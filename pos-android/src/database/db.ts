@@ -373,34 +373,24 @@ export const seedInitialData = async (db: any) => {
 
   const [setResults] = await db.executeSql('SELECT count(*) as count FROM settings');
   if (setResults.rows.item(0).count === 0) {
-    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeName', 'LitePOS')`);
+    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeName', 'Warna Warni')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeAddress', '')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storePhone', '')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('showImages', 'true')`);
-    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('enableTableOrder', 'false')`);
-    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('enableKitchenPrint', 'false')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('theme', 'light')`);
   } else {
     // Ensure new settings keys exist
     const settingKeys = [
-      'storeAddress', 'storePhone', 'enablePreOrder', 'enableTableOrder', 'allowNegativeStock', 'receiptFooter', 'enableKitchenPrint',
+      'storeAddress', 'storePhone', 'enablePreOrder', 'allowNegativeStock', 'receiptFooter',
       'loyalty_active', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points',
-      'store_id', 'license_expire_date', 'license_type', 'google_sheet_url', 'apiBaseUrl'
+      'google_sheet_url', 'apiBaseUrl'
     ];
     for (const key of settingKeys) {
       let defaultVal = '';
-      if (key === 'enablePreOrder' || key === 'enableTableOrder' || key === 'allowNegativeStock' || key === 'loyalty_active' || key === 'enableKitchenPrint') {
+      if (key === 'enablePreOrder' || key === 'allowNegativeStock' || key === 'loyalty_active') {
         defaultVal = 'false';
       } else if (key === 'loyalty_multiplier' || key === 'loyalty_multiplier_amount' || key === 'loyalty_point_value' || key === 'loyalty_min_points') {
         defaultVal = key === 'loyalty_multiplier_amount' ? '1000' : (key === 'loyalty_multiplier' ? '1' : '0');
-      } else if (key === 'store_id') {
-        defaultVal = 'TK-' + Math.random().toString(36).substr(2, 6).toUpperCase();
-      } else if (key === 'license_expire_date') {
-        const trialEnd = new Date();
-        trialEnd.setDate(trialEnd.getDate() + 14); // 14 Days Trial
-        defaultVal = trialEnd.toISOString();
-      } else if (key === 'license_type') {
-        defaultVal = 'TRIAL';
       }
       try {
         await db.executeSql(`INSERT OR IGNORE INTO settings (key, value) VALUES ('${key}', '${defaultVal}')`);

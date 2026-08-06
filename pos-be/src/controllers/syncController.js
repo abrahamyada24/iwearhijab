@@ -61,8 +61,7 @@ exports.getMasterData = async (req, res) => {
       customers,
       suppliers,
       packages,
-      packageItems,
-      tables
+      packageItems
     ] = await Promise.all([
       prisma.storeSetting.findFirst(),
       prisma.loyaltyConfig.findFirst(),
@@ -73,8 +72,7 @@ exports.getMasterData = async (req, res) => {
       prisma.customer.findMany(),
       prisma.supplier.findMany(),
       prisma.package.findMany(),
-      prisma.packageItem.findMany(),
-      prisma.dineTable.findMany()
+      prisma.packageItem.findMany()
     ]);
 
     // Format settings to Key-Value array as expected by Android SQLite
@@ -89,9 +87,7 @@ exports.getMasterData = async (req, res) => {
       { key: 'shiftDurationMinutes', value: settings.shiftDurationMinutes.toString() },
       { key: 'shiftReminderMinutes', value: settings.shiftReminderMinutes.toString() },
       { key: 'shiftDayCutoff', value: settings.shiftDayCutoff || '23:50' },
-      { key: 'enableDineTable', value: settings.enableDineTable ? 'true' : 'false' },
-      { key: 'enableTableOrder', value: settings.enableTableOrder ? 'true' : 'false' },
-      { key: 'enableKitchenQueue', value: settings.enableKitchenQueue ? 'true' : 'false' },
+      { key: 'enableDineTable', value: 'false' },
       { key: 'receiptFooter', value: settings.receiptFooter || '' },
       { key: 'taxRate', value: settings.taxRate.toString() },
       { key: 'serviceCharge', value: settings.serviceCharge.toString() },
@@ -127,8 +123,7 @@ exports.getMasterData = async (req, res) => {
         customers,
         suppliers,
         packages,
-        package_items: packageItems,
-        tables
+        package_items: packageItems
       }
     });
 
@@ -146,7 +141,7 @@ exports.pushLocalData = async (req, res) => {
   let releaseDataSync = null;
   try {
     releaseDataSync = enterDataSync();
-    const { transactions, expenses, shifts, categories, products, customers, settings, stockReceipts, suppliers: pushSuppliers, packages: pushPackages, dineTables, addons: pushAddons, dataResetVersion } = req.body;
+    const { transactions, expenses, shifts, categories, products, customers, settings, stockReceipts, suppliers: pushSuppliers, packages: pushPackages, addons: pushAddons, dataResetVersion } = req.body;
     const resetState = await prisma.storeSetting.findFirst({
       select: { dataResetVersion: true, dataResetInProgress: true, dataResetAt: true },
     });
@@ -187,7 +182,6 @@ exports.pushLocalData = async (req, res) => {
     let savedStockReceipts = 0;
     let savedSuppliers = 0;
     let savedPackages = 0;
-    let savedDineTables = 0;
     let savedAddons = 0;
     const syncWarnings = [];
     const syncedTransactionIds = [];
@@ -250,11 +244,7 @@ exports.pushLocalData = async (req, res) => {
         if (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(settingsMap.shiftDayCutoff || ''))) {
             storeSettingData.shiftDayCutoff = String(settingsMap.shiftDayCutoff);
         }
-        if (settingsMap.enableDineTable !== undefined) storeSettingData.enableDineTable = settingsMap.enableDineTable === 'true';
-        if (settingsMap.enableTableOrder !== undefined) storeSettingData.enableTableOrder = settingsMap.enableTableOrder === 'true';
-        if (settingsMap.enableKitchenQueue !== undefined) storeSettingData.enableKitchenQueue = settingsMap.enableKitchenQueue === 'true';
-        if (storeSettingData.enableTableOrder === true) storeSettingData.enableDineTable = true;
-        if (storeSettingData.enableTableOrder !== true && storeSettingData.enableDineTable === false) storeSettingData.enableTableOrder = false;
+        storeSettingData.enableDineTable = false;
         if (settingsMap.allowNegativeStock !== undefined) storeSettingData.allowNegativeStock = settingsMap.allowNegativeStock === 'true';
         if (settingsMap.showImages !== undefined) storeSettingData.showImages = settingsMap.showImages === 'true';
         if (theme) storeSettingData.theme = theme;
@@ -968,40 +958,7 @@ exports.pushLocalData = async (req, res) => {
         }
     }
 
-    // G. Proses DineTables dari Android
-    const dineTableIdMap = [];
-    if (dineTables && Array.isArray(dineTables)) {
-        for (const table of dineTables) {
-            try {
-                let serverTable = await prisma.dineTable.findUnique({ where: { androidId: table.id }});
-                if (!serverTable) {
-                    // Check if table number already exists
-                    const existingByNumber = await prisma.dineTable.findUnique({ where: { number: String(table.number) }});
-                    if (existingByNumber) {
-                        await prisma.dineTable.update({
-                            where: { id: existingByNumber.id },
-                            data: { androidId: table.id, name: table.name || existingByNumber.name }
-                        });
-                        serverTable = existingByNumber;
-                    } else {
-                        serverTable = await prisma.dineTable.create({
-                            data: {
-                                androidId: table.id,
-                                number: String(table.number),
-                                name: table.name || null,
-                                capacity: parseInt(table.capacity) || 4,
-                                status: table.status || 'AVAILABLE'
-                            }
-                        });
-                        savedDineTables++;
-                    }
-                }
-                dineTableIdMap.push({ androidId: table.id, serverId: serverTable.id });
-            } catch(e) { addSyncWarning('dineTable', table.id, e); }
-        }
-    }
-
-    // H. Proses Product Addons dari Android
+    // G. Proses Product Addons dari Android
     const addonIdMap = [];
     if (pushAddons && Array.isArray(pushAddons)) {
         for (const addon of pushAddons) {
@@ -1056,7 +1013,7 @@ exports.pushLocalData = async (req, res) => {
     res.json({
       success: true,
       message: `Berhasil sinkronisasi. Transaksi: ${savedTransactions}, Produk: ${savedProducts}, Kategori: ${savedCategories}, Pelanggan: ${savedCustomers}, Supplier: ${savedSuppliers}, Paket: ${savedPackages}`,
-      stats: { savedTransactions, savedExpenses, savedShifts, savedCategories, savedProducts, savedCustomers, savedStockReceipts, savedSuppliers, savedPackages, savedDineTables, savedAddons },
+      stats: { savedTransactions, savedExpenses, savedShifts, savedCategories, savedProducts, savedCustomers, savedStockReceipts, savedSuppliers, savedPackages, savedAddons },
       warnings: syncWarnings,
       syncedIds: {
           transactions: syncedTransactionIds,
@@ -1070,7 +1027,6 @@ exports.pushLocalData = async (req, res) => {
           customers: customerIdMap,
           suppliers: supplierIdMap,
           packages: packageIdMap,
-          dineTables: dineTableIdMap,
           addons: addonIdMap
       }
     });

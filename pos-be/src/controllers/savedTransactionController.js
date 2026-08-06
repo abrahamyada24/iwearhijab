@@ -4,13 +4,7 @@ const prisma = new PrismaClient();
 // 1. GET SAVED TRANSACTIONS
 exports.getSavedTransactions = async (req, res) => {
     try {
-        const cancelledTableOrders = await prisma.kitchenOrder.findMany({
-            where: { status: 'CANCELLED', savedOrderId: { not: null } },
-            select: { savedOrderId: true }
-        });
-        const cancelledIds = cancelledTableOrders.map(order => order.savedOrderId).filter(Boolean);
         const saved = await prisma.savedTransaction.findMany({
-            where: cancelledIds.length > 0 ? { id: { notIn: cancelledIds } } : undefined,
             include: { user: { select: { name: true } } },
             orderBy: { createdAt: 'desc' }
         });
@@ -48,16 +42,7 @@ exports.saveTransaction = async (req, res) => {
 exports.deleteSavedTransaction = async (req, res) => {
     try {
         const { id } = req.params;
-        const accepted = req.query.action === 'accepted';
-        await prisma.$transaction(async (tx) => {
-            await tx.kitchenOrder.updateMany({
-                where: { savedOrderId: id, status: { in: ['NEW', 'PREPARING'] } },
-                data: accepted
-                    ? { status: 'PREPARING', startedAt: new Date() }
-                    : { status: 'CANCELLED', completedAt: new Date() }
-            });
-            await tx.savedTransaction.delete({ where: { id } });
-        });
+        await prisma.savedTransaction.delete({ where: { id } });
         res.json({ success: true, message: "Transaksi tersimpan berhasil dihapus" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

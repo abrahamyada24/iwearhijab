@@ -1,7 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const midtransClient = require('midtrans-client');
 const { getProductPrice } = require('../utils/productDiscount');
-const { reserveQueue } = require('../utils/orderQueue');
 const { normalizePaymentType, resolvePaymentMethod } = require('../services/paymentMethodService');
 const prisma = new PrismaClient();
 
@@ -49,7 +48,7 @@ exports.createTransaction = async (req, res) => {
             userId, customerId, customerName, items, payment,
             orderType, tableNumber, note,
             preOrderDate, discountAmount, discountType, takeawayOption,
-            loyaltyPointsRedeemed, sourceOrderCode
+            loyaltyPointsRedeemed
         } = req.body;
 
         if (!items || items.length === 0) {
@@ -84,7 +83,6 @@ exports.createTransaction = async (req, res) => {
             let subTotal = 0;
             const transactionItemsData = [];
             const itemDetailsForMidtrans = [];
-            const kitchenItems = [];
             const stockDeductions = new Map();
             const addStockDeduction = (product, qty) => {
                 const current = stockDeductions.get(product.id);
@@ -118,14 +116,6 @@ exports.createTransaction = async (req, res) => {
                             notes: `[Paket ${pkg.name}] ${item.notes || ''}`.trim()
                         });
                     });
-                    kitchenItems.push({
-                        packageId: pkg.id,
-                        name: `[Paket] ${pkg.name}`,
-                        qty: requestedQty,
-                        price: packagePrice,
-                        notes: item.notes || null,
-                        components: pkg.items.map(packageItem => ({ name: packageItem.product.name, qty: packageItem.qty }))
-                    });
                     itemDetailsForMidtrans.push({ id: `PKG-${pkg.id}`, price: Math.round(packagePrice), quantity: requestedQty, name: pkg.name.substring(0, 50) });
                     continue;
                 }
@@ -152,16 +142,6 @@ exports.createTransaction = async (req, res) => {
                     originalPrice: priceInfo.originalPrice,
                     discountAmount: priceInfo.discountAmount,
                     costPrice: product.costPrice,
-                    notes: item.notes || null
-                });
-
-                kitchenItems.push({
-                    productId: product.id,
-                    name: product.name,
-                    qty: requestedQty,
-                    price,
-                    originalPrice: priceInfo.originalPrice,
-                    discountAmount: priceInfo.discountAmount,
                     notes: item.notes || null
                 });
 
@@ -261,7 +241,7 @@ exports.createTransaction = async (req, res) => {
                     cashAmount: payment.cashAmount != null ? parseFloat(payment.cashAmount) : null,
                     changeAmount: payment.changeAmount != null ? parseFloat(payment.changeAmount) : null,
                     status: initialStatus,
-                    orderType: orderType || 'DINE_IN',
+                    orderType: orderType || 'TAKE_AWAY',
                     tableNumber: tableNumber || null,
                     note: note || null,
                     preOrderDate: preOrderDate ? new Date(preOrderDate) : null,
@@ -278,55 +258,6 @@ exports.createTransaction = async (req, res) => {
                 include: { items: true, payments: true }
             });
 
-            let kitchenQueue = null;
-            if (isInstantPayment && (orderType || 'DINE_IN') !== 'PRE_ORDER') {
-                if (sourceOrderCode) {
-                    const existingKitchenOrder = await tx.kitchenOrder.findUnique({
-                        where: { orderCode: String(sourceOrderCode) }
-                    });
-                    if (!existingKitchenOrder) {
-                        throw new Error('Antrean order meja tidak ditemukan. Muat ulang Order Meja lalu coba lagi.');
-                    }
-                    if (['CANCELLED', 'COMPLETED'].includes(existingKitchenOrder.status)) {
-                        throw new Error(`Order meja sudah berstatus ${existingKitchenOrder.status === 'CANCELLED' ? 'dibatalkan' : 'selesai'}.`);
-                    }
-
-                    kitchenQueue = {
-                        queueDate: existingKitchenOrder.queueDate,
-                        queueNumber: existingKitchenOrder.queueNumber,
-                        queueLabel: existingKitchenOrder.queueLabel
-                    };
-                    await tx.kitchenOrder.update({
-                        where: { id: existingKitchenOrder.id },
-                        data: {
-                            status: existingKitchenOrder.status === 'NEW' ? 'PREPARING' : existingKitchenOrder.status,
-                            startedAt: existingKitchenOrder.startedAt || new Date(),
-                            tableNumber: tableNumber || existingKitchenOrder.tableNumber,
-                            customerName: customerName || existingKitchenOrder.customerName,
-                            note: note || existingKitchenOrder.note,
-                            total: grandTotal,
-                            itemsJson: JSON.stringify(kitchenItems),
-                            transactionId: newTransaction.id
-                        }
-                    });
-                } else {
-                    kitchenQueue = await reserveQueue(tx);
-                    await tx.kitchenOrder.create({
-                        data: {
-                            source: 'POS',
-                            orderCode: invoiceNumber,
-                            ...kitchenQueue,
-                            tableNumber: tableNumber || null,
-                            customerName: customerName || null,
-                            note: note || null,
-                            total: grandTotal,
-                            itemsJson: JSON.stringify(kitchenItems),
-                            transactionId: newTransaction.id
-                        }
-                    });
-                }
-            }
-
             // Loyalty points earning
             if (customerId && isInstantPayment) {
                 const loyaltyConfig = await tx.loyaltyConfig.findFirst({ where: { isActive: true } });
@@ -337,23 +268,6 @@ exports.createTransaction = async (req, res) => {
                     await tx.customer.update({
                         where: { id: parseInt(customerId) },
                         data: { points: { increment: pointsChange } }
-                    });
-                }
-            }
-
-            // Update table status if dine-in
-            if (orderType === 'DINE_IN' && tableNumber) {
-                const dineTable = await tx.dineTable.findUnique({ where: { number: tableNumber } });
-                if (dineTable) {
-                    await tx.dineTable.update({
-                        where: { id: dineTable.id },
-                        data: {
-                            status: 'OCCUPIED',
-                            occupiedAt: dineTable.occupiedAt || new Date(),
-                            statusUpdatedAt: dineTable.status === 'OCCUPIED'
-                                ? dineTable.statusUpdatedAt
-                                : new Date()
-                        }
                     });
                 }
             }
@@ -385,7 +299,7 @@ exports.createTransaction = async (req, res) => {
                 }
             }
 
-            return { ...newTransaction, ...kitchenQueue, midtransToken, midtransUrl };
+            return { ...newTransaction, midtransToken, midtransUrl };
         }, {
             timeout: 10000,
             isolationLevel: 'Serializable'
@@ -795,13 +709,6 @@ exports.returnTransaction = async (req, res) => {
                 });
             }
 
-            // Setelah transaksi dine-in selesai/retur, meja perlu dibersihkan sebelum dipakai lagi.
-            if (transaction.orderType === 'DINE_IN' && transaction.tableNumber) {
-                await tx.dineTable.updateMany({
-                    where: { number: transaction.tableNumber },
-                    data: { status: 'CLEANING', statusUpdatedAt: new Date() }
-                });
-            }
         });
 
         res.json({ success: true, message: "Transaksi berhasil diretur, stok dikembalikan" });

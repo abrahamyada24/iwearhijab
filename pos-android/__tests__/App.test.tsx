@@ -10,11 +10,11 @@ import {
 
 describe('konfigurasi backend Android', () => {
   test('menggunakan backend produksi yang sama dengan website', () => {
-    expect(DEFAULT_API_URL).toBe('https://103.150.227.178');
-    expect(buildApiBaseUrl(DEFAULT_API_URL)).toBe('https://103.150.227.178/api');
+    expect(DEFAULT_API_URL).toBe('http://103.175.221.2:5000');
+    expect(buildApiBaseUrl(DEFAULT_API_URL)).toBe('http://103.175.221.2:5000/api');
   });
 
-  test('memigrasikan alamat backend Android lama', () => {
+  test('mempertahankan alamat backend Warna Warni yang tersimpan', () => {
     expect(normalizeApiBaseUrl('http://103.175.221.2:5000')).toBe(DEFAULT_API_URL);
   });
 

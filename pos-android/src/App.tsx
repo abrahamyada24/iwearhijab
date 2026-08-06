@@ -3,8 +3,7 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, TouchableOpacity, Modal, Alert, TextInput, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, TouchableOpacity, Alert, TextInput, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { getDBConnection, createTables, seedInitialData } from './database/db';
 import tw, { useAppColorScheme } from 'twrnc';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -25,14 +24,11 @@ import UserManagementScreen from './screens/UserManagementScreen';
 import StockReceivingScreen from './screens/StockReceivingScreen';
 import StockOpnameScreen from './screens/StockOpnameScreen';
 import StockHistoryScreen from './screens/StockHistoryScreen';
-import TableManagementScreen from './screens/TableManagementScreen';
-import TableOrdersScreen from './screens/TableOrdersScreen';
 import InventoryScreen from './screens/InventoryScreen';
 import ContactScreen from './screens/ContactScreen';
 import PackageScreen from './screens/PackageScreen';
 import ProductListScreen from './screens/ProductListScreen';
 import CategoryListScreen from './screens/CategoryListScreen';
-import LockScreen from './screens/LockScreen';
 import AppDialogProvider from './components/AppDialogProvider';
 
 const Stack = createNativeStackNavigator();
@@ -169,23 +165,12 @@ function MainTabNavigator() {
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ App Root Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-const generateSignature = (storeId: string, days: string) => {
-    const str = storeId + days + "LITE_SECRET_2026";
-    let hash = 5381;
-    for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) + hash) + str.charCodeAt(i);
-    }
-    return Math.abs(hash).toString(16).toUpperCase().substring(0, 4).padStart(4, '0');
-};
-
 function App(): React.JSX.Element {
     const settings = useStore((state) => state.settings);
     const setSettings = useStore((state) => state.setSettings);
     const user = useStore((state) => state.user);
     const setActiveShift = useStore((state) => state.setActiveShift);
     const [colorScheme, , setColorScheme] = useAppColorScheme(tw);
-    const [showTrialPopup, setShowTrialPopup] = useState(false);
-    const [activationCode, setActivationCode] = useState('');
 
     const reconcileActiveShift = useCallback(async () => {
         const db = await getDBConnection();
@@ -204,58 +189,6 @@ function App(): React.JSX.Element {
         });
     }, [setActiveShift]);
 
-    const handleActivate = async () => {
-        const code = activationCode.trim().toUpperCase();
-        if (code.length < 4) {
-            Alert.alert("Kode Tidak Valid", "Kode aktivasi terlalu pendek.");
-            return;
-        }
-
-        const supportedDays = [14, 30, 60, 90, 180, 360, 365, 720, 1000];
-        let matchedDays = 0;
-        const storeId = settings.store_id || 'UNKNOWN';
-
-        for (const days of supportedDays) {
-            if (generateSignature(storeId, days.toString()) === code) {
-                matchedDays = days;
-                break;
-            }
-        }
-
-        if (matchedDays === 0) {
-            Alert.alert("Aktivasi Gagal", "Kode aktivasi salah atau tidak berlaku untuk mesin ini.");
-            return;
-        }
-
-        try {
-            const db = await getDBConnection();
-            const days = matchedDays;
-            
-            const now = new Date();
-            let baseDate = now;
-            if (settings.license_expire_date) {
-                const currentExpire = new Date(settings.license_expire_date);
-                if (currentExpire > now) {
-                    baseDate = currentExpire;
-                }
-            }
-
-            baseDate.setDate(baseDate.getDate() + days);
-            const newExpireISO = baseDate.toISOString();
-
-            await db.executeSql(`UPDATE settings SET value = ? WHERE key = 'license_expire_date'`, [newExpireISO]);
-            await db.executeSql(`INSERT OR REPLACE INTO settings (key, value) VALUES ('license_type', 'PREMIUM')`);
-            
-            setSettings({ ...settings, license_expire_date: newExpireISO, license_type: 'PREMIUM' });
-            setShowTrialPopup(false);
-            Alert.alert("Berhasil", `Aplikasi berhasil diaktivasi ulang (+${days} Hari).`);
-            setActivationCode('');
-
-        } catch (error) {
-            Alert.alert("Error", "Terjadi kesalahan saat menyimpan lisensi.");
-        }
-    };
-
     // Initialize DB and settings on mount
     useEffect(() => {
         const initDB = async () => {
@@ -267,14 +200,16 @@ function App(): React.JSX.Element {
                 const [settingsRes] = await db.executeSql('SELECT * FROM settings');
                 const rowCount = settingsRes.rows.length;
                 let loadedSettings: any = {
-                    storeName: 'LitePOS', storeAddress: '', storePhone: '',
-                    storeLogo: null, enablePreOrder: false, enableShift: true, enableDineTable: false, enableTableOrder: false, enableKitchenPrint: false,
+                    storeName: 'Warna Warni', storeAddress: '', storePhone: '',
+                    storeLogo: null, enablePreOrder: false, enableShift: true,
+                    enableDineTable: false, enableTableOrder: false, enableKitchenQueue: false, enableKitchenPrint: false,
                     showImages: true, printerAddress: null, printerType: null, theme: 'light',
                     apiBaseUrl: '',
                 };
                 for (let i = 0; i < rowCount; i++) {
                     const row = settingsRes.rows.item(i);
-                    if (row.key === 'showImages' || row.key === 'enablePreOrder' || row.key === 'enableShift' || row.key === 'enableDineTable' || row.key === 'enableTableOrder' || row.key === 'enableKitchenPrint') {
+                    if (['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'].includes(row.key)) continue;
+                    if (row.key === 'showImages' || row.key === 'enablePreOrder' || row.key === 'enableShift') {
                         loadedSettings[row.key] = row.value === 'true';
                     } else {
                         loadedSettings[row.key] = row.value || null;
@@ -333,8 +268,9 @@ function App(): React.JSX.Element {
                         const [settingsRes] = await db.executeSql('SELECT * FROM settings');
                         const rowCount = settingsRes.rows.length;
                         let reloadedSettings: any = {
-                            storeName: 'LitePOS', storeAddress: '', storePhone: '',
-                            storeLogo: null, enablePreOrder: false, enableShift: true, enableDineTable: false, enableTableOrder: false, enableKitchenPrint: false,
+                            storeName: 'Warna Warni', storeAddress: '', storePhone: '',
+                            storeLogo: null, enablePreOrder: false, enableShift: true,
+                            enableDineTable: false, enableTableOrder: false, enableKitchenQueue: false, enableKitchenPrint: false,
                             showImages: true, printerAddress: null, printerType: null, theme: 'light',
                             allowNegativeStock: false, receiptFooter: '',
                             loyalty_active: false, loyalty_multiplier: 1, loyalty_multiplier_amount: 1000,
@@ -343,7 +279,8 @@ function App(): React.JSX.Element {
                         };
                         for (let i = 0; i < rowCount; i++) {
                             const row = settingsRes.rows.item(i);
-                            if (['showImages', 'enablePreOrder', 'enableShift', 'enableDineTable', 'enableTableOrder', 'allowNegativeStock', 'loyalty_active', 'enableKitchenPrint'].includes(row.key)) {
+                            if (['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'].includes(row.key)) continue;
+                            if (['showImages', 'enablePreOrder', 'enableShift', 'allowNegativeStock', 'loyalty_active'].includes(row.key)) {
                                 reloadedSettings[row.key] = row.value === 'true';
                             } else if (['loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points'].includes(row.key)) {
                                 reloadedSettings[row.key] = Number(row.value || 0);
@@ -408,26 +345,6 @@ function App(): React.JSX.Element {
         return () => clearInterval(intervalId);
     }, [user, reconcileActiveShift]);
 
-    // Trial popup logic
-    useEffect(() => {
-        const checkTrialPopup = async () => {
-            if (settings.license_type !== 'TRIAL') return;
-            try {
-                const lastShown = await AsyncStorage.getItem('last_trial_popup');
-                const now = new Date().getTime();
-                if (!lastShown || now - parseInt(lastShown) > 12 * 60 * 60 * 1000) {
-                    setShowTrialPopup(true);
-                    await AsyncStorage.setItem('last_trial_popup', now.toString());
-                }
-            } catch (e) { }
-        };
-        if (settings.license_type === 'TRIAL') {
-            setTimeout(checkTrialPopup, 1000);
-        }
-    }, [settings.license_type]);
-
-    const isExpired = settings.license_expire_date ? new Date(settings.license_expire_date) < new Date() : false;
-
     return (
         <SafeAreaProvider>
             <AppDialogProvider>
@@ -435,77 +352,21 @@ function App(): React.JSX.Element {
                 <SafeAreaView style={tw`flex-1 bg-white dark:bg-gray-900`}>
                     <NavigationContainer theme={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
                         <Stack.Navigator screenOptions={{ headerShown: false }}>
-                            {isExpired ? (
-                                <Stack.Screen name="Lock" component={LockScreen} />
-                            ) : (
-                                <>
-                                    <Stack.Screen name="Login" component={LoginScreen} />
-                                    <Stack.Screen name="Main" component={MainTabNavigator} />
-                                    <Stack.Screen name="POS" component={ShiftGuardedPOS} />
-                                    <Stack.Screen name="TableOrders" component={TableOrdersScreen} />
-                                    <Stack.Screen name="Checkout" component={CheckoutScreen} />
-                                    <Stack.Screen name="ReceiptPreview" component={ReceiptPreviewScreen} />
-                                    <Stack.Screen name="UserManagement" component={UserManagementScreen} />
-                                    <Stack.Screen name="StockReceiving" component={StockReceivingScreen} />
-                                    <Stack.Screen name="StockOpname" component={StockOpnameScreen} />
-                                    <Stack.Screen name="TableManagement" component={TableManagementScreen} />
-                                    <Stack.Screen name="Management" component={ManagementScreen} />
-                                    <Stack.Screen name="PackageList" component={PackageScreen} />
-                                    <Stack.Screen name="ProductList" component={ProductListScreen} />
-                                    <Stack.Screen name="CategoryList" component={CategoryListScreen} />
-                                    <Stack.Screen name="StockHistory" component={StockHistoryScreen} />
-                                </>
-                            )}
+                            <Stack.Screen name="Login" component={LoginScreen} />
+                            <Stack.Screen name="Main" component={MainTabNavigator} />
+                            <Stack.Screen name="POS" component={ShiftGuardedPOS} />
+                            <Stack.Screen name="Checkout" component={CheckoutScreen} />
+                            <Stack.Screen name="ReceiptPreview" component={ReceiptPreviewScreen} />
+                            <Stack.Screen name="UserManagement" component={UserManagementScreen} />
+                            <Stack.Screen name="StockReceiving" component={StockReceivingScreen} />
+                            <Stack.Screen name="StockOpname" component={StockOpnameScreen} />
+                            <Stack.Screen name="Management" component={ManagementScreen} />
+                            <Stack.Screen name="PackageList" component={PackageScreen} />
+                            <Stack.Screen name="ProductList" component={ProductListScreen} />
+                            <Stack.Screen name="CategoryList" component={CategoryListScreen} />
+                            <Stack.Screen name="StockHistory" component={StockHistoryScreen} />
                         </Stack.Navigator>
                     </NavigationContainer>
-                
-                {/* Trial Watermark */}
-                {settings.license_type === 'TRIAL' && !isExpired && (
-                    <TouchableOpacity 
-                        style={tw`absolute top-12 right-0 bg-red-600 px-3 py-1.5 rounded-l-full shadow-lg z-50 flex-row items-center opacity-90`}
-                        onPress={() => setShowTrialPopup(true)}
-                    >
-                        <Icon name="clock-outline" size={12} color="white" style={tw`mr-1.5`} />
-                        <Text style={tw`text-white text-xs font-black tracking-wider`}>TRIAL MODE</Text>
-                    </TouchableOpacity>
-                )}
-
-                {/* Trial Pop-up Modal */}
-                <Modal visible={showTrialPopup} transparent animationType="fade">
-                    <View style={tw`flex-1 bg-black/60 justify-center items-center px-6`}>
-                        <View style={tw`bg-white dark:bg-gray-800 p-8 rounded-3xl w-full max-w-sm items-center shadow-2xl border border-gray-100 dark:border-gray-700`}>
-                            <View style={tw`bg-red-50 dark:bg-red-900/30 p-4 rounded-full mb-5`}>
-                                <Icon name="shield-alert-outline" size={48} color={tw.color('red-500')} />
-                            </View>
-                            <Text style={tw`text-xl font-black text-gray-800 dark:text-gray-100 text-center mb-3`}>Anda dalam Masa Trial</Text>
-                            <Text style={tw`text-sm text-gray-500 dark:text-gray-400 text-center leading-5 mb-8`}>
-                                Terimakasih telah mencoba aplikasi kami! Masa trial ini berlaku selama 14 hari. Ingin terus menggunakan semua fitur tanpa batas?
-                            </Text>
-                            
-                            <View style={tw`w-full mb-5`}>
-                                <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Masukkan Kode Aktivasi (ID: {settings.store_id || 'UNKNOWN'})</Text>
-                                <TextInput
-                                    style={tw`w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-gray-100 font-bold tracking-widest text-center`}
-                                    placeholder="Contoh: A4B1"
-                                    value={activationCode}
-                                    onChangeText={setActivationCode}
-                                    autoCapitalize="characters"
-                                    maxLength={4}
-                                />
-                            </View>
-
-                            <TouchableOpacity 
-                                style={tw`w-full bg-blue-600 py-4 rounded-xl items-center mb-3`} 
-                                onPress={handleActivate}
-                            >
-                                <Text style={tw`text-white font-black text-lg`}>Aktifkan</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={tw`w-full py-3 items-center`} onPress={() => setShowTrialPopup(false)}>
-                                <Text style={tw`text-gray-500 dark:text-gray-400 font-bold`}>Tutup</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </Modal>
                 </SafeAreaView>
             </AppDialogProvider>
         </SafeAreaProvider>

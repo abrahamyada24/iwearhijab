@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useStore } from '../store/useStore';
-import OrderNotificationWatcher from './OrderNotificationWatcher';
 
 type DialogButtonStyle = 'default' | 'cancel' | 'destructive';
 
@@ -45,7 +44,7 @@ const getTone = (dialog: DialogState | null) => {
     const hasDestructive = dialog?.buttons.some(button => button.style === 'destructive');
     if (hasDestructive || /hapus|reset|restore|retur|keluar/.test(title)) return 'danger';
     if (/gagal|error|ditolak|invalid|salah/.test(title)) return 'danger';
-    if (/konfirmasi|peringatan|kurang|trial/.test(title)) return 'warning';
+    if (/konfirmasi|peringatan|kurang/.test(title)) return 'warning';
     if (/berhasil|sukses|selesai|tersimpan|tersambung|backup/.test(title)) return 'success';
     return 'info';
 };
@@ -203,7 +202,6 @@ export default function AppDialogProvider({ children }: { children: ReactNode })
 
     return (
         <>
-            <OrderNotificationWatcher />
             {children}
             <Modal
                 visible={!!dialog}

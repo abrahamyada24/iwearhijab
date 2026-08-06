@@ -7,7 +7,6 @@ import api, { resolveApiAssetUrl } from '../services/api';
 import { getDBConnection } from '../database/db';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Camera, CameraType } from 'react-native-camera-kit';
-import { printKitchenTicket } from '../utils/kitchenPrinter';
 import { applyProductDiscount } from '../utils/productDiscount';
 
 export default function POSScreen({ navigation, route }: any) {
@@ -50,7 +49,6 @@ export default function POSScreen({ navigation, route }: any) {
     const collapsedHeight = 72;
     const cartPanelAnim = React.useRef(new Animated.Value(0)).current; // 0 = collapsed, 1 = expanded
     const [refreshing, setRefreshing] = useState(false);
-    const [isPrintingKitchen, setIsPrintingKitchen] = useState(false);
 
     const cart = useStore((state) => state.cart);
     const settings = useStore((state) => state.settings);
@@ -211,7 +209,7 @@ export default function POSScreen({ navigation, route }: any) {
                 const localPending = pendingRes.rows.item(i);
                 const localMeta = parsePendingCartPayload(localPending.cartData).meta;
                 const isTableOrder = localMeta?.source === 'TABLE_QR' || Boolean(localMeta?.tableNumber);
-                if (isTableOrder && !settings.enableTableOrder) continue;
+                if (isTableOrder) continue;
                 pending.push({ ...localPending, source: 'local' });
             }
 
@@ -222,7 +220,7 @@ export default function POSScreen({ navigation, route }: any) {
                     for (const remote of remoteRes.data.data) {
                         const remoteMeta = parsePendingCartPayload(remote.cartData).meta;
                         const isTableOrder = remoteMeta?.source === 'TABLE_QR' || Boolean(remoteMeta?.tableNumber);
-                        if (isTableOrder && !settings.enableTableOrder) continue;
+                        if (isTableOrder) continue;
                         pending.push({
                             id: remote.id,
                             name: remote.name,
@@ -251,7 +249,7 @@ export default function POSScreen({ navigation, route }: any) {
         } catch (error) {
             console.error(error);
         }
-    }, [selectedCategory, settings.enableTableOrder]);
+    }, [selectedCategory]);
 
     useEffect(() => {
         loadData();
@@ -503,26 +501,6 @@ export default function POSScreen({ navigation, route }: any) {
         }, 500);
     };
 
-    const handlePrintKitchen = async () => {
-        if (isPrintingKitchen || cart.length === 0) return;
-        setIsPrintingKitchen(true);
-        try {
-            await printKitchenTicket(settings, cart, {
-                tableNumber: pendingOrderContext?.tableNumber,
-                customerName: pendingOrderContext?.customerName,
-                orderName: pendingOrderContext?.source === 'TABLE_QR' ? 'ORDER MEJA' : undefined,
-                queueLabel: pendingOrderContext?.queueLabel,
-            });
-            Alert.alert('Berhasil', 'Tiket dapur berhasil dicetak.');
-        } catch (error: any) {
-            Alert.alert('Gagal Cetak Dapur', error?.message || 'Periksa koneksi printer di Pengaturan.');
-        } finally {
-            setIsPrintingKitchen(false);
-        }
-    };
-
-
-
     const resumePendingSale = async (pending: any) => {
         try {
             const { items, meta } = parsePendingCartPayload(pending.cartData);
@@ -545,20 +523,6 @@ export default function POSScreen({ navigation, route }: any) {
                 });
             }
 
-            let kitchenPrintError: any = null;
-            if ((meta?.source === 'TABLE_QR' || meta?.tableNumber) && settings.enableKitchenPrint) {
-                try {
-                    await printKitchenTicket(settings, cartData, {
-                        tableNumber: meta.tableNumber,
-                        customerName: meta.customerName,
-                        orderName: 'ORDER MEJA',
-                        queueLabel: meta.queueLabel,
-                    });
-                } catch (printError) {
-                    kitchenPrintError = printError;
-                }
-            }
-
             if (pending.source === 'server') {
                 await api.delete(`/saved-transactions/${pending.id}?action=accepted`);
             } else {
@@ -567,12 +531,6 @@ export default function POSScreen({ navigation, route }: any) {
             }
             loadData();
             setShowPendingModal(false);
-            if (kitchenPrintError) {
-                Alert.alert(
-                    'Order Masuk ke Kasir',
-                    `Cetak dapur gagal: ${kitchenPrintError?.message || 'Periksa koneksi printer.'}`,
-                );
-            }
         } catch (e) {
             Alert.alert('Error', 'Gagal melanjutkan penjualan tersimpan.');
         }
@@ -811,16 +769,6 @@ export default function POSScreen({ navigation, route }: any) {
                     <Text style={tw`font-bold text-gray-500 dark:text-gray-400 uppercase text-xs`}>Total Tagihan</Text>
                     <Text style={tw`font-black text-2xl text-blue-600`}>{formatRp(cartTotal)}</Text>
                 </View>
-                {settings.enableKitchenPrint && (
-                    <TouchableOpacity
-                        style={tw`mb-3 py-3 rounded-xl items-center flex-row justify-center border border-orange-300 bg-orange-50 ${isPrintingKitchen || cart.length === 0 ? 'opacity-50' : ''}`}
-                        disabled={isPrintingKitchen || cart.length === 0}
-                        onPress={handlePrintKitchen}
-                    >
-                        <Icon name="chef-hat" size={18} color={tw.color('orange-700')} style={tw`mr-2`} />
-                        <Text style={tw`font-black text-orange-700`}>{isPrintingKitchen ? 'Mencetak...' : 'Cetak Dapur'}</Text>
-                    </TouchableOpacity>
-                )}
                 <TouchableOpacity
                     style={tw`py-4 rounded-xl items-center flex-row justify-center shadow-sm ${cart.length === 0 ? 'bg-gray-300' : 'bg-blue-600'}`}
                     disabled={cart.length === 0}
@@ -896,16 +844,6 @@ export default function POSScreen({ navigation, route }: any) {
                             <Text style={tw`text-gray-400 text-[10px] font-bold`}>{cartItemCount} item di keranjang</Text>
                         </View>
                     </View>
-                    {settings.enableKitchenPrint && (
-                        <TouchableOpacity
-                            style={tw`mr-2 px-3 py-2.5 rounded-xl flex-row items-center border border-orange-300 bg-orange-50 ${isPrintingKitchen ? 'opacity-50' : ''}`}
-                            disabled={isPrintingKitchen}
-                            onPress={handlePrintKitchen}
-                        >
-                            <Icon name="chef-hat" size={16} color={tw.color('orange-700')} />
-                            <Text style={tw`text-orange-700 font-black text-xs ml-1`}>{isPrintingKitchen ? '...' : 'Dapur'}</Text>
-                        </TouchableOpacity>
-                    )}
                     <TouchableOpacity
                         style={tw`bg-blue-600 px-5 py-2.5 rounded-xl flex-row items-center`}
                         onPress={() => navigation.navigate('Checkout')}

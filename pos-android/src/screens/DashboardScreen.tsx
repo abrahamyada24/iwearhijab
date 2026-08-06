@@ -201,7 +201,6 @@ export default function DashboardScreen({ navigation }: any) {
     const [closingCashInput, setClosingCashInput] = useState('');
     const [showCloseShiftModal, setShowCloseShiftModal] = useState(false);
     const [pendingCount, setPendingCount] = useState(0);
-    const tableOrderNotificationCount = useStore((state) => state.tableOrderNotificationCount);
     const [upcomingPreOrders, setUpcomingPreOrders] = useState<any[]>([]);
     const settings = useStore(state => state.settings);
 
@@ -514,21 +513,6 @@ export default function DashboardScreen({ navigation }: any) {
                     </View>
                 </View>
                 <View style={styles.headerRight}>
-                    <TouchableOpacity
-                        style={styles.notifBtn}
-                        accessibilityLabel={`${tableOrderNotificationCount} order meja baru`}
-                        onPress={() => {
-                            if (settings.enableTableOrder) navigation.navigate('TableOrders');
-                            else Alert.alert('Order Meja tidak aktif', 'Aktifkan fitur Order Meja dari pengaturan web.');
-                        }}
-                    >
-                        <Icon name="bell-outline" size={22} color={COLORS.textPrimary} />
-                        {tableOrderNotificationCount > 0 && (
-                            <View style={styles.notifBadge}>
-                                <Text style={styles.notifBadgeText}>{tableOrderNotificationCount > 99 ? '99+' : tableOrderNotificationCount}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
                     <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                         <Icon name="logout-variant" size={20} color={COLORS.danger} />
                     </TouchableOpacity>
@@ -868,22 +852,6 @@ export default function DashboardScreen({ navigation }: any) {
                         onPress={() => navigation.navigate('POS')}
                         style={isTablet ? styles.tabletMenuFull : {}}
                     />
-
-                    {settings.enableTableOrder && (
-                        <>
-                            {!isTablet && <View style={{ height: 12 }} />}
-                            <MenuItem
-                                icon="table-chair"
-                                title="Order Meja"
-                                subtitle="Pesanan QR pelanggan"
-                                color="#0F766E"
-                                bgColor="#ECFDF5"
-                                delay={280}
-                                onPress={() => navigation.navigate('TableOrders')}
-                                style={isTablet ? styles.tabletMenuHalf : {}}
-                            />
-                        </>
-                    )}
 
                     {(user?.role === 'ADMIN' || user?.role === 'OWNER') && (
                         <>

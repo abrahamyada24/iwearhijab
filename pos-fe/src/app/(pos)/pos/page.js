@@ -12,7 +12,6 @@ import MemberModal from '@/components/pos/MemberModal';
 import PaymentModal from '@/components/pos/PaymentModal';
 import ReceiptPreviewModal from '@/components/pos/ReceiptPreviewModal';
 import SavedTransactionModal from '@/components/pos/SavedTransactionModal';
-import TableModal from '@/components/pos/TableModal';
 import ShiftGuardModal from '@/components/pos/ShiftGuardModal';
 
 // Import SweetAlert
@@ -38,7 +37,6 @@ export default function POSPage() {
   const [products, setProducts] = useState([]);
   const [members, setMembers] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [tables, setTables] = useState([]);
   const [currentUser, setCurrentUser] = useState(null); 
   const [storeSettings, setStoreSettings] = useState(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -50,7 +48,6 @@ export default function POSPage() {
   
   // --- STATE UI ---
   const [cart, setCart] = useState([]);
-  const [pendingOrderContext, setPendingOrderContext] = useState(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [mobileView, setMobileView] = useState('menu'); 
@@ -76,13 +73,10 @@ export default function POSPage() {
 
   // Table & Order Type States
   const [orderType, setOrderType] = useState('TAKE_AWAY');
-  const [selectedTable, setSelectedTable] = useState(null);
-  const [isTableModalOpen, setIsTableModalOpen] = useState(false);
   const [preOrderDate, setPreOrderDate] = useState('');
   const [takeawayOptions, setTakeawayOptions] = useState([]);
   const [takeawayOption, setTakeawayOption] = useState('');
   const [taxRate, setTaxRate] = useState(0);
-  const tableOrderRestoreStarted = useRef(false);
   const shiftReminderGateRef = useRef({ key: '', nextAt: 0 });
 
   const refreshSavedTransactionCount = async () => {
@@ -110,18 +104,16 @@ export default function POSPage() {
 
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-            const [prodRes, catRes, memRes, tableRes, pkgRes] = await Promise.all([
+            const [prodRes, catRes, memRes, pkgRes] = await Promise.all([
                 fetch(`${API_URL}/api/products`, { headers }),
                 fetch(`${API_URL}/api/products/categories`, { headers }),
                 fetch(`${API_URL}/api/customers`, { headers }),
-                fetch(`${API_URL}/api/tables`, { headers }),
                 fetch(`${API_URL}/api/packages`, { headers })
             ]);
 
             const prodData = await prodRes.json();
             const catData = await catRes.json();
             const memData = await memRes.json();
-            const tableData = await tableRes.json();
             const pkgData = await pkgRes.json();
 
             if (prodData.success) {
@@ -145,7 +137,6 @@ export default function POSPage() {
             }
             if (catData.success) setCategories([{ id: 0, name: 'Semua' }, ...catData.data, ...(pkgData.success && pkgData.data.some(pkg => pkg.isActive) ? [{ id: 'PACKAGE', name: 'Paket' }] : [])]);
             if (memData.success) setMembers(memData.data);
-            if (tableData.success) setTables(tableData.data.filter(t => t.status === 'AVAILABLE'));
 
             // Fetch settings for takeaway options and tax
             try {
@@ -263,77 +254,6 @@ export default function POSPage() {
     });
   }, [activeShift, router, storeSettings]);
 
-  useEffect(() => {
-    if (tableOrderRestoreStarted.current) return;
-    const rawOrder = sessionStorage.getItem('table-order-to-process');
-    if (!rawOrder) return;
-    tableOrderRestoreStarted.current = true;
-
-    const restoreTableOrder = async () => {
-      try {
-        const order = JSON.parse(rawOrder);
-        const payload = typeof order.cartData === 'string' ? JSON.parse(order.cartData) : order.cartData;
-        if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) {
-          throw new Error('Isi order meja tidak valid.');
-        }
-
-        const restoredCart = payload.items.map((item, index) => {
-          const packageId = item.packageId ? Number(item.packageId) : null;
-          const productId = packageId ? `pkg-${packageId}` : Number(item.productId || item.id);
-          return {
-            ...item,
-            id: productId,
-            packageId,
-            qty: Number(item.quantity || item.qty || 1),
-            price: Number(item.price || 0),
-            originalPrice: Number(item.originalPrice || item.price || 0),
-            category: { name: item.categoryName || (packageId ? 'Paket' : 'Menu') },
-            stock: Number(item.stock ?? (packageId ? 999 : 0)),
-            isUnlimitedStock: packageId ? true : Boolean(Number(item.isUnlimitedStock)),
-            cartItemId: item.cartItemId || `table-${order.id}-${index}`,
-          };
-        });
-
-        const context = {
-          savedOrderId: order.id,
-          orderCode: payload.orderCode,
-          queueLabel: payload.queueLabel,
-          tableNumber: payload.tableNumber,
-          customerName: payload.customerName,
-          note: payload.note || null,
-          accepted: sessionStorage.getItem('table-order-accepted-id') === String(order.id),
-        };
-        setCart(restoredCart);
-        setPendingOrderContext(context);
-        setOrderType('DINE_IN');
-        setSelectedTable({ number: payload.tableNumber, name: payload.tableNumber });
-        setSelectedMember(payload.customerName ? { id: null, name: payload.customerName, isTableGuest: true } : null);
-        if (window.innerWidth < 1024) setMobileView('cart');
-
-        if (context.accepted) return;
-
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_URL}/api/saved-transactions/${order.id}?action=accepted`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await response.json();
-        if (!response.ok || !data.success) throw new Error(data.message || data.error || 'Order belum dapat diterima.');
-
-        sessionStorage.setItem('table-order-accepted-id', String(order.id));
-        setPendingOrderContext(current => current ? { ...current, accepted: true } : current);
-        showAlert.success('Order diterima', `${payload.queueLabel || 'Order meja'} siap diproses di kasir.`);
-      } catch (error) {
-        await showAlert.error('Gagal membuka order meja', error.message || 'Kembali ke daftar Order Meja lalu coba lagi.');
-        setCart([]);
-        setPendingOrderContext(null);
-        router.push('/order-meja');
-      }
-    };
-
-    restoreTableOrder();
-  }, [router]);
-
   // --- LOGIC FILTER ---
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -420,7 +340,7 @@ export default function POSPage() {
       discountAmount: transaction.discountAmount ?? 0,
       grandTotal: transaction.grandTotal ?? grandTotal,
       orderType: transaction.orderType || orderType,
-      tableNumber: transaction.tableNumber || selectedTable?.number || null,
+      tableNumber: null,
   });
 
   // --- LOGOUT HANDLER (Sudah dipindah ke Header.jsx, tapi logic bisa disini jika butuh state) ---
@@ -441,7 +361,7 @@ export default function POSPage() {
           const payload = {
               userId: userId, 
               customerId: selectedMember?.id || null,
-              customerName: pendingOrderContext?.customerName || selectedMember?.name || guestCustomerName.trim() || null,
+              customerName: selectedMember?.name || guestCustomerName.trim() || null,
               items: cart.map(c => ({ productId: c.id, packageId: c.packageId || null, qty: c.qty, notes: c.notes || null })),
               payment: {
                 type,
@@ -450,9 +370,9 @@ export default function POSPage() {
                 changeAmount: type === 'CASH' ? change : null,
               },
               orderType: orderType,
-              tableNumber: orderType === 'DINE_IN' && selectedTable ? selectedTable.number : null,
-              note: pendingOrderContext?.note || null,
-              sourceOrderCode: pendingOrderContext?.orderCode || null,
+              tableNumber: null,
+              note: null,
+              sourceOrderCode: null,
               preOrderDate: orderType === 'PRE_ORDER' && preOrderDate ? new Date(preOrderDate).toISOString() : null,
               takeawayOption: orderType === 'TAKE_AWAY' && takeawayOption ? takeawayOption : null
           };
@@ -489,11 +409,6 @@ export default function POSPage() {
               } catch (cleanupError) {
                   console.error('Failed to remove completed saved transaction', cleanupError);
               }
-          }
-
-          if (pendingOrderContext?.orderCode) {
-              sessionStorage.removeItem('table-order-to-process');
-              sessionStorage.removeItem('table-order-accepted-id');
           }
 
           if (type === 'QRIS' && data.data.midtransToken) {
@@ -564,10 +479,6 @@ export default function POSPage() {
   };
 
   const handlePaymentOpen = () => {
-    if (pendingOrderContext && !pendingOrderContext.accepted) {
-      showAlert.warning('Order sedang diterima', 'Tunggu sebentar sampai order meja terkonfirmasi oleh server.');
-      return;
-    }
     setPaymentStep('SELECT');
     setPaymentMethod('');
     setCashGiven(0);
@@ -577,7 +488,7 @@ export default function POSPage() {
   }
 
   const handleSaveTransaction = async () => {
-    if (cart.length === 0 || isSavingTransaction || pendingOrderContext) return;
+    if (cart.length === 0 || isSavingTransaction) return;
 
     setIsSavingTransaction(true);
     try {
@@ -590,7 +501,7 @@ export default function POSPage() {
         selectedMember: selectedMember || null,
         guestCustomerName: guestCustomerName.trim() || '',
         orderType,
-        tableNumber: selectedTable?.number || null,
+        tableNumber: null,
         preOrderDate: preOrderDate || null,
         takeawayOption: takeawayOption || null,
         subTotal,
@@ -626,7 +537,6 @@ export default function POSPage() {
       setCart([]);
       setSelectedMember(null);
       setGuestCustomerName('');
-      setSelectedTable(null);
       setOrderType('TAKE_AWAY');
       setPreOrderDate('');
       setTakeawayOption('');
@@ -651,8 +561,7 @@ export default function POSPage() {
       setCart(restoredItems);
       setSelectedMember(payload.selectedMember || null);
       setGuestCustomerName(payload.guestCustomerName || '');
-      setOrderType(payload.orderType || 'TAKE_AWAY');
-      setSelectedTable(payload.tableNumber ? { number: payload.tableNumber } : null);
+      setOrderType(payload.orderType === 'PRE_ORDER' ? 'PRE_ORDER' : 'TAKE_AWAY');
       setPreOrderDate(payload.preOrderDate || '');
       setTakeawayOption(payload.takeawayOption || '');
       setActiveSavedTransactionId(transaction.id);
@@ -671,13 +580,9 @@ export default function POSPage() {
       setCart([]);
       setSelectedMember(null);
       setGuestCustomerName('');
-      setSelectedTable(null);
       setOrderType('TAKE_AWAY');
       setPreOrderDate('');
       setTakeawayOption('');
-      setPendingOrderContext(null);
-      sessionStorage.removeItem('table-order-to-process');
-      sessionStorage.removeItem('table-order-accepted-id');
       setMobileView('menu');
       window.location.reload(); 
   }
@@ -770,15 +675,12 @@ export default function POSPage() {
         taxAmount={taxAmount}
         orderType={orderType}
         setOrderType={setOrderType}
-        selectedTable={selectedTable}
-        setIsTableModalOpen={setIsTableModalOpen}
         preOrderDate={preOrderDate}
         setPreOrderDate={setPreOrderDate}
         takeawayOptions={takeawayOptions}
         takeawayOption={takeawayOption}
         setTakeawayOption={setTakeawayOption}
         taxRate={taxRate}
-        pendingOrderContext={pendingOrderContext}
         onSaveTransaction={handleSaveTransaction}
         isSavingTransaction={isSavingTransaction}
         savedTransactionCount={savedTransactionCount}
@@ -853,14 +755,6 @@ export default function POSPage() {
          transaction={completedTransaction}
          store={storeSettings}
          formatNumber={formatNumber}
-      />
-
-      <TableModal 
-         isOpen={isTableModalOpen}
-         onClose={() => setIsTableModalOpen(false)}
-         tables={tables}
-         selectedTable={selectedTable}
-         setSelectedTable={setSelectedTable}
       />
 
     </div>

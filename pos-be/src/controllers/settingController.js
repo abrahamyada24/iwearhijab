@@ -15,7 +15,7 @@ exports.getSettings = async (req, res) => {
       // Buat pengaturan awal jika database masih kosong
       setting = await prisma.storeSetting.create({
         data: {
-          storeName: "LitePOS Store",
+          storeName: "Warna Warni",
           taxRate: 11,
           serviceCharge: 0,
           enableCash: true,
@@ -28,7 +28,7 @@ exports.getSettings = async (req, res) => {
     // Konfigurasi fitur harus selalu aktual karena dipakai untuk membentuk menu.
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Pragma', 'no-cache');
-    res.json({ success: true, data: setting });
+    res.json({ success: true, data: { ...setting, enableDineTable: false } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -98,11 +98,7 @@ exports.updateSettings = async (req, res) => {
       }
       dataToUpdate.shiftDayCutoff = cutoff;
     }
-    if (req.body.enableDineTable !== undefined) dataToUpdate.enableDineTable = req.body.enableDineTable === 'true' || req.body.enableDineTable === true;
-    if (req.body.enableTableOrder !== undefined) dataToUpdate.enableTableOrder = req.body.enableTableOrder === 'true' || req.body.enableTableOrder === true;
-    if (req.body.enableKitchenQueue !== undefined) dataToUpdate.enableKitchenQueue = req.body.enableKitchenQueue === 'true' || req.body.enableKitchenQueue === true;
-    if (dataToUpdate.enableTableOrder === true) dataToUpdate.enableDineTable = true;
-    if (dataToUpdate.enableTableOrder !== true && dataToUpdate.enableDineTable === false) dataToUpdate.enableTableOrder = false;
+    dataToUpdate.enableDineTable = false;
     if (req.body.takeawayOptions !== undefined) dataToUpdate.takeawayOptions = req.body.takeawayOptions;
 
     if (dataToUpdate.enableShift === false) {

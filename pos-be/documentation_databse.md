@@ -1,8 +1,7 @@
-# 🛒 Savoria POS System
+# LitePOS Warna Warni
 
-> **Premium Point of Sale System** - Sistem kasir modern dengan integritas database tingkat enterprise untuk bisnis F&B Anda
+> Sistem kasir retail untuk toko boneka Warna Warni, dengan pengelolaan produk, stok, pelanggan, shift, penjualan, dan laporan.
 
-[![License](https://img.shields.io/badge/license-Premium-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 [![MySQL](https://img.shields.io/badge/mysql-%3E%3D8.0-orange.svg)](https://www.mysql.com/)
 
@@ -20,13 +19,12 @@
 - [API Documentation](#-api-documentation)
 - [Troubleshooting](#-troubleshooting)
 - [Kontribusi](#-kontribusi)
-- [Lisensi](#-lisensi)
 
 ---
 
 ## 🎯 Tentang Proyek
 
-Savoria POS adalah sistem Point of Sale yang dirancang khusus untuk bisnis Food & Beverage dengan fokus utama pada **integritas transaksi** dan **keamanan data**. 
+LitePOS Warna Warni adalah sistem Point of Sale retail yang berfokus pada **integritas transaksi**, **akurasi stok**, dan operasi toko sehari-hari.
 
 ### Mengapa Savoria POS?
 
@@ -1372,14 +1370,6 @@ Kontribusi selalu diterima! Silakan ikuti langkah berikut:
 - Follow Airbnb JavaScript Style Guide
 - Tulis test untuk fitur baru
 - Update dokumentasi sesuai perubahan
-
----
-
-## 📄 Lisensi
-
-Copyright © 2026 Savoria POS System - Premium Product by Salman & BuildWithAngga
-
-Proyek ini dilindungi lisensi premium. Penggunaan komersial memerlukan lisensi terpisah.
 
 ---
 

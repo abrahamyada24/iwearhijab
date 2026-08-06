@@ -56,7 +56,7 @@ function SectionItem({ icon, iconColor, label, sublabel, isOpen, onPress, childr
 
 export default function SettingsScreen({ navigation }: any) {
     const { settings, setSettings } = useStore();
-    const [storeName, setStoreName] = useState<string>(settings?.storeName || 'LitePOS');
+    const [storeName, setStoreName] = useState<string>(settings?.storeName || 'Warna Warni');
     const [storeAddress, setStoreAddress] = useState<string>(settings?.storeAddress || '');
     const [storePhone, setStorePhone] = useState<string>(settings?.storePhone || '');
     const [showImages, setShowImages] = useState<boolean>(settings?.showImages ?? true);
@@ -64,9 +64,6 @@ export default function SettingsScreen({ navigation }: any) {
     const [storeLogo, setStoreLogo] = useState<string | null>(settings?.storeLogo || null);
     const [enablePreOrder, setEnablePreOrder] = useState<boolean>(settings?.enablePreOrder ?? false);
     const [enableShift, setEnableShift] = useState<boolean>(settings?.enableShift ?? true);
-    const [enableDineTable, setEnableDineTable] = useState<boolean>(settings?.enableDineTable ?? false);
-    const [enableTableOrder, setEnableTableOrder] = useState<boolean>(settings?.enableTableOrder ?? false);
-    const [enableKitchenPrint, setEnableKitchenPrint] = useState<boolean>(settings?.enableKitchenPrint ?? false);
     const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(settings?.allowNegativeStock ?? false);
     const [showLogoOnReceipt, setShowLogoOnReceipt] = useState<boolean>(settings?.showLogoOnReceipt ?? true);
     const [receiptFooter, setReceiptFooter] = useState<string>(settings?.receiptFooter || '');
@@ -112,14 +109,15 @@ export default function SettingsScreen({ navigation }: any) {
             const normalizedApiBaseUrl = await persistApiBaseUrl(rawSettings.apiBaseUrl || await getApiBaseUrl());
             const finalSettings = {
                 ...settings,
-                storeName: rawSettings.storeName || 'LitePOS',
+                storeName: rawSettings.storeName || 'Warna Warni',
                 storeAddress: rawSettings.storeAddress || '',
                 storePhone: rawSettings.storePhone || '',
                 storeLogo: rawSettings.storeLogo || null,
                 enablePreOrder: rawSettings.enablePreOrder === 'true',
-                enableDineTable: rawSettings.enableDineTable === 'true',
-                enableTableOrder: rawSettings.enableTableOrder === 'true',
-                enableKitchenPrint: rawSettings.enableKitchenPrint === 'true',
+                enableDineTable: false,
+                enableTableOrder: false,
+                enableKitchenQueue: false,
+                enableKitchenPrint: false,
                 enableShift: rawSettings.enableShift === undefined ? true : rawSettings.enableShift === 'true',
                 showImages: rawSettings.showImages === 'true',
                 printerAddress: rawSettings.printerAddress || null,
@@ -142,9 +140,6 @@ export default function SettingsScreen({ navigation }: any) {
             setStoreLogo(finalSettings.storeLogo);
             setEnablePreOrder(finalSettings.enablePreOrder);
             setEnableShift(rawSettings.enableShift === undefined ? true : rawSettings.enableShift === 'true');
-            setEnableDineTable(finalSettings.enableDineTable);
-            setEnableTableOrder(finalSettings.enableTableOrder);
-            setEnableKitchenPrint(finalSettings.enableKitchenPrint);
             setLoyaltyActive(finalSettings.loyalty_active);
             setLoyaltyMultiplier(String(finalSettings.loyalty_multiplier));
             setLoyaltyMultiplierAmount(String(finalSettings.loyalty_multiplier_amount));
@@ -184,9 +179,6 @@ export default function SettingsScreen({ navigation }: any) {
                 ['storeLogo', storeLogo || ''],
                 ['enablePreOrder', enablePreOrder ? 'true' : 'false'],
                 ['enableShift', enableShift ? 'true' : 'false'],
-                ['enableDineTable', enableDineTable ? 'true' : 'false'],
-                ['enableTableOrder', enableTableOrder ? 'true' : 'false'],
-                ['enableKitchenPrint', enableKitchenPrint ? 'true' : 'false'],
                 ['showImages', showImages ? 'true' : 'false'],
                 ['theme', themeToSave],
                 ['allowNegativeStock', allowNegativeStock ? 'true' : 'false'],
@@ -210,7 +202,7 @@ export default function SettingsScreen({ navigation }: any) {
             await db.executeSql(
                 `INSERT OR REPLACE INTO settings (key, value) VALUES ('settings_sync_pending', 'true')`
             );
-            setSettings({ ...settings, storeName, storeAddress, storePhone, storeLogo, enablePreOrder, enableShift, enableDineTable, enableTableOrder, enableKitchenPrint, showImages, printerAddress: connectedPrinter, printerType, theme: themeToSave, allowNegativeStock, showLogoOnReceipt, receiptFooter,
+            setSettings({ ...settings, storeName, storeAddress, storePhone, storeLogo, enablePreOrder, enableShift, enableDineTable: false, enableTableOrder: false, enableKitchenQueue: false, enableKitchenPrint: false, showImages, printerAddress: connectedPrinter, printerType, theme: themeToSave, allowNegativeStock, showLogoOnReceipt, receiptFooter,
                 loyalty_active: loyaltyActive,
                 loyalty_multiplier: Number(loyaltyMultiplier),
                 loyalty_multiplier_amount: Number(loyaltyMultiplierAmount),
@@ -231,7 +223,7 @@ export default function SettingsScreen({ navigation }: any) {
             saveSettings();
         }, 800);
         return () => clearTimeout(timer);
-    }, [storeName, storeAddress, storePhone, storeLogo, enablePreOrder, enableShift, enableDineTable, enableTableOrder, enableKitchenPrint, showImages, isDarkMode, allowNegativeStock, showLogoOnReceipt, receiptFooter, loyaltyActive, loyaltyMultiplier, loyaltyMultiplierAmount, loyaltyPointValue, loyaltyMinPoints, googleSheetUrl, apiBaseUrl]);
+    }, [storeName, storeAddress, storePhone, storeLogo, enablePreOrder, enableShift, showImages, isDarkMode, allowNegativeStock, showLogoOnReceipt, receiptFooter, loyaltyActive, loyaltyMultiplier, loyaltyMultiplierAmount, loyaltyPointValue, loyaltyMinPoints, googleSheetUrl, apiBaseUrl]);
 
     const persistBackendUrl = async (value: string = apiBaseUrl) => {
         const normalized = await persistApiBaseUrl(value || DEFAULT_API_URL);
@@ -690,46 +682,6 @@ export default function SettingsScreen({ navigation }: any) {
                             <Switch value={enableShift} onValueChange={setEnableShift} trackColor={{ false: '#d1d5db', true: '#93c5fd' }} thumbColor={enableShift ? '#2563eb' : '#f3f4f6'} />
                         </View>
 
-                        {/* Dine Table */}
-                        <View style={tw`flex-row items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800`}>
-                            <View style={tw`flex-1 mr-4`}>
-                                <View style={tw`flex-row items-center mb-1`}>
-                                    <Icon name="silverware-fork-knife" size={14} color={tw.color('green-600')} style={tw`mr-2`} />
-                                    <Text style={tw`text-gray-800 dark:text-gray-100 font-bold`}>Manajemen Meja</Text>
-                                </View>
-                                <Text style={tw`text-gray-500 text-xs`}>Kelola meja dine-in (restoran, kafe)</Text>
-                            </View>
-                            <Switch
-                                value={enableDineTable}
-                                onValueChange={(value) => {
-                                    setEnableDineTable(value);
-                                    if (!value) setEnableTableOrder(false);
-                                }}
-                                trackColor={{ false: '#d1d5db', true: '#86efac' }}
-                                thumbColor={enableDineTable ? '#16a34a' : '#f3f4f6'}
-                            />
-                        </View>
-
-                        {/* Table Order */}
-                        <View style={tw`flex-row items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800`}>
-                            <View style={tw`flex-1 mr-4`}>
-                                <View style={tw`flex-row items-center mb-1`}>
-                                    <Icon name="qrcode-scan" size={14} color={tw.color('emerald-600')} style={tw`mr-2`} />
-                                    <Text style={tw`text-gray-800 dark:text-gray-100 font-bold`}>Order Meja via QR</Text>
-                                </View>
-                                <Text style={tw`text-gray-500 text-xs`}>Terima order pembeli dari QR meja</Text>
-                            </View>
-                            <Switch
-                                value={enableTableOrder}
-                                onValueChange={(value) => {
-                                    setEnableTableOrder(value);
-                                    if (value) setEnableDineTable(true);
-                                }}
-                                trackColor={{ false: '#d1d5db', true: '#6ee7b7' }}
-                                thumbColor={enableTableOrder ? '#059669' : '#f3f4f6'}
-                            />
-                        </View>
-
                         {/* Allow Negative Stock */}
                         <View style={tw`flex-row items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800`}>
                             <View style={tw`flex-1 mr-4`}>
@@ -842,21 +794,6 @@ export default function SettingsScreen({ navigation }: any) {
                                 <Text style={tw`text-green-700 font-bold ml-2 flex-1 text-xs`}>Tersambung: {printerType} — {connectedPrinter.substring(0, 20)}</Text>
                             </View>
                         )}
-                        <View style={tw`flex-row items-center justify-between mb-4 pb-4 border-b border-gray-100 dark:border-gray-800`}>
-                            <View style={tw`flex-1 mr-4`}>
-                                <View style={tw`flex-row items-center mb-1`}>
-                                    <Icon name="chef-hat" size={16} color={tw.color('orange-600')} style={tw`mr-2`} />
-                                    <Text style={tw`text-gray-800 dark:text-gray-100 font-bold`}>Aktifkan Cetak Dapur</Text>
-                                </View>
-                                <Text style={tw`text-gray-500 text-xs`}>Tampilkan tombol tiket dapur di layar kasir</Text>
-                            </View>
-                            <Switch
-                                value={enableKitchenPrint}
-                                onValueChange={setEnableKitchenPrint}
-                                trackColor={{ false: '#d1d5db', true: '#fdba74' }}
-                                thumbColor={enableKitchenPrint ? '#ea580c' : '#f3f4f6'}
-                            />
-                        </View>
                         <View style={tw`flex-row items-center justify-between mb-3`}>
                             <Text style={tw`text-gray-800 dark:text-gray-100 font-bold text-sm`}>Daftar Perangkat</Text>
                             <View style={tw`flex-row`}>
@@ -1098,7 +1035,8 @@ export default function SettingsScreen({ navigation }: any) {
                                                     let reloadedSettings: any = {};
                                                     for (let i = 0; i < settingsRes.rows.length; i++) {
                                                         const row = settingsRes.rows.item(i);
-                                                        if (['showImages', 'enablePreOrder', 'enableShift', 'enableDineTable', 'enableTableOrder', 'allowNegativeStock', 'loyalty_active', 'enableKitchenPrint'].includes(row.key)) {
+                                                        if (['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'].includes(row.key)) continue;
+                                                        if (['showImages', 'enablePreOrder', 'enableShift', 'allowNegativeStock', 'loyalty_active'].includes(row.key)) {
                                                             reloadedSettings[row.key] = row.value === 'true';
                                                         } else if (['loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points'].includes(row.key)) {
                                                             reloadedSettings[row.key] = Number(row.value || 0);
@@ -1106,6 +1044,10 @@ export default function SettingsScreen({ navigation }: any) {
                                                             reloadedSettings[row.key] = row.value || null;
                                                         }
                                                     }
+                                                    reloadedSettings.enableDineTable = false;
+                                                    reloadedSettings.enableTableOrder = false;
+                                                    reloadedSettings.enableKitchenQueue = false;
+                                                    reloadedSettings.enableKitchenPrint = false;
                                                     useStore.getState().setSettings(reloadedSettings);
                                                 } catch (e) { console.warn('Gagal reload settings setelah sync:', e); }
                                                 if (pushRes.warnings?.length > 0) {

@@ -26,8 +26,6 @@ const swaggerSpecs = require('./config/swagger');
 
 // Existing routes
 const authRoutes = require('./routes/authRoutes');
-const licenseRoutes = require('./routes/licenseRoutes');
-const { requireActiveLicense } = require('./middlewares/licenseMiddleware');
 const productRoutes = require('./routes/productRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
@@ -43,12 +41,10 @@ const savedTransactionRoutes = require('./routes/savedTransactionRoutes');
 const stockReceiptRoutes = require('./routes/stockReceiptRoutes');
 const stockOpnameRoutes = require('./routes/stockOpnameRoutes');
 const addonRoutes = require('./routes/addonRoutes');
-const tableRoutes = require('./routes/tableRoutes');
 const packageRoutes = require('./routes/packageRoutes');
 const supplierRoutes = require('./routes/supplierRoutes');
 const syncRoutes = require('./routes/syncRoutes');
 const catalogRoutes = require('./routes/catalogRoutes'); // Rute Katalog Publik
-const kitchenOrderRoutes = require('./routes/kitchenOrderRoutes');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -109,8 +105,6 @@ if (!isProduction || process.env.ENABLE_API_DOCS === 'true') {
 
 // Existing API routes
 app.use('/api/auth', authRoutes);
-app.use('/api/license', licenseRoutes);
-app.use('/api', requireActiveLicense);
 app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/transactions', transactionRoutes);
@@ -126,12 +120,10 @@ app.use('/api/saved-transactions', savedTransactionRoutes);
 app.use('/api/stock-receipts', stockReceiptRoutes);
 app.use('/api/stock-opname', stockOpnameRoutes);
 app.use('/api/addons', addonRoutes);
-app.use('/api/tables', tableRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/catalog', catalogRoutes); // Akses publik tanpa token
-app.use('/api/kitchen-orders', kitchenOrderRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: "LitePOS Backend Service is Running!", timestamp: new Date() });

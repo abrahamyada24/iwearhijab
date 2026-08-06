@@ -14,7 +14,6 @@ export default function AuthGuard({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const hydrateSession = useStore((state) => state.hydrateSession);
-  const fetchLicenseStatus = useStore((state) => state.fetchLicenseStatus);
   const logout = useStore((state) => state.logout);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
@@ -25,7 +24,7 @@ export default function AuthGuard({ children }) {
     }
 
     if (user.role === 'CASHIER') {
-      const allowedPaths = ['/', '/pos', '/transactions', '/tables', '/shifts', '/order-meja', '/kitchen', '/settings', '/license'];
+      const allowedPaths = ['/', '/pos', '/transactions', '/shifts', '/settings'];
       const isAllowed = allowedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
       if (!isAllowed) {
         router.replace('/');
@@ -50,19 +49,11 @@ export default function AuthGuard({ children }) {
       }
       if (!enforceRoleAccess(result.user)) return;
 
-      const licenseResult = await fetchLicenseStatus();
-      if (cancelled) return;
-      if (!licenseResult.success || !licenseResult.data?.isActive) {
-        if (pathname !== '/license') {
-          router.replace('/license');
-          return;
-        }
-      }
       setIsAuthorized(true);
     };
     verify();
     return () => { cancelled = true; };
-  }, [enforceRoleAccess, fetchLicenseStatus, hydrateSession, pathname, router]);
+  }, [enforceRoleAccess, hydrateSession, router]);
 
   useEffect(() => {
     if (!isAuthorized) return undefined;
@@ -114,25 +105,6 @@ export default function AuthGuard({ children }) {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [isAuthorized, logout, router]);
-
-  useEffect(() => {
-    if (!isAuthorized) return undefined;
-    const verifyLicense = async () => {
-      const result = await fetchLicenseStatus();
-      if ((!result.success || !result.data?.isActive) && pathname !== '/license') {
-        router.replace('/license');
-      }
-    };
-    const intervalId = window.setInterval(verifyLicense, 5 * 60 * 1000);
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') verifyLicense();
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => {
-      window.clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [fetchLicenseStatus, isAuthorized, pathname, router]);
 
   if (!isAuthorized) {
     return (

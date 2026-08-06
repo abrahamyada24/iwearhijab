@@ -3,9 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Users, Settings,
-  ChevronDown, Box, ClipboardList, UserCircle, LogOut, Utensils,
-  Wallet, Clock, PackageCheck, ClipboardCheck, UtensilsCrossed, Truck, Gift,
-  PlayCircle, Pause, AlertCircle, QrCode, ChefHat, BadgeCheck
+  ChevronDown, Box, ClipboardList, UserCircle, LogOut,
+  Wallet, Clock, Truck
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -66,7 +65,6 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
   const [mounted, setMounted] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState({ inventory: true });
   const [pendingSalesCount, setPendingSalesCount] = useState(0);
-  const [kitchenNewCount, setKitchenNewCount] = useState(0);
 
   // Pastikan komponen sudah terpasang (mounted) untuk menghindari error hydration
   useEffect(() => {
@@ -77,7 +75,6 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
   useEffect(() => {
     if (!mounted) {
       setPendingSalesCount(0);
-      setKitchenNewCount(0);
       return;
     }
     const fetchPendingSales = async () => {
@@ -90,19 +87,12 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
         if (data.success) {
           setPendingSalesCount(getPosPendingTransactions(data.data).length);
         }
-        if (settings?.enableKitchenQueue) {
-          const kitchenRes = await fetch(`${baseUrl}/api/kitchen-orders/summary`, { headers });
-          const kitchenData = await kitchenRes.json();
-          if (kitchenData.success) setKitchenNewCount(Number(kitchenData.data?.NEW || 0));
-        } else {
-          setKitchenNewCount(0);
-        }
       } catch (e) { /* silent */ }
     };
     fetchPendingSales();
     const interval = setInterval(fetchPendingSales, 30000);
     return () => clearInterval(interval);
-  }, [mounted, settings?.enableTableOrder, settings?.enableKitchenQueue]);
+  }, [mounted]);
 
   const toggleSubmenu = (key) => {
     setExpandedMenu(prev => ({ ...prev, [key]: !prev[key] }));
@@ -122,9 +112,6 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
   };
 
   const isAdminOrOwner = user?.role === 'ADMIN' || user?.role === 'OWNER';
-  const enableDineTable = settings?.enableDineTable;
-  const enableTableOrder = settings?.enableTableOrder;
-  const enableKitchenQueue = settings?.enableKitchenQueue;
   const enableShift = settings?.enableShift;
 
   return (
@@ -140,8 +127,8 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
               <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">LitePOS</h1>
-              <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">Enterprise Suite</p>
+              <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">{settings?.storeName || 'Warna Warni'}</h1>
+              <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">Retail Suite</p>
             </div>
           </Link>
 
@@ -190,9 +177,6 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
             )}
 
             {/* TRANSACTIONS & REPORTS */}
-            {enableTableOrder && (
-              <SidebarItem icon={QrCode} label="Order Meja" href="/order-meja" badge={pendingSalesCount} />
-            )}
             <SidebarItem icon={ShoppingCart} label="Transaksi" href="/transactions" />
 
             {isAdminOrOwner && (
@@ -202,14 +186,8 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
             <div className="pt-4 pb-2">
               <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 italic">Operasional</p>
               {enableShift && <SidebarItem icon={Clock} label="Shift" href="/shifts" />}
-              {enableKitchenQueue && (
-                <SidebarItem icon={ChefHat} label="Antrean Dapur" href="/kitchen" badge={kitchenNewCount} />
-              )}
               {isAdminOrOwner && (
                 <SidebarItem icon={Wallet} label="Pengeluaran" href="/expenses" />
-              )}
-              {enableDineTable && (
-                <SidebarItem icon={UtensilsCrossed} label="Meja" href="/tables" />
               )}
             </div>
 
@@ -223,7 +201,6 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
             )}
 
             <SidebarItem icon={Settings} label="Pengaturan" href="/settings" />
-            <SidebarItem icon={BadgeCheck} label="Lisensi Outlet" href="/license" />
           </div>
 
           {/* User Profile Area - Persis seperti Header (Clean & Mewah) */}

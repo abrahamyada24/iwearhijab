@@ -14,11 +14,9 @@ import {
   Send,
   ShoppingBag,
   Trash2,
-  Utensils,
   X,
 } from "lucide-react";
 import { showAlert } from '@/utils/swal';
-import OrderStatusTracker from '@/components/catalog/OrderStatusTracker';
 
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const API_URL = RAW_API_URL.replace(/\/api$/, "").replace(/\/$/, "");
@@ -59,8 +57,8 @@ export default function KatalogPage() {
     fetchCatalog();
   }, []);
 
-  const tableOrderRequested = Boolean(tableNumber);
-  const isTableMode = tableOrderRequested && settings?.enableTableOrder === true;
+  const tableOrderRequested = false;
+  const isTableMode = false;
 
   const fetchCatalog = async () => {
     setLoading(true);
@@ -404,12 +402,12 @@ export default function KatalogPage() {
               {settings?.logoUrl ? (
                 <img src={getImageUrl(settings.logoUrl)} alt="Logo toko" className="w-full h-full object-cover" />
               ) : (
-                <Utensils size={23} className="text-stone-500" />
+                <ShoppingBag size={23} className="text-stone-500" />
               )}
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="font-black text-gray-950 leading-tight truncate">
-                {settings?.storeName || "Menu"}
+                {settings?.storeName || "Warna Warni"}
               </h1>
               <p className="text-xs text-gray-500 truncate">
                 {isTableMode ? "Pesanan meja" : settings?.address || "Katalog toko"}
@@ -441,7 +439,7 @@ export default function KatalogPage() {
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Cari menu"
+              placeholder="Cari produk"
               className="bg-transparent outline-none flex-1 text-sm font-semibold placeholder:text-gray-400"
             />
             {searchQuery && (
@@ -820,19 +818,6 @@ export default function KatalogPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {orderSuccess && (
-        <OrderStatusTracker
-          key={orderSuccess.orderCode}
-          apiUrl={API_URL}
-          order={orderSuccess}
-          kitchenTrackingEnabled={settings?.enableKitchenQueue === true}
-          onAddOrder={() => {
-            window.sessionStorage.removeItem(ORDER_SESSION_KEY);
-            setOrderSuccess(null);
-          }}
-        />
       )}
 
       {!isTableMode && (

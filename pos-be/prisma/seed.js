@@ -61,14 +61,14 @@ async function main() {
     const settings = await prisma.storeSetting.upsert({
         where: { id: 1 },
         update: {
-            storeName: 'LitePOS Store',
+            storeName: 'Warna Warni',
             allowNegativeStock: false,
             showImages: true,
             theme: 'light',
         },
         create: {
             id: 1,
-            storeName: 'LitePOS Store',
+            storeName: 'Warna Warni',
             allowNegativeStock: false,
             showImages: true,
             theme: 'light',

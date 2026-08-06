@@ -1,8 +1,6 @@
 const { withExclusiveDataReset } = require('./dataResetCoordinator');
 
 const OPERATIONAL_DELETE_STEPS = [
-  ['kitchenOrders', 'kitchenOrder'],
-  ['queueCounters', 'orderQueueCounter'],
   ['payments', 'payment'],
   ['transactionItems', 'transactionItem'],
   ['transactions', 'transaction'],
@@ -16,7 +14,6 @@ const OPERATIONAL_DELETE_STEPS = [
   ['stockReceipts', 'stockReceipt'],
   ['packages', 'package'],
   ['suppliers', 'supplier'],
-  ['dineTables', 'dineTable'],
   ['customers', 'customer'],
   ['products', 'product'],
   ['categories', 'category'],

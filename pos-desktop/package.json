@@ -1,7 +1,7 @@
 {
   "name": "pos-desktop",
-  "version": "1.0.0",
-  "description": "LitePOS Desktop Application",
+  "version": "1.1.0",
+  "description": "LitePOS desktop client for Warna Warni",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -9,7 +9,8 @@
   },
   "build": {
     "appId": "com.warnawarni.litepos",
-    "productName": "LitePOS Desktop",
+    "productName": "LitePOS Warna Warni",
+    "artifactName": "LitePOS-Warna-Warni-Setup-${version}.${ext}",
     "win": {
       "target": "nsis",
       "icon": "icon.png"

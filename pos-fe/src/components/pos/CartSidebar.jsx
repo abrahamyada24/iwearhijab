@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { ArrowLeft, LogOut, X, UserPlus, ShoppingCart, Utensils, Minus, Plus, User, ChevronRight, Truck, Tag, Save, ShoppingBag, MessageSquare, Loader2 } from 'lucide-react';
+import { ArrowLeft, LogOut, X, UserPlus, ShoppingCart, Minus, Plus, User, Truck, Tag, Save, ShoppingBag, MessageSquare, Loader2 } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
 
 export default function CartSidebar({ 
@@ -24,15 +24,12 @@ export default function CartSidebar({
     taxAmount,
     orderType,
     setOrderType,
-    selectedTable,
-    setIsTableModalOpen,
     preOrderDate,
     setPreOrderDate,
     takeawayOptions,
     takeawayOption,
     setTakeawayOption,
     taxRate,
-    pendingOrderContext,
     // New props for enhanced features
     discount,
     onOpenDiscountModal,
@@ -82,25 +79,13 @@ export default function CartSidebar({
                 <button onClick={handleLogout} className="lg:hidden text-gray-400 hover:text-red-500">
                     <LogOut size={18}/>
                 </button>
-                {cart.length > 0 && !pendingOrderContext && (
+                {cart.length > 0 && (
                     <button onClick={clearCart} className="text-sm text-red-500 font-bold hover:text-red-600 transition-colors">
                         Hapus
                     </button>
                 )}
             </div>
         </div>
-
-        {pendingOrderContext && (
-            <div className="mx-4 mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase text-emerald-600">Order Meja {pendingOrderContext.queueLabel || ''}</p>
-                    <p className="text-sm font-bold text-emerald-900 truncate">Meja {pendingOrderContext.tableNumber} - {pendingOrderContext.customerName || 'Pelanggan'}</p>
-                </div>
-                <span className={`text-[10px] font-black px-2 py-1 rounded-md ${pendingOrderContext.accepted ? 'bg-emerald-700 text-white' : 'bg-white text-amber-700 border border-amber-200'}`}>
-                    {pendingOrderContext.accepted ? 'Diterima' : 'Memproses'}
-                </span>
-            </div>
-        )}
 
         {/* Customer Selection Area */}
         <div className="px-6 py-2 border-b border-gray-50 space-y-3">
@@ -132,42 +117,18 @@ export default function CartSidebar({
             {/* Order Type Toggle */}
             <div className="flex bg-gray-100 p-1 rounded-lg">
                 <button 
-                    disabled={Boolean(pendingOrderContext)}
                     onClick={() => setOrderType('TAKE_AWAY')}
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all disabled:cursor-not-allowed ${orderType === 'TAKE_AWAY' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'} ${pendingOrderContext ? 'opacity-50' : ''}`}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${orderType === 'TAKE_AWAY' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
                 >
                     Take Away
                 </button>
                 <button 
-                    disabled={Boolean(pendingOrderContext)}
-                    onClick={() => setOrderType('DINE_IN')}
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all disabled:cursor-not-allowed ${orderType === 'DINE_IN' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'} ${pendingOrderContext ? 'opacity-50' : ''}`}
-                >
-                    Dine In
-                </button>
-                <button 
-                    disabled={Boolean(pendingOrderContext)}
                     onClick={() => setOrderType('PRE_ORDER')}
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all disabled:cursor-not-allowed ${orderType === 'PRE_ORDER' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'} ${pendingOrderContext ? 'opacity-50' : ''}`}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${orderType === 'PRE_ORDER' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
                 >
                     Pre Order
                 </button>
             </div>
-
-            {/* Table Selection Dropdown (Only if Dine In) */}
-            {orderType === 'DINE_IN' && (
-                <button 
-                    disabled={Boolean(pendingOrderContext)}
-                    onClick={() => setIsTableModalOpen(true)}
-                    className="flex items-center justify-between text-sm bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors w-full disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                    <span className="flex items-center gap-2 text-gray-600">
-                        <Utensils size={14} />
-                        {selectedTable ? <span className="font-bold text-gray-800">Meja {selectedTable.number}</span> : "Pilih Meja"}
-                    </span>
-                    <ChevronRight size={14} className="text-gray-400" />
-                </button>
-            )}
 
             {/* Take Away Options Dropdown (Only if Take Away and options exist) */}
             {orderType === 'TAKE_AWAY' && takeawayOptions && takeawayOptions.length > 0 && (
@@ -327,7 +288,7 @@ export default function CartSidebar({
             <div className="flex gap-2">
                 {/* Save Transaction Button */}
                 <button 
-                    disabled={cart.length === 0 || isSavingTransaction || Boolean(pendingOrderContext)}
+                    disabled={cart.length === 0 || isSavingTransaction}
                     onClick={onSaveTransaction}
                     className="py-4 px-4 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 hover:border-gray-300 disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5 active:scale-95"
                     title="Simpan Pesanan"

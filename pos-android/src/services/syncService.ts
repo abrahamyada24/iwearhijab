@@ -2,7 +2,8 @@ import api, { isDeviceAssetUrl } from './api';
 import { getDBConnection } from '../database/db';
 
 // Keys yang hanya ada di device lokal, tidak boleh ditimpa oleh server
-const LOCAL_ONLY_KEYS = ['printerAddress', 'printerType', 'apiBaseUrl', 'enableKitchenPrint', 'settings_sync_pending', 'sync_initialized'];
+const RETAIL_DISABLED_KEYS = ['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'];
+const LOCAL_ONLY_KEYS = ['printerAddress', 'printerType', 'apiBaseUrl', 'settings_sync_pending', 'sync_initialized', ...RETAIL_DISABLED_KEYS];
 
 const markRowsSynced = async (db: any, table: string, ids: Array<string | number>) => {
     if (ids.length === 0) return;
@@ -69,7 +70,7 @@ export const syncService = {
                 // Settings — "NON-EMPTY WINS" merge strategy
                 // Boolean keys: selalu update (false adalah value valid)
                 // String keys: hanya update jika server value non-kosong, atau lokal belum ada
-                const BOOLEAN_KEYS = ['enablePreOrder', 'enableShift', 'enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'allowNegativeStock', 'showImages', 'loyalty_active'];
+                const BOOLEAN_KEYS = ['enablePreOrder', 'enableShift', 'allowNegativeStock', 'showImages', 'loyalty_active'];
                 const NUMERIC_KEYS = ['taxRate', 'serviceCharge', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points'];
                 
                 if (data.settings && data.settings.length > 0) {
@@ -247,23 +248,6 @@ export const syncService = {
                     }
                 }
 
-                // Dine-in Tables — upsert by serverId
-                if (data.tables) {
-                    for (const tb of data.tables) {
-                        const [checkRes] = await tx.executeSql('SELECT id, isSynced FROM dine_tables WHERE serverId = ? OR id = ?', [tb.id, tb.id]);
-                        if (checkRes.rows.length > 0) {
-                            const localTable = checkRes.rows.item(0);
-                            if (Number(localTable.isSynced) === 0) {
-                                await tx.executeSql('UPDATE dine_tables SET serverId = COALESCE(serverId, ?) WHERE id = ?', [tb.id, localTable.id]);
-                            } else {
-                                await tx.executeSql('UPDATE dine_tables SET number = ?, name = ?, capacity = ?, status = ?, serverId = ?, isSynced = 1 WHERE id = ?', [tb.number, tb.name, tb.capacity || 4, tb.status || 'AVAILABLE', tb.id, localTable.id]);
-                            }
-                        } else {
-                            await tx.executeSql('INSERT INTO dine_tables (number, name, capacity, status, serverId, isSynced) VALUES (?, ?, ?, ?, ?, 1)', [tb.number, tb.name, tb.capacity || 4, tb.status || 'AVAILABLE', tb.id]);
-                        }
-                    }
-                }
-
                 // Product Addons — upsert by serverId
                 if (data.addons) {
                     for (const ad of data.addons) {
@@ -359,17 +343,6 @@ export const syncService = {
                     }
                 }
 
-                // Cleanup Dine Tables
-                if (data.tables) {
-                    const serverTableIds = data.tables.map((t: any) => t.id);
-                    if (serverTableIds.length > 0) {
-                        const placeholders = serverTableIds.map(() => '?').join(',');
-                        await tx.executeSql(
-                            `DELETE FROM dine_tables WHERE isSynced = 1 AND serverId IS NOT NULL AND serverId NOT IN (${placeholders})`,
-                            serverTableIds
-                        );
-                    }
-                }
             // End of sequential db execution
 
             await db.executeSql(
@@ -552,15 +525,6 @@ export const syncService = {
                 }
             } catch(e) { console.warn('Push: gagal ambil packages:', e); }
 
-            // Ambil dine tables
-            let dineTables: any[] = [];
-            try {
-                const [tableRes] = await db.executeSql('SELECT * FROM dine_tables WHERE isSynced = 0');
-                for (let i = 0; i < tableRes.rows.length; i++) {
-                    dineTables.push(tableRes.rows.item(i));
-                }
-            } catch(e) { console.warn('Push: gagal ambil dine_tables:', e); }
-
             // Ambil product addons
             let addons: any[] = [];
             try {
@@ -600,7 +564,7 @@ export const syncService = {
             const hasData = transactions.length > 0 || expenses.length > 0 || shifts.length > 0 || 
                 categories.length > 0 || products.length > 0 || customers.length > 0 || 
                 settings.length > 0 || stockReceipts.length > 0 ||
-                suppliers.length > 0 || packages.length > 0 || dineTables.length > 0 || addons.length > 0;
+                suppliers.length > 0 || packages.length > 0 || addons.length > 0;
             if (!hasData) {
                 return { success: true, message: 'No local data to sync' };
             }
@@ -613,7 +577,7 @@ export const syncService = {
                 delete productWithoutLocalImage.imageUrl;
                 return productWithoutLocalImage;
             });
-            const payload = { transactions, expenses, shifts, categories, products: productsForPush, customers, settings, stockReceipts, suppliers, packages, dineTables, addons };
+            const payload = { transactions, expenses, shifts, categories, products: productsForPush, customers, settings, stockReceipts, suppliers, packages, addons };
             const res = await api.post('/sync/push', payload, {
                 headers: { 'X-LitePOS-Sync-Version': '2' },
             });
@@ -699,12 +663,6 @@ export const syncService = {
                 if (idMap.packages) {
                     for (const item of idMap.packages) {
                         await db.executeSql('UPDATE packages SET serverId = ?, isSynced = 1 WHERE id = ?', [item.serverId, item.androidId]);
-                    }
-                }
-
-                if (idMap.dineTables) {
-                    for (const item of idMap.dineTables) {
-                        await db.executeSql('UPDATE dine_tables SET serverId = ?, isSynced = 1 WHERE id = ?', [item.serverId, item.androidId]);
                     }
                 }
 

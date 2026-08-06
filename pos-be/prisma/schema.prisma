@@ -19,16 +19,6 @@ enum AuthClientType {
   ANDROID
 }
 
-enum LicensePlan {
-  TRIAL
-  PREMIUM
-}
-
-enum LicenseState {
-  ACTIVE
-  SUSPENDED
-}
-
 enum TransactionStatus {
   PENDING
   PAID
@@ -113,41 +103,6 @@ model AuthSession {
   @@index([userId, revokedAt])
   @@index([lastSeenAt])
   @@map("auth_sessions")
-}
-
-model StoreLicense {
-  id                    Int                 @id @default(1)
-  licenseNumber         String              @unique @map("license_number") @db.VarChar(40)
-  plan                  LicensePlan         @default(TRIAL)
-  state                 LicenseState        @default(ACTIVE)
-  startsAt              DateTime            @default(now()) @map("starts_at")
-  expiresAt             DateTime?           @map("expires_at")
-  activatedAt           DateTime?           @map("activated_at")
-  activationSource      String              @default("AUTO_TRIAL") @map("activation_source") @db.VarChar(40)
-  legacyStoreId         String?             @map("legacy_store_id") @db.VarChar(100)
-  offlineGraceDays      Int                 @default(7) @map("offline_grace_days")
-  createdAt             DateTime            @default(now()) @map("created_at")
-  updatedAt             DateTime            @updatedAt @map("updated_at")
-  activationRedemptions LicenseActivation[]
-
-  @@map("store_licenses")
-}
-
-model LicenseActivation {
-  id              String        @id @default(uuid())
-  codeHash        String        @unique @map("code_hash") @db.VarChar(64)
-  plan            LicensePlan   @default(PREMIUM)
-  durationDays    Int           @map("duration_days")
-  validUntil      DateTime?     @map("valid_until")
-  note            String?       @db.VarChar(255)
-  createdAt       DateTime      @default(now()) @map("created_at")
-  redeemedAt      DateTime?     @map("redeemed_at")
-  redeemedByEmail String?       @map("redeemed_by_email") @db.VarChar(255)
-  licenseId       Int?          @map("license_id")
-  license         StoreLicense? @relation(fields: [licenseId], references: [id])
-
-  @@index([redeemedAt])
-  @@map("license_activations")
 }
 
 model Category {
@@ -317,8 +272,6 @@ model StoreSetting {
   shiftReminderMinutes Int    @default(15) @map("shift_reminder_minutes")
   shiftDayCutoff     String   @default("23:50") @map("shift_day_cutoff") @db.VarChar(5)
   enableDineTable    Boolean  @default(false) @map("enable_dine_table")
-  enableTableOrder   Boolean  @default(false) @map("enable_table_order")
-  enableKitchenQueue Boolean  @default(false) @map("enable_kitchen_queue")
   takeawayOptions    String?  @map("takeaway_options") @db.Text
   allowNegativeStock Boolean  @default(false) @map("allow_negative_stock")
   showImages         Boolean  @default(true) @map("show_images")
@@ -387,15 +340,6 @@ model SavedTransaction {
   @@map("saved_transactions")
 }
 
-model OrderQueueCounter {
-  queueDate  String   @id @map("queue_date") @db.VarChar(10)
-  lastNumber Int      @default(0) @map("last_number")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  @@map("order_queue_counters")
-}
-
 model StockReceipt {
   id         String             @id @default(uuid())
   receivedAt DateTime           @map("received_at")
@@ -444,32 +388,6 @@ model DineTable {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@map("dine_tables")
-}
-
-model KitchenOrder {
-  id            String    @id @default(uuid())
-  source        String    @default("POS") @db.VarChar(20)
-  orderCode     String    @unique @map("order_code") @db.VarChar(100)
-  queueDate     String    @map("queue_date") @db.VarChar(10)
-  queueNumber   Int       @map("queue_number")
-  queueLabel    String    @map("queue_label") @db.VarChar(20)
-  tableNumber   String?   @map("table_number") @db.VarChar(20)
-  customerName  String?   @map("customer_name") @db.VarChar(255)
-  note          String?   @db.Text
-  total         Decimal   @default(0) @db.Decimal(15, 2)
-  itemsJson     String    @map("items_json") @db.LongText
-  status        String    @default("NEW") @db.VarChar(20)
-  transactionId Int?      @map("transaction_id")
-  savedOrderId  String?   @map("saved_order_id") @db.VarChar(191)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  startedAt     DateTime? @map("started_at")
-  readyAt       DateTime? @map("ready_at")
-  completedAt   DateTime? @map("completed_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  @@index([queueDate, queueNumber])
-  @@index([status, createdAt])
-  @@map("kitchen_orders")
 }
 
 model Package {

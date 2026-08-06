@@ -57,9 +57,6 @@ interface StoreState {
         loyalty_multiplier_amount: number;
         loyalty_point_value: number;
         loyalty_min_points: number;
-        store_id?: string;
-        license_expire_date?: string;
-        license_type?: 'TRIAL' | 'PREMIUM';
         google_sheet_url?: string;
         apiBaseUrl?: string;
     };
@@ -91,7 +88,7 @@ export const useStore = create<StoreState>((set, get) => ({
     tableOrderNotificationCount: 0,
     pendingOrderContext: null,
     settings: {
-        storeName: 'LitePOS',
+        storeName: 'Warna Warni',
         storeAddress: '',
         storePhone: '',
         storeLogo: null,
