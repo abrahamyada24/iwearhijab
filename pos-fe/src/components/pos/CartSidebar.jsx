@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { ArrowLeft, LogOut, X, UserPlus, ShoppingCart, Minus, Plus, User, Truck, Tag, Save, ShoppingBag, MessageSquare, Loader2 } from 'lucide-react';
+import { ArrowLeft, LogOut, X, UserPlus, ShoppingCart, Minus, Plus, User, Truck, Tag, Save, ShoppingBag, MessageSquare, Loader2, ChevronRight } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
 
 export default function CartSidebar({ 

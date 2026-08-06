@@ -1,8 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Endpoint Warna Warni. Tetap dapat diganti dari Pengaturan tanpa rebuild aplikasi.
-export const DEFAULT_API_URL = 'http://103.175.221.2:5000';
+// Endpoint HTTPS Warna Warni. Tetap dapat diganti dari Pengaturan tanpa rebuild aplikasi.
+export const DEFAULT_API_URL = 'https://api.103-175-221-2.sslip.io';
 export const API_BASE_URL_STORAGE_KEY = '@litepos_api_base_url';
 export const API_URL = DEFAULT_API_URL;
 

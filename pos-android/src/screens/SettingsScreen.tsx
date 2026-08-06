@@ -961,7 +961,7 @@ export default function SettingsScreen({ navigation }: any) {
                             <Text style={tw`text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider ml-1`}>URL Backend / API</Text>
                             <TextInput
                                 style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-xl px-4 py-3 font-medium`}
-                                placeholder="http://192.168.1.10:5000"
+                                placeholder="https://api.103-175-221-2.sslip.io"
                                 placeholderTextColor={tw.color('gray-400')}
                                 value={apiBaseUrl}
                                 onChangeText={setApiBaseUrlInput}
