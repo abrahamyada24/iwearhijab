@@ -3,7 +3,7 @@ const path = require('path');
 
 const APP_URL = process.env.LITEPOS_APP_URL || 'https://lite-pos-warnawarni.vercel.app';
 
-ipcMain.on('print-receipt', (_event, receiptHTML) => {
+ipcMain.handle('print-receipt', async (_event, receiptHTML) => {
   const printWindow = new BrowserWindow({
     show: false,
     webPreferences: {
@@ -13,17 +13,32 @@ ipcMain.on('print-receipt', (_event, receiptHTML) => {
     },
   });
 
-  printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(receiptHTML)}`);
-  printWindow.webContents.once('did-finish-load', () => {
-    printWindow.webContents.print({
-      silent: true,
-      printBackground: true,
-      margins: { marginType: 'printableArea' },
-    }, (success, errorType) => {
-      if (!success) console.error('Gagal mencetak:', errorType);
-      if (!printWindow.isDestroyed()) printWindow.close();
+  try {
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(receiptHTML)}`);
+    await printWindow.webContents.executeJavaScript(`
+      Promise.all(Array.from(document.images).map((image) => {
+        if (image.complete && image.naturalWidth > 0) return image.decode?.().catch(() => undefined);
+        return new Promise((resolve) => {
+          image.addEventListener('load', resolve, { once: true });
+          image.addEventListener('error', resolve, { once: true });
+          setTimeout(resolve, 5000);
+        });
+      }))
+    `);
+
+    return await new Promise((resolve, reject) => {
+      printWindow.webContents.print({
+        silent: true,
+        printBackground: true,
+        margins: { marginType: 'printableArea' },
+      }, (success, errorType) => {
+        if (success) resolve({ success: true });
+        else reject(new Error(errorType || 'Gagal mencetak.'));
+      });
     });
-  });
+  } finally {
+    if (!printWindow.isDestroyed()) printWindow.close();
+  }
 });
 
 function createWindow() {

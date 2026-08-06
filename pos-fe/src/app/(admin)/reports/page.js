@@ -9,6 +9,7 @@ import {
 import { useStore } from '@/store/useStore';
 import SalesChart from '@/components/SalesChart';
 import StatCard from '@/components/StatCard';
+import { buildSimplePdf } from '@/utils/simplePdf';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -104,6 +105,7 @@ const TransactionDetailModal = ({ isOpen, onClose, transaction }) => {
 };
 
 export default function ReportsPage() {
+    const settings = useStore((state) => state.settings);
     const [activeTab, setActiveTab] = useState('TRANSAKSI');
     const [period, setPeriod] = useState('month');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -122,6 +124,7 @@ export default function ReportsPage() {
     const [expensesData, setExpensesData] = useState([]);
 
     const [selectedTrx, setSelectedTrx] = useState(null);
+    const [exportingFormat, setExportingFormat] = useState('');
 
     const TABS = [
         { id: 'TRANSAKSI', label: 'Transaksi', icon: Receipt },
@@ -141,10 +144,7 @@ export default function ReportsPage() {
         return `?period=${period}`;
     };
 
-    const headers = () => {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-        return { 'Authorization': `Bearer ${token}` };
-    };
+    const requestOptions = () => ({ credentials: 'include', cache: 'no-store' });
 
     const loadData = async () => {
         setLoading(true);
@@ -153,13 +153,13 @@ export default function ReportsPage() {
             
             // Base dashboard stats (used by Multiple tabs: Transaksi, Terlaris)
             if (['TRANSAKSI', 'TERLARIS'].includes(activeTab)) {
-                const res = await fetch(`${API_URL}/api/reports/dashboard${qs}`, { headers: headers() });
+                const res = await fetch(`${API_URL}/api/reports/dashboard${qs}`, requestOptions());
                 const data = await res.json();
                 if (data.success) setSummaryData(data.data);
                 
                 // Fetch full transactions for table
                 if (activeTab === 'TRANSAKSI') {
-                    const trxRes = await fetch(`${API_URL}/api/transactions${qs}&limit=100`, { headers: headers() });
+                    const trxRes = await fetch(`${API_URL}/api/transactions${qs}&limit=100`, requestOptions());
                     const trxData = await trxRes.json();
                     if (trxData.success) setTransactions(trxData.data);
                 }
@@ -167,32 +167,32 @@ export default function ReportsPage() {
             
             // Tab Specific Data
             else if (activeTab === 'KATEGORI') {
-                const res = await fetch(`${API_URL}/api/reports/by-category${qs}`, { headers: headers() });
+                const res = await fetch(`${API_URL}/api/reports/by-category${qs}`, requestOptions());
                 const data = await res.json();
                 if (data.success) setCategoryData(data.data);
             }
             else if (activeTab === 'PELANGGAN') {
-                const res = await fetch(`${API_URL}/api/reports/by-customer${qs}`, { headers: headers() });
+                const res = await fetch(`${API_URL}/api/reports/by-customer${qs}`, requestOptions());
                 const data = await res.json();
                 if (data.success) setCustomerData(data.data);
             }
             else if (activeTab === 'RETUR') {
-                const res = await fetch(`${API_URL}/api/reports/returns${qs}`, { headers: headers() });
+                const res = await fetch(`${API_URL}/api/reports/returns${qs}`, requestOptions());
                 const data = await res.json();
                 if (data.success) setReturnsData(data.data);
             }
             else if (activeTab === 'SHIFT') {
-                const res = await fetch(`${API_URL}/api/reports/shift`, { headers: headers() });
+                const res = await fetch(`${API_URL}/api/reports/shift`, requestOptions());
                 const data = await res.json();
                 if (data.success) setShiftData(data.data);
             }
             else if (activeTab === 'LABARUGI') {
-                const res = await fetch(`${API_URL}/api/reports/profit-loss${qs}`, { headers: headers() });
+                const res = await fetch(`${API_URL}/api/reports/profit-loss${qs}`, requestOptions());
                 const data = await res.json();
                 if (data.success) setProfitLossData(data.data);
             }
             else if (activeTab === 'PENGELUARAN') {
-                const res = await fetch(`${API_URL}/api/expenses${qs}`, { headers: headers() });
+                const res = await fetch(`${API_URL}/api/expenses${qs}`, requestOptions());
                 const data = await res.json();
                 if (data.success) setExpensesData(data.data);
             }
@@ -210,11 +210,12 @@ export default function ReportsPage() {
 
     // Export Handler
     const handleExport = async () => {
-        const token = localStorage.getItem('token');
         const qs = getQueryString();
+        setExportingFormat('csv');
         try {
             const response = await fetch(`${API_URL}/api/reports/export${qs}&format=csv`, {
-                headers: { Authorization: `Bearer ${token}` }
+                credentials: 'include',
+                cache: 'no-store',
             });
             if (!response.ok) throw new Error('Gagal mengekspor laporan.');
 
@@ -228,9 +229,58 @@ export default function ReportsPage() {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            URL.revokeObjectURL(downloadUrl);
+            window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1500);
         } catch (error) {
             window.alert(error.message || 'Gagal mengekspor laporan.');
+        } finally {
+            setExportingFormat('');
+        }
+    };
+
+    const handleExportPdf = async () => {
+        const qs = getQueryString();
+        setExportingFormat('pdf');
+        try {
+            const response = await fetch(`${API_URL}/api/reports/export${qs}&format=json`, {
+                credentials: 'include',
+                cache: 'no-store',
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.message || payload.error || 'Gagal menyiapkan PDF.');
+
+            const rows = payload.data || [];
+            const total = rows.reduce((sum, transaction) => sum + Number(transaction.grandTotal || 0), 0);
+            const lines = [
+                String(settings?.storeName || 'WARNA WARNI').toUpperCase(),
+                'LAPORAN TRANSAKSI',
+                `Periode: ${isCustomDate ? `${dateRange.start} s/d ${dateRange.end}` : period}`,
+                `Dibuat : ${new Date().toLocaleString('id-ID')}`,
+                `Jumlah : ${rows.length} transaksi`,
+                `Total  : ${formatRp(total)}`,
+                '',
+                'Tanggal          | Invoice              | Kasir            | Pelanggan        | Total',
+                '-'.repeat(94),
+                ...rows.map((transaction) => [
+                    new Date(transaction.createdAt).toLocaleString('id-ID').substring(0, 16).padEnd(16),
+                    String(transaction.invoiceNumber || '-').substring(0, 20).padEnd(20),
+                    String(transaction.user?.name || '-').substring(0, 16).padEnd(16),
+                    String(transaction.customer?.name || transaction.customerName || 'Umum').substring(0, 16).padEnd(16),
+                    String(Number(transaction.grandTotal || 0)),
+                ].join(' | ')),
+            ];
+            const blob = new Blob([buildSimplePdf(lines)], { type: 'application/pdf' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `laporan-transaksi-${isCustomDate ? `${dateRange.start}-${dateRange.end}` : period}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1500);
+        } catch (error) {
+            window.alert(error.message || 'Gagal mengekspor PDF.');
+        } finally {
+            setExportingFormat('');
         }
     };
 
@@ -577,9 +627,14 @@ export default function ReportsPage() {
                         <button onClick={() => setIsCustomDate(true)} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${isCustomDate ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}>Custom</button>
                     </div>
 
-                    <button onClick={handleExport} className="hidden md:flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors shadow-lg">
-                        Export CSV
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={handleExport} disabled={Boolean(exportingFormat)} className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors shadow-lg disabled:opacity-50">
+                            {exportingFormat === 'csv' && <Loader2 className="animate-spin" size={15} />} CSV
+                        </button>
+                        <button onClick={handleExportPdf} disabled={Boolean(exportingFormat)} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-colors shadow-lg disabled:opacity-50">
+                            {exportingFormat === 'pdf' && <Loader2 className="animate-spin" size={15} />} PDF
+                        </button>
+                    </div>
                 </div>
             </div>
 

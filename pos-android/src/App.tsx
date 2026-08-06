@@ -3,7 +3,7 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, TouchableOpacity, Alert, TextInput, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { AppState, View, Text, TouchableOpacity, Alert, TextInput, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { getDBConnection, createTables, seedInitialData } from './database/db';
 import tw, { useAppColorScheme } from 'twrnc';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -29,7 +29,9 @@ import ContactScreen from './screens/ContactScreen';
 import PackageScreen from './screens/PackageScreen';
 import ProductListScreen from './screens/ProductListScreen';
 import CategoryListScreen from './screens/CategoryListScreen';
+import LockScreen from './screens/LockScreen';
 import AppDialogProvider from './components/AppDialogProvider';
+import { licenseToSettings, resolveLicenseStatus } from './services/licenseService';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -171,6 +173,7 @@ function App(): React.JSX.Element {
     const user = useStore((state) => state.user);
     const setActiveShift = useStore((state) => state.setActiveShift);
     const [colorScheme, , setColorScheme] = useAppColorScheme(tw);
+    const [licenseChecked, setLicenseChecked] = useState(false);
 
     const reconcileActiveShift = useCallback(async () => {
         const db = await getDBConnection();
@@ -204,12 +207,14 @@ function App(): React.JSX.Element {
                     storeLogo: null, enablePreOrder: false, enableShift: true,
                     enableDineTable: false, enableTableOrder: false, enableKitchenQueue: false, enableKitchenPrint: false,
                     showImages: true, printerAddress: null, printerType: null, theme: 'light',
+                    license_number: '', license_status: 'UNKNOWN', license_expire_date: '',
+                    license_type: 'TRIAL', license_offline: false,
                     apiBaseUrl: '',
                 };
                 for (let i = 0; i < rowCount; i++) {
                     const row = settingsRes.rows.item(i);
                     if (['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'].includes(row.key)) continue;
-                    if (row.key === 'showImages' || row.key === 'enablePreOrder' || row.key === 'enableShift') {
+                    if (['showImages', 'enablePreOrder', 'enableShift', 'license_offline'].includes(row.key)) {
                         loadedSettings[row.key] = row.value === 'true';
                     } else {
                         loadedSettings[row.key] = row.value || null;
@@ -243,9 +248,38 @@ function App(): React.JSX.Element {
         restoreShift();
     }, [user?.id, reconcileActiveShift, setActiveShift]);
 
+    // Status lisensi berasal dari backend outlet. Saat offline, aplikasi hanya
+    // memakai cache perangkat yang masih berada dalam masa toleransi server.
+    useEffect(() => {
+        if (!user) {
+            setLicenseChecked(false);
+            return undefined;
+        }
+
+        let cancelled = false;
+        const refreshLicense = async () => {
+            const license = await resolveLicenseStatus();
+            if (cancelled) return;
+            setSettings({ ...useStore.getState().settings, ...licenseToSettings(license) });
+            setLicenseChecked(true);
+        };
+
+        void refreshLicense();
+        const intervalId = setInterval(refreshLicense, 5 * 60 * 1000);
+        const subscription = AppState.addEventListener('change', (state) => {
+            if (state === 'active') void refreshLicense();
+        });
+
+        return () => {
+            cancelled = true;
+            clearInterval(intervalId);
+            subscription.remove();
+        };
+    }, [user?.id, setSettings]);
+
     // Setup Data Synchronization Polling (Foreground for now)
     useEffect(() => {
-        if (!user) return; // Only sync when logged in
+        if (!user || !licenseChecked || settings.license_status !== 'ACTIVE') return; // Only sync when logged in and licensed
 
         const syncData = async () => {
             try {
@@ -275,12 +309,14 @@ function App(): React.JSX.Element {
                             allowNegativeStock: false, receiptFooter: '',
                             loyalty_active: false, loyalty_multiplier: 1, loyalty_multiplier_amount: 1000,
                             loyalty_point_value: 0, loyalty_min_points: 0,
+                            license_number: '', license_status: 'UNKNOWN', license_expire_date: '',
+                            license_type: 'TRIAL', license_offline: false,
                             apiBaseUrl: '',
                         };
                         for (let i = 0; i < rowCount; i++) {
                             const row = settingsRes.rows.item(i);
                             if (['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'].includes(row.key)) continue;
-                            if (['showImages', 'enablePreOrder', 'enableShift', 'allowNegativeStock', 'loyalty_active'].includes(row.key)) {
+                            if (['showImages', 'enablePreOrder', 'enableShift', 'allowNegativeStock', 'loyalty_active', 'license_offline'].includes(row.key)) {
                                 reloadedSettings[row.key] = row.value === 'true';
                             } else if (['loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points'].includes(row.key)) {
                                 reloadedSettings[row.key] = Number(row.value || 0);
@@ -343,30 +379,42 @@ function App(): React.JSX.Element {
         syncData();
 
         return () => clearInterval(intervalId);
-    }, [user, reconcileActiveShift]);
+    }, [user, licenseChecked, settings.license_status, reconcileActiveShift, setSettings]);
+
+    const isCheckingLicense = Boolean(user && !licenseChecked);
+    const isLicenseInactive = Boolean(user && licenseChecked && settings.license_status !== 'ACTIVE');
 
     return (
         <SafeAreaProvider>
             <AppDialogProvider>
                 <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colorScheme === 'dark' ? tw.color('gray-900') : tw.color('white')} />
                 <SafeAreaView style={tw`flex-1 bg-white dark:bg-gray-900`}>
-                    <NavigationContainer theme={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-                        <Stack.Navigator screenOptions={{ headerShown: false }}>
-                            <Stack.Screen name="Login" component={LoginScreen} />
-                            <Stack.Screen name="Main" component={MainTabNavigator} />
-                            <Stack.Screen name="POS" component={ShiftGuardedPOS} />
-                            <Stack.Screen name="Checkout" component={CheckoutScreen} />
-                            <Stack.Screen name="ReceiptPreview" component={ReceiptPreviewScreen} />
-                            <Stack.Screen name="UserManagement" component={UserManagementScreen} />
-                            <Stack.Screen name="StockReceiving" component={StockReceivingScreen} />
-                            <Stack.Screen name="StockOpname" component={StockOpnameScreen} />
-                            <Stack.Screen name="Management" component={ManagementScreen} />
-                            <Stack.Screen name="PackageList" component={PackageScreen} />
-                            <Stack.Screen name="ProductList" component={ProductListScreen} />
-                            <Stack.Screen name="CategoryList" component={CategoryListScreen} />
-                            <Stack.Screen name="StockHistory" component={StockHistoryScreen} />
-                        </Stack.Navigator>
-                    </NavigationContainer>
+                    {isCheckingLicense ? (
+                        <View style={tw`flex-1 items-center justify-center bg-gray-950`}>
+                            <Icon name="shield-search" size={42} color={tw.color('blue-400')} />
+                            <Text style={tw`text-white font-black mt-4`}>Memeriksa lisensi outlet...</Text>
+                        </View>
+                    ) : isLicenseInactive ? (
+                        <LockScreen />
+                    ) : (
+                        <NavigationContainer theme={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                            <Stack.Navigator screenOptions={{ headerShown: false }}>
+                                <Stack.Screen name="Login" component={LoginScreen} />
+                                <Stack.Screen name="Main" component={MainTabNavigator} />
+                                <Stack.Screen name="POS" component={ShiftGuardedPOS} />
+                                <Stack.Screen name="Checkout" component={CheckoutScreen} />
+                                <Stack.Screen name="ReceiptPreview" component={ReceiptPreviewScreen} />
+                                <Stack.Screen name="UserManagement" component={UserManagementScreen} />
+                                <Stack.Screen name="StockReceiving" component={StockReceivingScreen} />
+                                <Stack.Screen name="StockOpname" component={StockOpnameScreen} />
+                                <Stack.Screen name="Management" component={ManagementScreen} />
+                                <Stack.Screen name="PackageList" component={PackageScreen} />
+                                <Stack.Screen name="ProductList" component={ProductListScreen} />
+                                <Stack.Screen name="CategoryList" component={CategoryListScreen} />
+                                <Stack.Screen name="StockHistory" component={StockHistoryScreen} />
+                            </Stack.Navigator>
+                        </NavigationContainer>
+                    )}
                 </SafeAreaView>
             </AppDialogProvider>
         </SafeAreaProvider>

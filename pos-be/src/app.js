@@ -15,7 +15,7 @@ if (!isProduction && !process.env.JWT_SECRET) {
   console.warn('[ENV] JWT_SECRET kosong; memakai secret khusus development.');
 }
 
-const requiredEnvironment = ['DATABASE_URL', ...(isProduction ? ['JWT_SECRET'] : [])];
+const requiredEnvironment = ['DATABASE_URL', ...(isProduction ? ['JWT_SECRET', 'LICENSE_CODE_SECRET'] : [])];
 const missingEnvironment = requiredEnvironment.filter((key) => !process.env[key]);
 if (missingEnvironment.length > 0) {
   throw new Error(`Environment wajib belum diisi: ${missingEnvironment.join(', ')}`);
@@ -26,6 +26,8 @@ const swaggerSpecs = require('./config/swagger');
 
 // Existing routes
 const authRoutes = require('./routes/authRoutes');
+const licenseRoutes = require('./routes/licenseRoutes');
+const { requireActiveLicense } = require('./middlewares/licenseMiddleware');
 const productRoutes = require('./routes/productRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
@@ -105,6 +107,8 @@ if (!isProduction || process.env.ENABLE_API_DOCS === 'true') {
 
 // Existing API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/license', licenseRoutes);
+app.use('/api', requireActiveLicense);
 app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/transactions', transactionRoutes);

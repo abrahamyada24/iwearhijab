@@ -3,7 +3,12 @@ import { getDBConnection } from '../database/db';
 
 // Keys yang hanya ada di device lokal, tidak boleh ditimpa oleh server
 const RETAIL_DISABLED_KEYS = ['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'];
-const LOCAL_ONLY_KEYS = ['printerAddress', 'printerType', 'apiBaseUrl', 'settings_sync_pending', 'sync_initialized', ...RETAIL_DISABLED_KEYS];
+const LICENSE_DEVICE_KEYS = ['license_number', 'license_status', 'license_expire_date', 'license_type', 'license_offline'];
+const LOCAL_ONLY_KEYS = [
+    'printerAddress', 'printerType', 'apiBaseUrl', 'settings_sync_pending', 'sync_initialized',
+    ...LICENSE_DEVICE_KEYS,
+    ...RETAIL_DISABLED_KEYS,
+];
 
 const markRowsSynced = async (db: any, table: string, ids: Array<string | number>) => {
     if (ids.length === 0) return;

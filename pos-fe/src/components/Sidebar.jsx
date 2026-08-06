@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Users, Settings,
   ChevronDown, Box, ClipboardList, UserCircle, LogOut,
-  Wallet, Clock, Truck
+  Wallet, Clock, Truck, BadgeCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -201,6 +201,7 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
             )}
 
             <SidebarItem icon={Settings} label="Pengaturan" href="/settings" />
+            <SidebarItem icon={BadgeCheck} label="Lisensi Outlet" href="/license" />
           </div>
 
           {/* User Profile Area - Persis seperti Header (Clean & Mewah) */}

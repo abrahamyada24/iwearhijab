@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Printer, X } from 'lucide-react';
 import { DEFAULT_DEVICE_PREFERENCES, getDevicePreferences, getPaperWidthMm } from '@/utils/devicePreferences';
+import { useStore } from '@/store/useStore';
 
 export default function ReceiptPreviewModal({ isOpen, onClose, transaction, store, formatNumber }) {
     const receiptRef = useRef(null);
     const [devicePreferences, setDevicePreferences] = useState(DEFAULT_DEVICE_PREFERENCES);
+    const license = useStore((state) => state.license);
 
     useEffect(() => {
         if (isOpen) setDevicePreferences(getDevicePreferences());
@@ -28,17 +30,22 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
     });
     const paperWidthMm = getPaperWidthMm(devicePreferences);
     const logoMaxWidthMm = paperWidthMm === 80 ? 58 : 42;
+    const showLitePosBranding = !(license?.isActive && license?.plan === 'PREMIUM');
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         if (typeof window === 'undefined') return;
 
         if (window.electronAPI?.printReceipt && receiptRef.current) {
             const html = `<!doctype html><html><head><meta charset="utf-8"><style>
                 @page { size: ${paperWidthMm}mm auto; margin: 0; }
                 body { width: ${paperWidthMm}mm; margin: 0; padding: ${devicePreferences.printMarginMm}mm; box-sizing: border-box; font-family: monospace; color: #000; }
-                .receipt-logo { display: block; width: auto; height: auto; max-width: ${logoMaxWidthMm}mm; max-height: 16mm; margin: 0 auto 2mm; object-fit: contain; }
+                .receipt-logo { display: block; width: 100%; height: 16mm; max-width: ${logoMaxWidthMm}mm; margin: 0 auto 2mm; object-fit: contain; object-position: center; }
             </style></head><body>${receiptRef.current.innerHTML}</body></html>`;
-            window.electronAPI.printReceipt(html);
+            try {
+                await window.electronAPI.printReceipt(html);
+            } catch (error) {
+                window.alert(error?.message || 'Gagal mencetak nota. Periksa printer default Windows.');
+            }
             return;
         }
 
@@ -69,12 +76,12 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                     }
                     #pos-receipt-print .receipt-logo {
                         display: block !important;
-                        width: auto !important;
-                        height: auto !important;
+                        width: 100% !important;
+                        height: 16mm !important;
                         max-width: ${logoMaxWidthMm}mm !important;
-                        max-height: 16mm !important;
                         margin: 0 auto 2mm !important;
                         object-fit: contain !important;
+                        object-position: center !important;
                     }
                 }
             `}</style>
@@ -110,12 +117,12 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                                     className="receipt-logo grayscale"
                                     style={{
                                         display: 'block',
-                                        width: 'auto',
-                                        height: 'auto',
+                                        width: '100%',
+                                        height: '16mm',
                                         maxWidth: `${logoMaxWidthMm}mm`,
-                                        maxHeight: '16mm',
                                         margin: '0 auto 2mm',
                                         objectFit: 'contain',
+                                        objectPosition: 'center',
                                     }}
                                 />
                             )}
@@ -170,6 +177,9 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                         <div className="whitespace-pre-wrap text-center">
                             {store?.receiptFooter || 'Terima kasih atas kunjungan Anda'}
                         </div>
+                        {showLitePosBranding && (
+                            <div className="mt-2 text-center text-[8px]">Powered by LitePOS</div>
+                        )}
                     </div>
                 </div>
 

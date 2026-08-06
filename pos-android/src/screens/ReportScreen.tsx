@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, ScrollView,
-    Modal, TextInput, Alert, PermissionsAndroid, Platform, KeyboardAvoidingView,
+    Modal, TextInput, Alert, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import tw, { useAppColorScheme } from 'twrnc';
 import Share, { Social } from 'react-native-share';
@@ -13,8 +13,17 @@ import Svg, { Defs, LinearGradient, Stop, Path, Circle as SvgCircle, Text as Svg
 import DatePickerDropdown from '../components/DatePickerDropdown';
 import { getPaidAmount, getPaymentStatusLabel } from '../utils/preOrderPayment';
 import { connectConfiguredPrinter } from '../utils/printerConnection';
+import { errorCodes, isErrorWithCode, saveDocuments } from '@react-native-documents/picker';
+import { buildSimplePdf } from '../utils/simplePdf';
 
 const formatRp = (num: number) => 'Rp ' + (Math.round(num) || 0).toLocaleString('id-ID');
+const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ')}"`;
+const sanitizeFilePart = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'Semua-Periode';
+const isSaveCancelled = (error: unknown) => isErrorWithCode(error) && error.code === errorCodes.OPERATION_CANCELED;
 
 // Area Chart ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â using react-native-svg
 function AreaChart({ data }: { data: { label: string; value: number }[] }) {
@@ -513,43 +522,58 @@ export default function ReportScreen({ navigation }: any) {
         return rows;
     };
 
+    const saveExportDocument = async (
+        fileName: string,
+        mimeType: string,
+        content: string,
+        encoding: 'utf8' | 'ascii' = 'utf8',
+    ) => {
+        const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+        await RNFS.writeFile(filePath, content, encoding);
+        const [result] = await saveDocuments({
+            sourceUris: [encodeURI(`file://${filePath}`)],
+            mimeType,
+            fileName,
+            copy: true,
+        });
+        if (result.error) throw new Error(result.error);
+        return result.name || fileName;
+    };
+
     const handleExportCSV = async () => {
         setIsExporting(true);
         try {
-            if (Platform.OS === 'android') {
-                await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
-            }
             const rows = await fetchExportData();
             let csv = '\uFEFFInvoice,Tanggal,Pelanggan,Produk,Catatan,Harga,Qty,Subtotal,Diskon,Total Trx,Dibayar,Sisa,Metode,Status,Status Bayar,Pre-Order\n';
             for (const row of rows) {
-                const prod = `"${(row.productName || '').replace(/"/g, '""')}"`;
-                const notes = `"${(row.itemNotes || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
-                const cust = `"${(row.customerName || '').replace(/"/g, '""')}"`;
                 const po = row.preOrderDate ? row.preOrderDate.substring(0, 10) : '';
-                csv += `${row.invoiceNumber},${(row.paidAt || row.createdAt)?.substring(0, 16)},${cust},${prod},${notes},${row.price},${row.quantity},${(row.price || 0) * (row.quantity || 0)},${row.discountAmount || 0},${row.grandTotal},${getPaidAmount(row)},${row.remainingAmount || 0},${row.paymentMethod},${row.status},${getPaymentStatusLabel(row.paymentStatus)},${po}\n`;
+                csv += [
+                    row.invoiceNumber, (row.paidAt || row.createdAt)?.substring(0, 16), row.customerName,
+                    row.productName, row.itemNotes, row.price, row.quantity,
+                    (row.price || 0) * (row.quantity || 0), row.discountAmount || 0, row.grandTotal,
+                    getPaidAmount(row), row.remainingAmount || 0, row.paymentMethod, row.status,
+                    getPaymentStatusLabel(row.paymentStatus), po,
+                ].map(csvCell).join(',') + '\n';
             }
-            const dateStr = buildDateLabel() || 'All_Time';
-            const dateLabel = dateStr.replace(/[\s\/]/g, '-');
+            const dateLabel = sanitizeFilePart(buildDateLabel());
             const fileName = `Laporan_${dateLabel}.csv`;
-            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
-            await RNFS.writeFile(filePath, csv, 'utf8');
+            const savedName = await saveExportDocument(fileName, 'text/csv', csv);
+            Alert.alert('CSV Tersimpan', `${savedName} berhasil disimpan di lokasi yang Anda pilih.`);
+            /* Pesan lama untuk penyimpanan langsung ke Download:
             Alert.alert(
                 'Tersimpan',
                 `File CSV berhasil disimpan ke:\nFolder Download ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ ${fileName}\n\nSilakan buka File Manager Anda untuk melihatnya.`
-            );
-        } catch (e) {
-            Alert.alert('Error', 'Gagal export CSV. Pastikan izin penyimpanan sudah disetujui.');
+            ); */
+        } catch (e: any) {
+            if (!isSaveCancelled(e)) Alert.alert('Export CSV Gagal', e?.message || 'File CSV tidak dapat disimpan.');
         } finally { setIsExporting(false); setShowExportModal(false); }
     };
 
     const handleExportAkuntansiCSV = async () => {
         setIsExporting(true);
         try {
-            if (Platform.OS === 'android') {
-                await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
-            }
             const rows = await fetchExportData();
-            let csv = 'Tanggal,No. Bukti,Keterangan,Akun,Debit,Kredit\n';
+            let csv = '\uFEFFTanggal,No. Bukti,Keterangan,Akun,Debit,Kredit\n';
             for (const row of rows) {
                 if (row.status === 'RETURNED') continue;
                 if ((row.paymentStatus || 'PAID') !== 'PAID') continue;
@@ -558,29 +582,26 @@ export default function ReportScreen({ navigation }: any) {
                 const desc = `Penjualan ${inv} - ${row.paymentMethod}`;
                 const total = getPaidAmount(row);
                 if (total <= 0) continue;
-                csv += `${date},${inv},${desc},Kas/Bank,${total},0\n`;
-                csv += `${date},${inv},${desc},Pendapatan Penjualan,0,${total}\n`;
+                csv += [date, inv, desc, 'Kas/Bank', total, 0].map(csvCell).join(',') + '\n';
+                csv += [date, inv, desc, 'Pendapatan Penjualan', 0, total].map(csvCell).join(',') + '\n';
             }
-            const dateStr = buildDateLabel() || 'All_Time';
-            const dateLabel = dateStr.replace(/[\s\/]/g, '-');
+            const dateLabel = sanitizeFilePart(buildDateLabel());
             const fileName = `Jurnal_Akuntansi_${dateLabel}.csv`;
-            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
-            await RNFS.writeFile(filePath, csv, 'utf8');
+            const savedName = await saveExportDocument(fileName, 'text/csv', csv);
+            Alert.alert('Jurnal Tersimpan', `${savedName} berhasil disimpan di lokasi yang Anda pilih.`);
+            /* Pesan lama untuk penyimpanan langsung ke Download:
             Alert.alert(
                 'Tersimpan',
                 `File Jurnal CSV (Accurate/Jurnal) berhasil disimpan ke:\nFolder Download ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ ${fileName}\n\nSilakan buka File Manager Anda untuk melihatnya.`
-            );
-        } catch (e) {
-            Alert.alert('Error', 'Gagal export CSV Akuntansi.');
+            ); */
+        } catch (e: any) {
+            if (!isSaveCancelled(e)) Alert.alert('Export Jurnal Gagal', e?.message || 'File jurnal tidak dapat disimpan.');
         } finally { setIsExporting(false); setShowExportModal(false); }
     };
 
-    const handleExportHTML = async () => {
+    const handleExportPDF = async () => {
         setIsExporting(true);
         try {
-            if (Platform.OS === 'android' && (Platform.Version as number) < 33) {
-                await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
-            }
             const rows = await fetchExportData();
             // Group by invoice
             const trxMap: Record<string, any> = {};
@@ -599,59 +620,36 @@ export default function ReportScreen({ navigation }: any) {
             const totalBruto = entries.filter(t => t.status !== 'RETURNED' && (t.paymentStatus || 'PAID') === 'PAID').reduce((s, t) => s + getPaidAmount(t), 0);
             const totalRetur = entries.filter(t => t.status === 'RETURNED').reduce((s, t) => s + Number(t.grandTotal || 0), 0);
 
-            const toRp = (n: number) => 'Rp ' + (n || 0).toLocaleString('id-ID');
-            const rowsHtml = entries.map(t => `
-                <tr class="${t.status === 'RETURNED' ? 'ret' : ''}">
-                    <td>${t.invoiceNumber}</td>
-                    <td>${(t.paidAt || t.createdAt)?.substring(0, 16).replace('T', ' ')}</td>
-                    <td>${t.customerName || '-'}</td>
-                    <td>${t.items.map((i: any) => `${i.name} x${i.qty}`).join('<br>')}</td>
-                    <td style="text-align:right">${toRp(t.discountAmount || 0)}</td>
-                    <td style="text-align:right;font-weight:bold">${toRp(getPaidAmount(t))}</td>
-                    <td>${t.paymentMethod}</td>
-                    <td><span class="badge ${t.status === 'RETURNED' ? 'ret-badge' : t.status === 'COMPLETED' ? 'ok-badge' : ''}">${t.status}</span></td>
-                    <td>${getPaymentStatusLabel(t.paymentStatus)}</td>
-                </tr>`).join('');
-
-            const html = `<!DOCTYPE html>
-<html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Laporan ${buildDateLabel()}</title>
-<style>body{font-family:Arial,sans-serif;font-size:12px;padding:16px;color:#222}
-h1{font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#555;margin-bottom:12px;font-weight:normal}
-table{width:100%;border-collapse:collapse;margin-bottom:20px}
-th{background:#2563eb;color:white;padding:6px 8px;text-align:left;font-size:11px}
-td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px}
-tr.ret td{color:#dc2626;background:#fef2f2}
-.badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px}
-.ok-badge{background:#d1fae5;color:#065f46}.ret-badge{background:#fee2e2;color:#991b1b}
-.summary{display:flex;gap:20px;margin-bottom:20px}
-.card{padding:12px 20px;border-radius:8px;flex:1;text-align:center}
-.card-blue{background:#eff6ff;border:1px solid #bfdbfe}.card-red{background:#fef2f2;border:1px solid #fecaca}.card-green{background:#f0fdf4;border:1px solid #bbf7d0}
-.card .label{font-size:10px;color:#6b7280;text-transform:uppercase}.card .value{font-size:18px;font-weight:bold;margin-top:4px}
-@media print{button,nav{display:none}}
-</style></head>
-<body>
-<h1>Laporan Penjualan - LitePOS</h1>
-<h2>Periode: ${buildDateLabel()} | Dibuat: ${new Date().toLocaleString('id-ID')}</h2>
-<div class="summary">
-  <div class="card card-blue"><div class="label">Total Transaksi</div><div class="value">${entries.filter(t => t.status !== 'RETURNED').length}</div></div>
-  <div class="card card-green"><div class="label">Bruto</div><div class="value">${toRp(totalBruto)}</div></div>
-  <div class="card card-red"><div class="label">Retur</div><div class="value">${toRp(totalRetur)}</div></div>
-  <div class="card card-green"><div class="label">Neto</div><div class="value">${toRp(totalBruto - totalRetur)}</div></div>
-</div>
-<table><thead><tr><th>Invoice</th><th>Tanggal</th><th>Pelanggan</th><th>Produk</th><th>Diskon</th><th>Dibayar</th><th>Metode</th><th>Status</th><th>Status Bayar</th></tr></thead>
-<tbody>${rowsHtml}</tbody></table>
-</body></html>`;
-
-            const dateLabel = buildDateLabel().replace(/[\s\/]/g, '-');
-            const fileName = `Laporan_${dateLabel}.html`;
-            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
-            await RNFS.writeFile(filePath, html, 'utf8');
-            Alert.alert(
-                'Tersimpan',
-                `File HTML berhasil disimpan ke:\nFolder Download -> ${fileName}\n\nSilakan buka File Manager Anda untuk melihatnya.`
-            );
+            const pdfLines = [
+                String(settings.storeName || 'WARNA WARNI').toUpperCase(),
+                'LAPORAN PENJUALAN',
+                `Periode : ${buildDateLabel()}`,
+                `Dibuat  : ${new Date().toLocaleString('id-ID')}`,
+                '',
+                `Total transaksi : ${entries.filter(t => t.status !== 'RETURNED').length}`,
+                `Penjualan bruto : ${formatRp(totalBruto)}`,
+                `Total retur      : ${formatRp(totalRetur)}`,
+                `Penjualan neto  : ${formatRp(totalBruto - totalRetur)}`,
+                '',
+                'Tanggal          | Invoice              | Pelanggan        | Dibayar        | Status',
+                '-'.repeat(94),
+                ...entries.flatMap((transaction: any) => {
+                    const header = [
+                        String(transaction.paidAt || transaction.createdAt || '').substring(0, 16).replace('T', ' ').padEnd(16),
+                        String(transaction.invoiceNumber || '-').substring(0, 20).padEnd(20),
+                        String(transaction.customerName || '-').substring(0, 16).padEnd(16),
+                        String(getPaidAmount(transaction)).padStart(14),
+                        String(transaction.status || '-'),
+                    ].join(' | ');
+                    const itemLines = transaction.items.map((item: any) => `  - ${item.name || 'Produk'} x${item.qty} @ ${formatRp(item.price)}`);
+                    return [header, ...itemLines];
+                }),
+            ];
+            const fileName = `Laporan_${sanitizeFilePart(buildDateLabel())}.pdf`;
+            const savedName = await saveExportDocument(fileName, 'application/pdf', buildSimplePdf(pdfLines), 'ascii');
+            Alert.alert('PDF Tersimpan', `${savedName} berhasil disimpan di lokasi yang Anda pilih.`);
         } catch (e: any) {
-            Alert.alert('Error', `Gagal export laporan HTML.\n${e.message || ''}`);
+            if (!isSaveCancelled(e)) Alert.alert('Export PDF Gagal', e?.message || 'File PDF tidak dapat disimpan.');
         } finally { setIsExporting(false); setShowExportModal(false); }
     };
 
@@ -1586,7 +1584,7 @@ tr.ret td{color:#dc2626;background:#fef2f2}
                             </View>
                             <View style={tw`flex-1`}>
                                 <Text style={tw`font-black text-green-800`}>Simpan ke CSV (.csv)</Text>
-                                <Text style={tw`text-xs text-green-600 mt-0.5`}>Disimpan ke Folder Download, buka di Excel / Google Sheets</Text>
+                                <Text style={tw`text-xs text-green-600 mt-0.5`}>Pilih folder tujuan, lalu buka di Excel / Google Sheets</Text>
                             </View>
                         </TouchableOpacity>
 
@@ -1620,15 +1618,15 @@ tr.ret td{color:#dc2626;background:#fef2f2}
 
                         <TouchableOpacity
                             style={tw`bg-blue-50 border border-blue-200 p-4 rounded-xl mb-3 flex-row items-center ${isExporting ? 'opacity-50' : ''}`}
-                            onPress={handleExportHTML}
+                            onPress={handleExportPDF}
                             disabled={isExporting}
                         >
                             <View style={tw`w-10 h-10 bg-blue-100 rounded-xl items-center justify-center mr-4`}>
                                 <Icon name="file-document-outline" size={20} color={tw.color('blue-600')} />
                             </View>
                             <View style={tw`flex-1`}>
-                                <Text style={tw`font-black text-blue-800`}>Simpan ke PDF (.html)</Text>
-                                <Text style={tw`text-xs text-blue-600 mt-0.5`}>File HTML tersimpan di Download, buka di browser -{">"} Print -{">"} PDF</Text>
+                                <Text style={tw`font-black text-blue-800`}>Simpan ke PDF (.pdf)</Text>
+                                <Text style={tw`text-xs text-blue-600 mt-0.5`}>Pilih sendiri folder dan nama file tujuan</Text>
                             </View>
                         </TouchableOpacity>
 

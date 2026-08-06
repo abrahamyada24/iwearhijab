@@ -57,6 +57,11 @@ interface StoreState {
         loyalty_multiplier_amount: number;
         loyalty_point_value: number;
         loyalty_min_points: number;
+        license_number?: string;
+        license_status?: 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'UNKNOWN';
+        license_expire_date?: string;
+        license_type?: 'TRIAL' | 'PREMIUM';
+        license_offline?: boolean;
         google_sheet_url?: string;
         apiBaseUrl?: string;
     };
@@ -110,6 +115,11 @@ export const useStore = create<StoreState>((set, get) => ({
         loyalty_multiplier_amount: 1000,
         loyalty_point_value: 0,
         loyalty_min_points: 0,
+        license_number: '',
+        license_status: 'UNKNOWN',
+        license_expire_date: '',
+        license_type: 'TRIAL',
+        license_offline: false,
         apiBaseUrl: '',
     },
     setSettings: (settings) => set({ settings }),

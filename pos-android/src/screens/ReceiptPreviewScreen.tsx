@@ -9,6 +9,14 @@ import { RECEIPT_LOGO_BASE64 } from '../assets/receiptLogoBase64';
 import RNFS from 'react-native-fs';
 import { getPaidAmount, getPaymentStatusLabel, getPaymentStatusMessage, getRemainingAmount } from '../utils/preOrderPayment';
 import { connectConfiguredPrinter } from '../utils/printerConnection';
+import {
+    getReceiptLogoPrintOptions,
+    RECEIPT_LOGO_CAPTURE_HEIGHT,
+    RECEIPT_LOGO_CAPTURE_WIDTH,
+    RECEIPT_LOGO_INNER_HEIGHT,
+    RECEIPT_LOGO_INNER_WIDTH,
+    resolveReceiptLogoUri,
+} from '../utils/receiptLogo';
 
 // Logo LitePOS permanen - tidak perlu setting
 const LITEPOS_LOGO = require('../assets/logo.png');
@@ -21,6 +29,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
     const settings = useStore(state => state.settings);
     const viewShotRef = useRef<any>(null);
     const logoShotRef = useRef<any>(null);
+    const receiptLogoUri = resolveReceiptLogoUri(settings.storeLogo, settings.apiBaseUrl);
 
     const formatRp = (num: number) => 'Rp ' + (Math.round(num) || 0).toLocaleString('id-ID');
     const paymentStatusLabel = getPaymentStatusLabel(receiptData.paymentStatus);
@@ -184,7 +193,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
     };
 
     const getPrintableLogoBase64 = async (): Promise<string> => {
-        if (settings.storeLogo && logoShotRef.current?.capture) {
+        if (receiptLogoUri && logoShotRef.current?.capture) {
             try {
                 const uri = await logoShotRef.current.capture();
                 return await RNFS.readFile(uri.replace('file://', ''), 'base64');
@@ -253,7 +262,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
             if (settings.showLogoOnReceipt === true || String(settings.showLogoOnReceipt) === 'true') {
                 try {
                     const logoToPrint = await getPrintableLogoBase64();
-                    await printerClass.printImageBase64(logoToPrint, { imageWidth: 180 });
+                    await printerClass.printImageBase64(logoToPrint, getReceiptLogoPrintOptions());
                     await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
                 } catch (logoErr) {
                     console.log('Logo print failed:', logoErr);
@@ -277,14 +286,14 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
                 <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100 flex-1`}>Printer dan Struk</Text>
             </View>
 
-            {settings.storeLogo && settings.showLogoOnReceipt !== false ? (
-                <View pointerEvents="none" style={{ position: 'absolute', left: -10000, top: -10000, width: 220, height: 120 }}>
+            {receiptLogoUri && settings.showLogoOnReceipt !== false ? (
+                <View pointerEvents="none" style={{ position: 'absolute', left: -10000, top: -10000, width: RECEIPT_LOGO_CAPTURE_WIDTH, height: RECEIPT_LOGO_CAPTURE_HEIGHT }}>
                     <ViewShot
                         ref={logoShotRef}
-                        options={{ format: 'jpg', quality: 0.95 }}
+                        options={{ format: 'png', quality: 1 }}
                         style={{
-                            width: 220,
-                            height: 120,
+                            width: RECEIPT_LOGO_CAPTURE_WIDTH,
+                            height: RECEIPT_LOGO_CAPTURE_HEIGHT,
                             padding: 10,
                             backgroundColor: '#FFFFFF',
                             alignItems: 'center',
@@ -292,8 +301,8 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
                         }}
                     >
                         <Image
-                            source={{ uri: settings.storeLogo }}
-                            style={{ width: 200, height: 100 }}
+                            source={{ uri: receiptLogoUri }}
+                            style={{ width: RECEIPT_LOGO_INNER_WIDTH, height: RECEIPT_LOGO_INNER_HEIGHT }}
                             resizeMode="contain"
                         />
                     </ViewShot>
@@ -306,10 +315,10 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
                 <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }} style={tw`bg-white w-full max-w-[380px] shadow-md mb-8`}>
                     <View style={tw`p-5 bg-white`}>
                         {/* Logo */}
-                        {settings.storeLogo && settings.showLogoOnReceipt !== false ? (
+                        {receiptLogoUri && settings.showLogoOnReceipt !== false ? (
                             <View style={tw`items-center mb-4`}>
                                 <Image 
-                                    source={{ uri: settings.storeLogo }} 
+                                    source={{ uri: receiptLogoUri }}
                                     style={{ width: 120, height: 72, backgroundColor: '#FFFFFF' }}
                                     resizeMode="contain"
                                 />

@@ -226,15 +226,8 @@ exports.getDashboardStats = async (req, res) => {
  */
 exports.exportTransactionReport = async (req, res) => {
     try {
-        const { startDate, endDate, format } = req.query;
-        const dateFilter = {};
-
-        if (startDate && endDate) {
-            dateFilter.createdAt = {
-                gte: new Date(startDate),
-                lte: new Date(new Date(endDate).setHours(23, 59, 59, 999))
-            };
-        }
+        const { startDate, period, format } = req.query;
+        const { dateFilter } = parseDateRange(req.query);
 
         const transactions = await prisma.transaction.findMany({
             where: { ...dateFilter, status: { in: ['PAID', 'COMPLETED'] } },
@@ -267,7 +260,7 @@ exports.exportTransactionReport = async (req, res) => {
             const csv = parser.parse(csvData);
 
             res.setHeader('Content-Type', 'text/csv');
-            res.setHeader('Content-Disposition', `attachment; filename=laporan_transaksi_${startDate || 'all'}.csv`);
+            res.setHeader('Content-Disposition', `attachment; filename=laporan_transaksi_${startDate || period || 'month'}.csv`);
             return res.send(csv);
         }
 
@@ -337,6 +330,11 @@ const parseDateRange = (query) => {
         start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
         end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+    } else if (period === 'today') {
+        start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(now);
         end.setHours(23, 59, 59, 999);
     } else if (period === 'week') {
         start = new Date(now);

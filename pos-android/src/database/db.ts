@@ -378,23 +378,30 @@ export const seedInitialData = async (db: any) => {
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storePhone', '')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('showImages', 'true')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('theme', 'light')`);
-  } else {
-    // Ensure new settings keys exist
-    const settingKeys = [
-      'storeAddress', 'storePhone', 'enablePreOrder', 'allowNegativeStock', 'receiptFooter',
-      'loyalty_active', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points',
-      'google_sheet_url', 'apiBaseUrl'
-    ];
-    for (const key of settingKeys) {
-      let defaultVal = '';
-      if (key === 'enablePreOrder' || key === 'allowNegativeStock' || key === 'loyalty_active') {
-        defaultVal = 'false';
-      } else if (key === 'loyalty_multiplier' || key === 'loyalty_multiplier_amount' || key === 'loyalty_point_value' || key === 'loyalty_min_points') {
-        defaultVal = key === 'loyalty_multiplier_amount' ? '1000' : (key === 'loyalty_multiplier' ? '1' : '0');
-      }
-      try {
-        await db.executeSql(`INSERT OR IGNORE INTO settings (key, value) VALUES ('${key}', '${defaultVal}')`);
-      } catch (e) { }
+  }
+
+  // Selalu pastikan konfigurasi lisensi tersedia, termasuk pada instalasi baru.
+  const settingKeys = [
+    'storeAddress', 'storePhone', 'enablePreOrder', 'allowNegativeStock', 'receiptFooter',
+    'loyalty_active', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points',
+    'license_number', 'license_status', 'license_expire_date', 'license_type', 'license_offline',
+    'google_sheet_url', 'apiBaseUrl'
+  ];
+  for (const key of settingKeys) {
+    let defaultVal = '';
+    if (key === 'enablePreOrder' || key === 'allowNegativeStock' || key === 'loyalty_active') {
+      defaultVal = 'false';
+    } else if (key === 'loyalty_multiplier' || key === 'loyalty_multiplier_amount' || key === 'loyalty_point_value' || key === 'loyalty_min_points') {
+      defaultVal = key === 'loyalty_multiplier_amount' ? '1000' : (key === 'loyalty_multiplier' ? '1' : '0');
+    } else if (key === 'license_status') {
+      defaultVal = 'UNKNOWN';
+    } else if (key === 'license_type') {
+      defaultVal = 'TRIAL';
+    } else if (key === 'license_offline') {
+      defaultVal = 'false';
     }
+    try {
+      await db.executeSql('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', [key, defaultVal]);
+    } catch (e) { }
   }
 };

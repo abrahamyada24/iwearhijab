@@ -19,6 +19,14 @@ import ViewShot from 'react-native-view-shot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { DEFAULT_API_URL, getApiBaseUrl, setApiBaseUrl as persistApiBaseUrl } from '../services/api';
 import { connectConfiguredPrinter } from '../utils/printerConnection';
+import {
+    getReceiptLogoPrintOptions,
+    RECEIPT_LOGO_CAPTURE_HEIGHT,
+    RECEIPT_LOGO_CAPTURE_WIDTH,
+    RECEIPT_LOGO_INNER_HEIGHT,
+    RECEIPT_LOGO_INNER_WIDTH,
+    resolveReceiptLogoUri,
+} from '../utils/receiptLogo';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -77,6 +85,7 @@ export default function SettingsScreen({ navigation }: any) {
     const [, , setColorScheme] = useAppColorScheme(tw);
     const logoShotRef = useRef<any>(null);
     const isHydratingSettingsRef = useRef(true);
+    const receiptLogoUri = resolveReceiptLogoUri(storeLogo, apiBaseUrl);
 
     // Printer state
     const [bleDevices, setBleDevices] = useState<any[]>([]);
@@ -293,7 +302,7 @@ export default function SettingsScreen({ navigation }: any) {
 
     // ── Test Print ───────────────────────────────────────────────────────────
     const getPrintableLogoBase64 = async (): Promise<string> => {
-        if (storeLogo && logoShotRef.current?.capture) {
+        if (receiptLogoUri && logoShotRef.current?.capture) {
             try {
                 const uri = await logoShotRef.current.capture();
                 return await RNFS.readFile(uri.replace('file://', ''), 'base64');
@@ -321,7 +330,7 @@ export default function SettingsScreen({ navigation }: any) {
             if (showLogoOnReceipt === true || String(showLogoOnReceipt) === 'true') {
                 try {
                     const logoToPrint = await getPrintableLogoBase64();
-                    await printerClass.printImageBase64(logoToPrint, { imageWidth: 180 });
+                    await printerClass.printImageBase64(logoToPrint, getReceiptLogoPrintOptions());
                     await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
                 } catch (logoErr) {
                     console.warn('Logo print failed (lanjut cetak teks):', logoErr);
@@ -552,14 +561,14 @@ export default function SettingsScreen({ navigation }: any) {
                 </View>
             </View>
 
-            {storeLogo && showLogoOnReceipt ? (
-                <View pointerEvents="none" style={{ position: 'absolute', left: -10000, top: -10000, width: 220, height: 120 }}>
+            {receiptLogoUri && showLogoOnReceipt ? (
+                <View pointerEvents="none" style={{ position: 'absolute', left: -10000, top: -10000, width: RECEIPT_LOGO_CAPTURE_WIDTH, height: RECEIPT_LOGO_CAPTURE_HEIGHT }}>
                     <ViewShot
                         ref={logoShotRef}
-                        options={{ format: 'jpg', quality: 0.95 }}
+                        options={{ format: 'png', quality: 1 }}
                         style={{
-                            width: 220,
-                            height: 120,
+                            width: RECEIPT_LOGO_CAPTURE_WIDTH,
+                            height: RECEIPT_LOGO_CAPTURE_HEIGHT,
                             padding: 10,
                             backgroundColor: '#FFFFFF',
                             alignItems: 'center',
@@ -567,8 +576,8 @@ export default function SettingsScreen({ navigation }: any) {
                         }}
                     >
                         <Image
-                            source={{ uri: storeLogo }}
-                            style={{ width: 200, height: 100 }}
+                            source={{ uri: receiptLogoUri }}
+                            style={{ width: RECEIPT_LOGO_INNER_WIDTH, height: RECEIPT_LOGO_INNER_HEIGHT }}
                             resizeMode="contain"
                         />
                     </ViewShot>
@@ -645,7 +654,7 @@ export default function SettingsScreen({ navigation }: any) {
                 {/* ── FITUR TOKO ─────────────────────────────────────────────────── */}
                 <SectionItem
                     icon="cog-outline" iconColor={tw.color('purple-600')}
-                    label="Fitur Toko" sublabel="Pre-order, shift, meja dine-in"
+                    label="Fitur Toko" sublabel="Pre-order, shift, dan tampilan produk"
                     isOpen={openSection === 'features'} onPress={() => toggleSection('features')}
                 >
                     <View style={tw`pt-4`}>

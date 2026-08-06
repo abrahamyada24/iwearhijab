@@ -89,12 +89,12 @@ export default function TransactionDetailModal({ isOpen, onClose, transaction })
 
           #receipt-print .receipt-logo {
             display: block !important;
-            width: auto !important;
-            height: auto !important;
+            width: 100% !important;
+            height: 16mm !important;
             max-width: ${logoMaxWidthMm}mm !important;
-            max-height: 16mm !important;
             margin: 0 auto 3mm !important;
             object-fit: contain !important;
+            object-position: center !important;
           }
           
           .no-print { display: none !important; }
@@ -254,12 +254,12 @@ export default function TransactionDetailModal({ isOpen, onClose, transaction })
                                 alt="Logo toko"
                                 style={{
                                     display: 'block',
-                                    width: 'auto',
-                                    height: 'auto',
+                                    width: '100%',
+                                    height: '16mm',
                                     maxWidth: `${logoMaxWidthMm}mm`,
-                                    maxHeight: '16mm',
                                     margin: '0 auto 3mm',
                                     objectFit: 'contain',
+                                    objectPosition: 'center',
                                 }}
                             />
                         )}
