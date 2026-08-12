@@ -11,8 +11,11 @@ import { applyProductDiscount } from '../utils/productDiscount';
 
 export default function POSScreen({ navigation, route }: any) {
     useAppColorScheme(tw);
-    const { width } = useWindowDimensions();
-    const isTablet = width >= 768;
+    const { width, height: screenHeight } = useWindowDimensions();
+    const isTablet = Math.min(width, screenHeight) >= 600;
+    const isLandscape = width > screenHeight;
+    const productColumns = isTablet ? (isLandscape && width >= 1100 ? 4 : 3) : 2;
+    const cartPaneWidth = isTablet ? Math.min(380, Math.max(320, Math.round(width * 0.3))) : 0;
 
     const [categories, setCategories] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
@@ -44,7 +47,6 @@ export default function POSScreen({ navigation, route }: any) {
 
     // Mobile cart panel state
     const [mobileCartExpanded, setMobileCartExpanded] = useState(false);
-    const { height: screenHeight } = useWindowDimensions();
     const expandedHeight = Math.round(screenHeight * 0.42);
     const collapsedHeight = 72;
     const cartPanelAnim = React.useRef(new Animated.Value(0)).current; // 0 = collapsed, 1 = expanded
@@ -58,8 +60,6 @@ export default function POSScreen({ navigation, route }: any) {
     const updateCartItemNotes = useStore((state) => state.updateCartItemNotes);
     const updateCartItem = useStore((state) => state.updateCartItem);
     const clearCart = useStore((state) => state.clearCart);
-    const setPendingOrderContext = useStore((state) => state.setPendingOrderContext);
-    const pendingOrderContext = useStore((state) => state.pendingOrderContext);
     const cartTotal = useStore((state) => state.cartTotal());
     const cartSubtotal = useStore((state) => state.cartSubtotal());
     const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -83,18 +83,7 @@ export default function POSScreen({ navigation, route }: any) {
 
     const getPendingMeta = (pending: any) => parsePendingCartPayload(pending.cartData).meta;
     const getPendingItemCount = (pending: any) => parsePendingCartPayload(pending.cartData).items.length;
-    const isTablePendingOrder = (pending: any) => {
-        const meta = getPendingMeta(pending);
-        return meta?.source === 'TABLE_QR' || Boolean(meta?.tableNumber);
-    };
-    const getPendingDisplayName = (pending: any) => {
-        const meta = getPendingMeta(pending);
-        if (meta?.tableNumber) {
-            const customer = meta.customerName || 'Pelanggan';
-            return `Meja ${meta.tableNumber} - ${customer}`;
-        }
-        return pending.name || 'Order Pending';
-    };
+    const getPendingDisplayName = (pending: any) => pending.name || 'Penjualan Tersimpan';
 
     const resolvePendingCartItems = async (items: any[]) => {
         const db = await getDBConnection();
@@ -213,7 +202,7 @@ export default function POSScreen({ navigation, route }: any) {
                 pending.push({ ...localPending, source: 'local' });
             }
 
-            // Load server pending orders, including table QR orders submitted from public catalog
+            // Load server pending retail sales.
             try {
                 const remoteRes = await api.get('/saved-transactions');
                 if (remoteRes.data?.success && Array.isArray(remoteRes.data.data)) {
@@ -510,19 +499,6 @@ export default function POSScreen({ navigation, route }: any) {
                 addToCartNewLine(item);
             }
 
-            if (meta?.source === 'TABLE_QR' || meta?.tableNumber) {
-                setPendingOrderContext({
-                    source: meta.source || pending.source,
-                    orderType: 'DINE_IN',
-                    tableNumber: meta.tableNumber,
-                    customerName: meta.customerName,
-                    note: meta.note,
-                    orderCode: meta.orderCode,
-                    queueNumber: meta.queueNumber,
-                    queueLabel: meta.queueLabel,
-                });
-            }
-
             if (pending.source === 'server') {
                 await api.delete(`/saved-transactions/${pending.id}?action=accepted`);
             } else {
@@ -583,7 +559,7 @@ export default function POSScreen({ navigation, route }: any) {
                 </TouchableOpacity>
             );
         }
-        const numCols = isTablet ? 3 : 2;
+        const numCols = productColumns;
         return (
             <View style={{ flex: 1 / numCols, padding: 8 }}>
                 <TouchableOpacity
@@ -673,7 +649,7 @@ export default function POSScreen({ navigation, route }: any) {
                         <Icon name="magnify" size={15} color={tw.color('gray-400')} style={tw`mr-2`} />
                         <TextInput
                             style={tw`flex-1 py-2.5 text-gray-800 dark:text-gray-100 text-sm`}
-                            placeholder="Cari menu..."
+                            placeholder="Cari produk..."
                             placeholderTextColor={tw.color('gray-400')}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -724,8 +700,8 @@ export default function POSScreen({ navigation, route }: any) {
                 data={filteredProducts}
                 extraData={cart}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3b82f6']} />}
-                numColumns={!settings.showImages ? 1 : (isTablet ? 3 : 2)}
-                key={(!settings.showImages ? 'list' : 'grid') + (isTablet ? '-tablet' : '-mobile')}
+                numColumns={!settings.showImages ? 1 : productColumns}
+                key={(!settings.showImages ? 'list' : 'grid') + `-${productColumns}-columns`}
                 keyExtractor={(item) => String(item.id)}
                 contentContainerStyle={tw`p-2 pb-32`}
                 renderItem={renderProduct}
@@ -734,7 +710,7 @@ export default function POSScreen({ navigation, route }: any) {
     );
 
     const renderCartPane = () => (
-        <View style={tw`w-[350px] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex-none`}>
+        <View style={[tw`bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex-none`, { width: cartPaneWidth }]}>
             <View style={tw`p-4 border-b border-gray-200 dark:border-gray-700 flex-row justify-between items-center`}>
                 <Text style={tw`font-black text-lg text-gray-800 dark:text-gray-100`}>Keranjang</Text>
                 <View style={tw`flex-row gap-2`}>
@@ -1015,7 +991,7 @@ export default function POSScreen({ navigation, route }: any) {
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
                     <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl max-h-[70%] p-6`}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
-                            <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Order Meja & Pending</Text>
+                            <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Penjualan Tersimpan</Text>
                             <TouchableOpacity onPress={() => setShowPendingModal(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}>
                                 <Icon name="close" size={18} color={tw.color('gray-600')} />
                             </TouchableOpacity>
@@ -1023,20 +999,14 @@ export default function POSScreen({ navigation, route }: any) {
                         <FlatList
                             data={pendingSales}
                             keyExtractor={item => item.id}
-                            ListEmptyComponent={() => <Text style={tw`text-center text-gray-400 py-8`}>Belum ada order meja atau pending</Text>}
+                            ListEmptyComponent={() => <Text style={tw`text-center text-gray-400 py-8`}>Belum ada penjualan tersimpan</Text>}
                             renderItem={({ item }) => {
                                 const meta = getPendingMeta(item);
-                                const isTableOrder = isTablePendingOrder(item);
                                 return (
                                     <View style={tw`flex-row items-center bg-gray-50 dark:bg-gray-900 p-4 rounded-xl mb-3 border border-gray-100 dark:border-gray-800`}>
                                         <View style={tw`flex-1`}>
                                             <View style={tw`flex-row items-center flex-wrap`}>
                                                 <Text style={tw`font-bold text-gray-800 dark:text-gray-100 mr-2`}>{getPendingDisplayName(item)}</Text>
-                                                {isTableOrder && (
-                                                    <View style={tw`bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mr-1`}>
-                                                        <Text style={tw`text-[9px] font-black text-emerald-700 uppercase`}>Order Meja</Text>
-                                                    </View>
-                                                )}
                                                 {item.source === 'server' && (
                                                     <View style={tw`bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full`}>
                                                         <Text style={tw`text-[9px] font-black text-blue-600 uppercase`}>Server</Text>

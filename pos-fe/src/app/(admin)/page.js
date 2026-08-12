@@ -3,7 +3,7 @@
 import React, { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import {
   DollarSign, ShoppingCart, TrendingUp, AlertTriangle,
-  Utensils, Calendar, ArrowRight, Package, Eye, Loader2,
+  Calendar, ArrowRight, Package, Eye, Loader2,
   Sun, Moon, Sunset, CloudSun,
   Clock, PlayCircle, StopCircle, X,
   BarChart3, Users, LayoutGrid, QrCode,
@@ -524,7 +524,7 @@ export default function Dashboard() {
         ) : (
           <>
             <StatCardItem title="Total Penjualan" value={formatRp(stats.summary.todayRevenue)} subtitle="Pendapatan hari ini" icon={DollarSign} trend="up" trendValue="Realtime" color="blue" />
-            <StatCardItem title="Pesanan Selesai" value={stats.summary.todayCount} subtitle="Transaksi berhasil" icon={Utensils} trend="up" trendValue="Orders" color="blue" />
+            <StatCardItem title="Transaksi Selesai" value={stats.summary.todayCount} subtitle="Penjualan berhasil" icon={ShoppingCart} trend="up" trendValue="Hari ini" color="blue" />
             <StatCardItem title="Gross Profit" value={formatRp(stats.summary.grossProfit)} subtitle="Margin (Jual - Modal)" icon={TrendingUp} trend="up" trendValue="Profit" color="green" />
             <StatCardItem title="Stok Menipis" value={`${stats.summary.lowStockCount} Item`} subtitle="Perlu restock segera" icon={AlertTriangle} trend="down" trendValue="Warning" isAlert={true} color="red" />
           </>
@@ -603,13 +603,13 @@ export default function Dashboard() {
 
           {loading || !stats ? <ListSkeleton /> : (
             <div className="card-base p-5 bg-white border border-gray-200 shadow-sm">
-              <h3 className="font-bold text-gray-800 mb-4">Menu Terlaris</h3>
+              <h3 className="font-bold text-gray-800 mb-4">Produk Terlaris</h3>
               <div className="space-y-4">
                 {(stats.topProducts || []).map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 relative border border-gray-200">
-                        {item.imageUrl ? <img src={getImageUrl(item.imageUrl)} className="w-full h-full object-cover" /> : <Utensils size={14} className="m-3 text-gray-300" />}
+                        {item.imageUrl ? <img src={getImageUrl(item.imageUrl)} className="w-full h-full object-cover" /> : <Package size={14} className="m-3 text-gray-300" />}
                         <div className="absolute bottom-0 right-0 bg-blue-500 text-white text-[8px] font-bold px-1 rounded-tl-md">#{idx + 1}</div>
                       </div>
                       <div className="min-w-0">

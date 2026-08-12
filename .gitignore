@@ -34,6 +34,10 @@ pos-android/android/app/build/
 pos-android/android/.gradle/
 pos-android/android/local.properties
 pos-android/android/app/src/main/assets/
+!pos-android/android/app/src/main/assets/
+pos-android/android/app/src/main/assets/*
+!pos-android/android/app/src/main/assets/fonts/
+!pos-android/android/app/src/main/assets/fonts/*.ttf
 pos-android/.bundle/
 
 # Desktop build artifacts

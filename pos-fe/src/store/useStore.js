@@ -214,7 +214,7 @@ export const useStore = create(
         return { success: true };
       },
 
-      // Add to cart with a new unique line (restaurant-style)
+      // Add to cart as a separate line so product notes remain independent.
       addToCartNewLine: (product) => {
         const { cart, settings } = get();
         const allowNegativeStock = settings?.allowNegativeStock;

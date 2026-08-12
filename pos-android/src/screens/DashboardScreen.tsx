@@ -9,7 +9,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, ScrollView, Modal, FlatList,
-    Linking, Alert, TextInput, StyleSheet, Animated, Dimensions,
+    Linking, Alert, TextInput, StyleSheet, Animated, useWindowDimensions,
     Platform, StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -18,9 +18,6 @@ import { getDBConnection, getStoreSummary } from '../database/db';
 import tw, { useAppColorScheme } from 'twrnc';
 import { getPaidAmount, getPaymentStatusLabel, getPaymentStatusMessage, getRemainingAmount } from '../utils/preOrderPayment';
 import { closeCashierShift, openCashierShift } from '../services/shiftService';
-
-const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const getColors = (isDark: boolean) => ({
@@ -190,6 +187,8 @@ const MenuItem = ({ icon, title, subtitle, color, bgColor, primary, onPress, del
 
 // ─── MAIN DASHBOARD SCREEN ──────────────────────────────────────────────────
 export default function DashboardScreen({ navigation }: any) {
+    const { width, height } = useWindowDimensions();
+    const isTablet = Math.min(width, height) >= 600;
     const COLORS = useThemeColors();
     const styles = useStyles();
     const user = useStore((state) => state.user);

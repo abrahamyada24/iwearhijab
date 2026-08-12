@@ -137,8 +137,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                             <div>{formatDate(transaction.createdAt)}</div>
                             <div>Kasir: {transaction.user?.name || 'Kasir'}</div>
                             <div>Pelanggan: {transaction.customerName || transaction.customer?.name || 'Umum'}</div>
-                            <div>Tipe: {transaction.orderType === 'DINE_IN' ? 'Dine In' : transaction.orderType === 'PRE_ORDER' ? 'Pre Order' : 'Take Away'}</div>
-                            {transaction.tableNumber && <div>Meja: {transaction.tableNumber}</div>}
+                            <div>Jenis: {transaction.orderType === 'PRE_ORDER' ? 'Pre-order' : 'Penjualan toko'}</div>
                         </div>
 
                         <div className="my-2 border-t border-dashed border-black" />

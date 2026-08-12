@@ -71,11 +71,9 @@ export default function POSPage() {
   const [isSavingTransaction, setIsSavingTransaction] = useState(false);
   const [activeSavedTransactionId, setActiveSavedTransactionId] = useState(null);
 
-  // Table & Order Type States
+  // Retail transaction type
   const [orderType, setOrderType] = useState('TAKE_AWAY');
   const [preOrderDate, setPreOrderDate] = useState('');
-  const [takeawayOptions, setTakeawayOptions] = useState([]);
-  const [takeawayOption, setTakeawayOption] = useState('');
   const [taxRate, setTaxRate] = useState(0);
   const shiftReminderGateRef = useRef({ key: '', nextAt: 0 });
 
@@ -138,19 +136,13 @@ export default function POSPage() {
             if (catData.success) setCategories([{ id: 0, name: 'Semua' }, ...catData.data, ...(pkgData.success && pkgData.data.some(pkg => pkg.isActive) ? [{ id: 'PACKAGE', name: 'Paket' }] : [])]);
             if (memData.success) setMembers(memData.data);
 
-            // Fetch settings for takeaway options and tax
+            // Fetch store settings and tax
             try {
                 const settingsRes = await fetch(`${API_URL}/api/settings`, { headers });
                 const settingsData = await settingsRes.json();
                 
                 if (settingsData.success && settingsData.data) {
                     setStoreSettings(settingsData.data);
-                    if (settingsData.data.takeawayOptions) {
-                        try {
-                            const parsed = JSON.parse(settingsData.data.takeawayOptions);
-                            setTakeawayOptions(Array.isArray(parsed) ? parsed : []);
-                        } catch { setTakeawayOptions([]); }
-                    }
                     if (settingsData.data.taxRate !== undefined && settingsData.data.taxRate !== null) {
                         setTaxRate(Number(settingsData.data.taxRate) / 100);
                     }
@@ -373,8 +365,7 @@ export default function POSPage() {
               tableNumber: null,
               note: null,
               sourceOrderCode: null,
-              preOrderDate: orderType === 'PRE_ORDER' && preOrderDate ? new Date(preOrderDate).toISOString() : null,
-              takeawayOption: orderType === 'TAKE_AWAY' && takeawayOption ? takeawayOption : null
+              preOrderDate: orderType === 'PRE_ORDER' && preOrderDate ? new Date(preOrderDate).toISOString() : null
           };
 
           const res = await fetch(`${API_URL}/api/transactions`, {
@@ -503,7 +494,6 @@ export default function POSPage() {
         orderType,
         tableNumber: null,
         preOrderDate: preOrderDate || null,
-        takeawayOption: takeawayOption || null,
         subTotal,
         taxAmount,
         grandTotal,
@@ -539,7 +529,6 @@ export default function POSPage() {
       setGuestCustomerName('');
       setOrderType('TAKE_AWAY');
       setPreOrderDate('');
-      setTakeawayOption('');
       setActiveSavedTransactionId(null);
       setMobileView('menu');
       await refreshSavedTransactionCount();
@@ -563,7 +552,6 @@ export default function POSPage() {
       setGuestCustomerName(payload.guestCustomerName || '');
       setOrderType(payload.orderType === 'PRE_ORDER' ? 'PRE_ORDER' : 'TAKE_AWAY');
       setPreOrderDate(payload.preOrderDate || '');
-      setTakeawayOption(payload.takeawayOption || '');
       setActiveSavedTransactionId(transaction.id);
       setIsSavedTransactionModalOpen(false);
       if (window.innerWidth < 1024) setMobileView('cart');
@@ -582,7 +570,6 @@ export default function POSPage() {
       setGuestCustomerName('');
       setOrderType('TAKE_AWAY');
       setPreOrderDate('');
-      setTakeawayOption('');
       setMobileView('menu');
       window.location.reload(); 
   }
@@ -677,9 +664,6 @@ export default function POSPage() {
         setOrderType={setOrderType}
         preOrderDate={preOrderDate}
         setPreOrderDate={setPreOrderDate}
-        takeawayOptions={takeawayOptions}
-        takeawayOption={takeawayOption}
-        setTakeawayOption={setTakeawayOption}
         taxRate={taxRate}
         onSaveTransaction={handleSaveTransaction}
         isSavingTransaction={isSavingTransaction}

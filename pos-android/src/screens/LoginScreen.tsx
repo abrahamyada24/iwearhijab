@@ -76,26 +76,21 @@ export default function LoginScreen({ navigation }: any) {
     }, []);
 
     const handleLogin = async () => {
-        if (!email || !password) {
-            Alert.alert('Error', 'Email dan password (atau PIN lokal) harus diisi');
-            return;
-        }
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            Alert.alert('Validasi Gagal', 'Format email tidak valid (contoh: user@email.com)');
-            return;
-        }
-
-        if (password.length < 6) {
-            Alert.alert('Validasi Gagal', 'Password atau PIN minimal terdiri dari 6 karakter/angka');
+        const identifier = email.trim().toLowerCase();
+        if (!identifier || !password) {
+            Alert.alert('Data Belum Lengkap', 'Email/username dan password harus diisi.');
             return;
         }
 
         setIsLoading(true);
         try {
             // Coba Login Online ke VPS
-            const response = await api.post('/auth/login', { email, password });
+            const response = await api.post('/auth/login', {
+                identifier,
+                password,
+                clientType: 'ANDROID',
+                deviceName: 'LitePOS Warna Warni Android',
+            });
             if (response.data.success) {
                 const { token, user } = response.data;
                 if (rememberMe) {
@@ -112,7 +107,7 @@ export default function LoginScreen({ navigation }: any) {
                     const db = await getDBConnection();
                     await db.executeSql(
                         `INSERT OR REPLACE INTO users (id, name, email, pin, role) VALUES (?, ?, ?, ?, ?)`, 
-                        [user.id, user.name, email, password, user.role]
+                        [user.id, user.name, user.email || identifier, password, user.role]
                     );
                 } catch (e) { console.error("Gagal simpan user lokal:", e) }
 
@@ -135,7 +130,7 @@ export default function LoginScreen({ navigation }: any) {
             try {
                 const db = await getDBConnection();
                 // Cari berdasarkan email + PIN (password) untuk mencocokkan user yang tepat
-                const [results] = await db.executeSql(`SELECT * FROM users WHERE email = ? AND pin = ? LIMIT 1`, [email, password]);
+                const [results] = await db.executeSql(`SELECT * FROM users WHERE email = ? AND pin = ? LIMIT 1`, [identifier, password]);
 
                 if (results.rows.length > 0) {
                     const localUser = results.rows.item(0);
@@ -172,8 +167,8 @@ export default function LoginScreen({ navigation }: any) {
         return (
             <SafeAreaView style={tw`flex-1 justify-center items-center bg-gray-100 dark:bg-gray-800`}>
                 <Image
-                    source={require('../assets/logo.png')}
-                    style={tw`w-24 h-24 mb-6`}
+                    source={require('../assets/icon.png')}
+                    style={tw`w-28 h-28 mb-6 rounded-3xl`}
                     resizeMode="contain"
                 />
                 <ActivityIndicator size="large" color={tw.color('blue-600')} />
@@ -183,16 +178,16 @@ export default function LoginScreen({ navigation }: any) {
     }
 
     return (
-        <SafeAreaView style={tw`flex-1 justify-center items-center bg-gray-100 dark:bg-gray-800 p-6`}>
+        <SafeAreaView style={tw`flex-1 justify-center items-center bg-orange-50 dark:bg-gray-900 p-6`}>
             {/* Logo/Icon Container */}
             <View style={tw`items-center mb-8`}>
                 <Image
-                    source={require('../assets/logo.png')}
-                    style={tw`w-24 h-24 mb-4`}
+                    source={require('../assets/icon.png')}
+                    style={tw`w-28 h-28 mb-4 rounded-3xl`}
                     resizeMode="contain"
                 />
-                <Text style={tw`text-4xl font-black text-center text-gray-900 dark:text-white tracking-tight`}>LitePOS</Text>
-                <Text style={tw`text-sm font-bold text-center text-gray-500 dark:text-gray-400 dark:text-gray-500 mt-1`}>Sistem Point of Sale</Text>
+                <Text style={tw`text-3xl font-black text-center text-gray-900 dark:text-white tracking-tight`}>Warna Warni</Text>
+                <Text style={tw`text-sm font-bold text-center text-orange-600 dark:text-orange-400 mt-1`}>LitePOS Toko Boneka</Text>
             </View>
 
             <View style={tw`bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-md w-full max-w-sm border border-gray-100 dark:border-gray-800`}>
@@ -202,9 +197,11 @@ export default function LoginScreen({ navigation }: any) {
                     style={tw`bg-gray-50 dark:bg-gray-900 border focus:border-blue-500 border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 mb-4 text-center text-lg font-bold text-gray-900 dark:text-white shadow-sm`}
                     value={email}
                     onChangeText={setEmail}
-                    keyboardType="email-address"
+                    keyboardType="default"
                     autoCapitalize="none"
-                    placeholder="Email Address"
+                    autoCorrect={false}
+                    autoComplete="username"
+                    placeholder="Email atau username"
                     placeholderTextColor="#9ca3af"
                 />
 
@@ -213,6 +210,7 @@ export default function LoginScreen({ navigation }: any) {
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry
+                    autoComplete="current-password"
                     placeholder="Password"
                     placeholderTextColor="#9ca3af"
                 />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { ArrowLeft, LogOut, X, UserPlus, ShoppingCart, Minus, Plus, User, Truck, Tag, Save, ShoppingBag, MessageSquare, Loader2, ChevronRight } from 'lucide-react';
+import { ArrowLeft, LogOut, X, UserPlus, ShoppingCart, Minus, Plus, User, Package, Tag, Save, ShoppingBag, MessageSquare, Loader2, ChevronRight } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
 
 export default function CartSidebar({ 
@@ -26,9 +26,6 @@ export default function CartSidebar({
     setOrderType,
     preOrderDate,
     setPreOrderDate,
-    takeawayOptions,
-    takeawayOption,
-    setTakeawayOption,
     taxRate,
     // New props for enhanced features
     discount,
@@ -114,13 +111,13 @@ export default function CartSidebar({
                 </div>
             )}
 
-            {/* Order Type Toggle */}
+            {/* Retail transaction type */}
             <div className="flex bg-gray-100 p-1 rounded-lg">
                 <button 
                     onClick={() => setOrderType('TAKE_AWAY')}
                     className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${orderType === 'TAKE_AWAY' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
                 >
-                    Take Away
+                    Penjualan
                 </button>
                 <button 
                     onClick={() => setOrderType('PRE_ORDER')}
@@ -129,23 +126,6 @@ export default function CartSidebar({
                     Pre Order
                 </button>
             </div>
-
-            {/* Take Away Options Dropdown (Only if Take Away and options exist) */}
-            {orderType === 'TAKE_AWAY' && takeawayOptions && takeawayOptions.length > 0 && (
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><Truck size={12} /> Layanan Online (Opsional)</label>
-                    <select
-                        value={takeawayOption}
-                        onChange={(e) => setTakeawayOption(e.target.value)}
-                        className="w-full text-sm bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-blue-300 transition-colors text-gray-800"
-                    >
-                        <option value="">Langsung / Tanpa Layanan</option>
-                        {takeawayOptions.map((opt, idx) => (
-                            <option key={idx} value={opt}>{opt}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
 
             {/* Pre Order Date Input (Only if Pre Order) */}
             {orderType === 'PRE_ORDER' && (
@@ -176,7 +156,7 @@ export default function CartSidebar({
                             {item.imageUrl ? (
                                 <img src={getImageUrl(item.imageUrl)} className="w-full h-full object-cover" alt={item.name} />
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center text-gray-300"><Utensils size={24}/></div>
+                                <div className="w-full h-full flex items-center justify-center text-gray-300"><Package size={24}/></div>
                             )}
                         </div>
 
@@ -192,7 +172,7 @@ export default function CartSidebar({
                                         <X size={18} />
                                     </button>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-1">{item.category ? item.category.name : 'Menu'}</p>
+                                <p className="text-xs text-gray-400 mt-1">{item.category ? item.category.name : 'Produk'}</p>
                             </div>
                             
                             <div className="flex justify-between items-end mt-2">

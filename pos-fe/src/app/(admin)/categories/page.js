@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, Plus, TrendingUp, Package, Utensils, ArrowUpRight, ImageIcon, Trash2, Edit } from 'lucide-react';
+import { Search, Plus, TrendingUp, Package, ArrowUpRight, ImageIcon, Trash2, Edit } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import CategoryModal from '@/components/CategoryModal';
 import { showAlert } from '@/utils/swal';
@@ -128,8 +128,8 @@ export default function CategoriesPage() {
         <div className="space-y-5 sm:space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-                    <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Kategori Menu</h2>
-                    <p className="text-gray-500 text-sm font-medium">Kelola tata letak dan kelompok menu restoran Anda.</p>
+                    <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Kategori Produk</h2>
+                    <p className="text-gray-500 text-sm font-medium">Kelola kelompok dan susunan produk toko boneka.</p>
                 </div>
 
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 w-full sm:flex sm:w-auto">
@@ -217,8 +217,8 @@ export default function CategoriesPage() {
                                     {cat.name}
                                 </h3>
                                 <div className="flex items-center gap-2 text-gray-300 text-[11px] font-bold uppercase tracking-widest">
-                                    <Utensils size={12} className="text-blue-500" />
-                                    <span>{cat.productCount || 0} MENU ITEMS</span>
+                                    <Package size={12} className="text-blue-500" />
+                                    <span>{cat.productCount || 0} PRODUK</span>
                                     <ArrowUpRight size={14} className="opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0 transition-all duration-500 text-blue-500" />
                                 </div>
                             </div>

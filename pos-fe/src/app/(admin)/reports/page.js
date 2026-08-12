@@ -9,7 +9,12 @@ import {
 import { useStore } from '@/store/useStore';
 import SalesChart from '@/components/SalesChart';
 import StatCard from '@/components/StatCard';
-import { buildSimplePdf } from '@/utils/simplePdf';
+import {
+    buildReportExport,
+    exportReportCsv,
+    exportReportPdf,
+} from '@/utils/reportExport';
+import { showAlert } from '@/utils/swal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -208,77 +213,55 @@ export default function ReportsPage() {
         loadData();
     }, [activeTab, period, isCustomDate]);
 
-    // Export Handler
-    const handleExport = async () => {
-        const qs = getQueryString();
+    const getPeriodLabel = () => {
+        if (isCustomDate && dateRange.start && dateRange.end) {
+            return `${dateRange.start} s/d ${dateRange.end}`;
+        }
+        const labels = { today: 'Hari ini', week: '7 hari terakhir', month: 'Bulan ini', year: 'Tahun ini' };
+        return labels[period] || period;
+    };
+
+    const getExportReport = () => buildReportExport(activeTab, {
+        summaryData,
+        transactions,
+        categoryData,
+        customerData,
+        returnsData,
+        shiftData,
+        profitLossData,
+        expensesData,
+    });
+
+    const getExportFilename = (extension) => {
+        const periodPart = isCustomDate && dateRange.start && dateRange.end
+            ? `${dateRange.start}-${dateRange.end}`
+            : period;
+        return `laporan-${activeTab.toLowerCase()}-${periodPart}.${extension}`;
+    };
+
+    const handleExport = () => {
         setExportingFormat('csv');
         try {
-            const response = await fetch(`${API_URL}/api/reports/export${qs}&format=csv`, {
-                credentials: 'include',
-                cache: 'no-store',
-            });
-            if (!response.ok) throw new Error('Gagal mengekspor laporan.');
-
-            const blob = await response.blob();
-            const disposition = response.headers.get('content-disposition') || '';
-            const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'laporan-transaksi.csv';
-            const downloadUrl = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1500);
+            const report = getExportReport();
+            exportReportCsv(report, getExportFilename('csv'));
         } catch (error) {
-            window.alert(error.message || 'Gagal mengekspor laporan.');
+            showAlert.error('CSV gagal dibuat', error?.message || 'Silakan coba lagi.');
         } finally {
             setExportingFormat('');
         }
     };
 
     const handleExportPdf = async () => {
-        const qs = getQueryString();
         setExportingFormat('pdf');
         try {
-            const response = await fetch(`${API_URL}/api/reports/export${qs}&format=json`, {
-                credentials: 'include',
-                cache: 'no-store',
+            const report = getExportReport();
+            await exportReportPdf(report, {
+                filename: getExportFilename('pdf'),
+                storeName: settings?.storeName || 'Warna Warni Boneka',
+                periodLabel: getPeriodLabel(),
             });
-            const payload = await response.json();
-            if (!response.ok || !payload.success) throw new Error(payload.message || payload.error || 'Gagal menyiapkan PDF.');
-
-            const rows = payload.data || [];
-            const total = rows.reduce((sum, transaction) => sum + Number(transaction.grandTotal || 0), 0);
-            const lines = [
-                String(settings?.storeName || 'WARNA WARNI').toUpperCase(),
-                'LAPORAN TRANSAKSI',
-                `Periode: ${isCustomDate ? `${dateRange.start} s/d ${dateRange.end}` : period}`,
-                `Dibuat : ${new Date().toLocaleString('id-ID')}`,
-                `Jumlah : ${rows.length} transaksi`,
-                `Total  : ${formatRp(total)}`,
-                '',
-                'Tanggal          | Invoice              | Kasir            | Pelanggan        | Total',
-                '-'.repeat(94),
-                ...rows.map((transaction) => [
-                    new Date(transaction.createdAt).toLocaleString('id-ID').substring(0, 16).padEnd(16),
-                    String(transaction.invoiceNumber || '-').substring(0, 20).padEnd(20),
-                    String(transaction.user?.name || '-').substring(0, 16).padEnd(16),
-                    String(transaction.customer?.name || transaction.customerName || 'Umum').substring(0, 16).padEnd(16),
-                    String(Number(transaction.grandTotal || 0)),
-                ].join(' | ')),
-            ];
-            const blob = new Blob([buildSimplePdf(lines)], { type: 'application/pdf' });
-            const downloadUrl = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `laporan-transaksi-${isCustomDate ? `${dateRange.start}-${dateRange.end}` : period}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1500);
         } catch (error) {
-            window.alert(error.message || 'Gagal mengekspor PDF.');
+            showAlert.error('PDF gagal dibuat', error?.message || 'Silakan coba lagi.');
         } finally {
             setExportingFormat('');
         }

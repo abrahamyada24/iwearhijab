@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { 
   Save, Store, CreditCard, ShieldCheck, UploadCloud, 
   Receipt, Printer, Smartphone, DollarSign, Loader2, Image as ImageIcon,
-  Truck, Plus, X, Trash2, Gift, Layout, PackageSearch,
+  Gift, Layout,
   Moon, Info
 } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
@@ -59,10 +59,6 @@ export default function SettingsPage() {
   });
 
   const [logoPreview, setLogoPreview] = useState('');
-
-  // Take Away Options state
-  const [takeawayOptions, setTakeawayOptions] = useState([]);
-  const [newTakeawayOption, setNewTakeawayOption] = useState('');
 
   const [passForm, setPassForm] = useState({
     oldPassword: '',
@@ -127,11 +123,6 @@ export default function SettingsPage() {
       if (settings.logoUrl) {
           setLogoPreview(settings.logoUrl.startsWith('http') ? settings.logoUrl : `${API_URL}${settings.logoUrl}`);
       }
-      // Load takeaway options
-      try {
-          const parsed = settings.takeawayOptions ? JSON.parse(settings.takeawayOptions) : [];
-          setTakeawayOptions(Array.isArray(parsed) ? parsed : []);
-      } catch { setTakeawayOptions([]); }
     }
   }, [settings]);
 
@@ -168,7 +159,6 @@ export default function SettingsPage() {
                 formData.append(key, form[key]);
             }
         });
-        formData.append('takeawayOptions', JSON.stringify(takeawayOptions));
 
         if (form.logoFile) {
             formData.append('logo', form.logoFile);
@@ -336,7 +326,6 @@ export default function SettingsPage() {
         {canManageBusinessSettings && <TabButton id="general" label="Profil Toko" icon={Store} />}
         {canManageBusinessSettings && <TabButton id="payment" label="Pembayaran" icon={CreditCard} />}
         {canManageBusinessSettings && <TabButton id="system" label="Sistem & Struk" icon={Receipt} />}
-        {canManageBusinessSettings && <TabButton id="takeaway" label="Layanan Take Away" icon={Truck} />}
         {canManageBusinessSettings && <TabButton id="loyalty" label="Poin Pelanggan" icon={Gift} />}
         {canManageBusinessSettings && <TabButton id="security" label="Keamanan" icon={ShieldCheck} />}
         <TabButton id="theme" label="Tema" icon={Moon} />
@@ -602,6 +591,25 @@ export default function SettingsPage() {
 
                 </div>
             </div>
+
+            <div className="card-base p-6">
+                <h3 className="font-bold text-gray-800 mb-2 border-b border-gray-100 pb-3 flex items-center gap-2">
+                    <Receipt size={18} /> Catatan di Nota
+                </h3>
+                <p className="text-xs text-gray-500 mb-4">
+                    Teks ini tercetak di bagian bawah nota web, desktop, dan Android.
+                </p>
+                <textarea
+                    name="receiptFooter"
+                    value={form.receiptFooter}
+                    onChange={handleChange}
+                    maxLength={500}
+                    rows={4}
+                    placeholder="Contoh: Terima kasih sudah berbelanja di Warna Warni Boneka"
+                    className="w-full resize-y rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
+                />
+                <p className="mt-1 text-right text-[10px] text-gray-400">{form.receiptFooter.length}/500</p>
+            </div>
         </div>
       )}
 
@@ -695,72 +703,6 @@ export default function SettingsPage() {
                         </p>
                     </div>
                 </div>
-            </div>
-        </div>
-      )}
-
-      {activeTab === 'takeaway' && (
-        <div className="max-w-3xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="card-base p-6">
-                <h3 className="font-bold text-gray-800 mb-2 border-b border-gray-100 pb-3 flex items-center gap-2">
-                    <Truck size={18} /> Layanan Beli Online (Take Away)
-                </h3>
-                <p className="text-xs text-gray-500 mb-4">Kelola daftar layanan online seperti GoFood, GrabFood, ShopeeFood, dll. Daftar ini akan muncul saat kasir memilih Take Away di POS.</p>
-
-                <div className="flex gap-2 mb-4">
-                    <input 
-                        type="text" 
-                        value={newTakeawayOption} 
-                        onChange={(e) => setNewTakeawayOption(e.target.value)} 
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && newTakeawayOption.trim()) {
-                                if (!takeawayOptions.includes(newTakeawayOption.trim())) {
-                                    setTakeawayOptions([...takeawayOptions, newTakeawayOption.trim()]);
-                                }
-                                setNewTakeawayOption('');
-                            }
-                        }}
-                        placeholder="Nama layanan, misal: GoFood" 
-                        className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition-all bg-gray-50/50 focus:bg-white text-sm" 
-                    />
-                    <button 
-                        onClick={() => {
-                            if (newTakeawayOption.trim() && !takeawayOptions.includes(newTakeawayOption.trim())) {
-                                setTakeawayOptions([...takeawayOptions, newTakeawayOption.trim()]);
-                                setNewTakeawayOption('');
-                            }
-                        }}
-                        className="px-4 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors font-medium flex items-center gap-1 text-sm"
-                    >
-                        <Plus size={16} /> Tambah
-                    </button>
-                </div>
-
-                {takeawayOptions.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400">
-                        <Truck size={40} className="mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">Belum ada layanan. Tambahkan di atas.</p>
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        {takeawayOptions.map((opt, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-white hover:border-orange-200 transition-colors">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-orange-50 text-orange-500 rounded-lg flex items-center justify-center font-black text-xs">{idx + 1}</div>
-                                    <span className="font-medium text-gray-800 text-sm">{opt}</span>
-                                </div>
-                                <button 
-                                    onClick={() => setTakeawayOptions(takeawayOptions.filter((_, i) => i !== idx))}
-                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <p className="text-[10px] text-gray-400 mt-4">*Klik "Simpan Perubahan" di atas untuk menyimpan daftar ini ke server.</p>
             </div>
         </div>
       )}
@@ -884,7 +826,7 @@ export default function SettingsPage() {
       {activeTab === 'about' && (
         <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="card-base p-8 text-center">
-            <img src="/logo.png" alt="LitePOS" className="mx-auto mb-4 h-20 w-20 object-contain" />
+            <img src="/icon.png" alt="LitePOS Warna Warni" className="mx-auto mb-4 h-20 w-20 object-contain" />
             <h3 className="text-2xl font-black text-gray-800">LitePOS</h3>
             <p className="mt-1 text-sm text-gray-500">Point of Sale untuk operasional outlet</p>
             <p className="mt-5 text-xs text-gray-400">Pengaturan tema dan printer disimpan per perangkat.</p>

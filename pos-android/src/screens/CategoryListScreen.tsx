@@ -123,7 +123,7 @@ export default function CategoryListScreen({ navigation }: any) {
                             <TouchableOpacity onPress={() => setShowModal(false)}><Icon name="close" size={24} color={tw.color('gray-400')} /></TouchableOpacity>
                         </View>
                         <TextInput style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-5 text-gray-800 dark:text-gray-100`}
-                            placeholder="Contoh: Makanan Berat" value={categoryName} onChangeText={setCategoryName} />
+                            placeholder="Contoh: Boneka Karakter" value={categoryName} onChangeText={setCategoryName} />
                         <TouchableOpacity style={tw`bg-gray-900 py-3 rounded-xl items-center flex-row justify-center`} onPress={handleSave}>
                             <Icon name="content-save" size={18} color="white" style={tw`mr-2`} />
                             <Text style={tw`font-bold text-white`}>Simpan Kategori</Text>

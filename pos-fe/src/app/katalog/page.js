@@ -1,370 +1,258 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  CheckCircle2,
+  ArrowDownUp,
   ChevronLeft,
-  MessageCircle,
-  Minus,
+  ImageIcon,
+  MapPin,
   Package,
-  Plus,
+  RefreshCw,
   Search,
-  Send,
+  ShieldCheck,
   ShoppingBag,
-  Trash2,
+  Sparkles,
+  Store,
+  Tag,
   X,
 } from "lucide-react";
-import { showAlert } from '@/utils/swal';
+import { showAlert } from "@/utils/swal";
 
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const API_URL = RAW_API_URL.replace(/\/api$/, "").replace(/\/$/, "");
-const ORDER_SESSION_KEY = "litepos:last-table-order";
+const ALL_CATEGORIES = "ALL";
+
+function WhatsAppLogo({ size = 20, className = "" }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479s1.065 2.875 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.871.118.571-.085 1.758-.719 2.005-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.981.999-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884a9.81 9.81 0 0 1 7.021 2.91 9.825 9.825 0 0 1 2.9 7.029c-.002 5.45-4.437 9.884-9.889 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+    </svg>
+  );
+}
+
+const formatRupiah = (value) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(Number(value) || 0);
+
+const isUnlimitedStock = (item) =>
+  item?.isUnlimitedStock === true ||
+  item?.isUnlimitedStock === 1 ||
+  item?.isUnlimitedStock === "1";
+
+const isAvailable = (item) =>
+  isUnlimitedStock(item) || Number(item?.stock || 0) > 0;
+
+function CatalogImage({ src, alt, className = "", eager = false }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [src]);
+
+  if (!src || failed) {
+    return (
+      <div
+        className={`flex h-full w-full items-center justify-center bg-gradient-to-br from-rose-50 via-orange-50 to-amber-50 text-orange-300 ${className}`}
+        role="img"
+        aria-label={`Gambar ${alt} belum tersedia`}
+      >
+        <ImageIcon size={38} strokeWidth={1.6} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      width={640}
+      height={640}
+      loading={eager ? "eager" : "lazy"}
+      fetchPriority={eager ? "high" : "auto"}
+      decoding="async"
+      onError={() => setFailed(true)}
+      className={className}
+    />
+  );
+}
+
+function ProductSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
+      <div className="aspect-square animate-pulse bg-orange-50" />
+      <div className="space-y-3 p-3">
+        <div className="h-3 w-20 animate-pulse rounded-full bg-stone-100" />
+        <div className="h-4 w-full animate-pulse rounded-full bg-stone-100" />
+        <div className="h-5 w-28 animate-pulse rounded-full bg-stone-100" />
+        <div className="h-9 w-full animate-pulse rounded-xl bg-stone-100" />
+      </div>
+    </div>
+  );
+}
 
 export default function KatalogPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [settings, setSettings] = useState(null);
-  const [tableNumber, setTableNumber] = useState("");
-  const [cart, setCart] = useState([]);
-  const [showCart, setShowCart] = useState(false);
-  const [customerName, setCustomerName] = useState("");
-  const [orderNote, setOrderNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORIES);
+  const [sortBy, setSortBy] = useState("featured");
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [detailCartItemId, setDetailCartItemId] = useState(null);
-  const [detailQty, setDetailQty] = useState(1);
-  const [detailNotes, setDetailNotes] = useState("");
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const requestedTable = (params.get("table") || params.get("meja") || "").trim().toUpperCase();
-      setTableNumber(requestedTable);
-      try {
-        const storedOrder = JSON.parse(window.sessionStorage.getItem(ORDER_SESSION_KEY) || "null");
-        if (storedOrder?.orderCode && storedOrder?.tableNumber === requestedTable) setOrderSuccess(storedOrder);
-      } catch {
-        window.sessionStorage.removeItem(ORDER_SESSION_KEY);
-      }
-    }
-    fetchCatalog();
+  const getImageUrl = useCallback((path) => {
+    if (!path) return null;
+    if (/^https?:\/\//i.test(path)) return path;
+    return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
   }, []);
 
-  const tableOrderRequested = false;
-  const isTableMode = false;
+  const fetchCatalog = useCallback(async () => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
 
-  const fetchCatalog = async () => {
     setLoading(true);
     setLoadError("");
+
     try {
-      const res = await fetch(`${API_URL}/api/catalog`);
-      const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Katalog belum tersedia.");
-      const regularProducts = Array.isArray(json.data.products) ? json.data.products.map(product => ({
-        ...product,
-        originalPrice: Number(product.originalPrice ?? product.price),
-        price: Number(product.effectivePrice ?? product.price)
-      })) : [];
-      const packageProducts = Array.isArray(json.data.packages) ? json.data.packages.map(pkg => ({
-        ...pkg,
-        id: `pkg-${pkg.id}`,
-        packageId: pkg.id,
-        originalPrice: Number(pkg.price),
-        price: Number(pkg.price)
-      })) : [];
+      const response = await fetch(`${API_URL}/api/catalog`, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || "Katalog belum tersedia.");
+      }
+
+      const regularProducts = Array.isArray(payload.data?.products)
+        ? payload.data.products.map((product) => ({
+            ...product,
+            originalPrice: Number(product.originalPrice ?? product.price),
+            price: Number(product.effectivePrice ?? product.price),
+          }))
+        : [];
+      const packageProducts = Array.isArray(payload.data?.packages)
+        ? payload.data.packages.map((item) => ({
+            ...item,
+            id: `package-${item.id}`,
+            packageId: item.id,
+            categoryId: "PACKAGE",
+            category: { id: "PACKAGE", name: "Paket Boneka" },
+            originalPrice: Number(item.price),
+            price: Number(item.price),
+          }))
+        : [];
+
       setProducts([...regularProducts, ...packageProducts]);
       setCategories([
-        ...(Array.isArray(json.data.categories) ? json.data.categories : []),
-        ...(packageProducts.length > 0 ? [{ id: 'PACKAGE', name: 'Paket' }] : [])
+        ...(Array.isArray(payload.data?.categories) ? payload.data.categories : []),
+        ...(packageProducts.length ? [{ id: "PACKAGE", name: "Paket Boneka" }] : []),
       ]);
-      setSettings(json.data.settings || null);
+      setSettings(payload.data?.settings || null);
     } catch (error) {
-      setLoadError(error.message || "Gagal mengambil katalog.");
+      setLoadError(
+        error?.name === "AbortError"
+          ? "Koneksi ke katalog terlalu lama. Silakan coba lagi."
+          : error?.message || "Gagal mengambil katalog."
+      );
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const formatRupiah = (number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(Number(number) || 0);
-  };
+  useEffect(() => {
+    fetchCatalog();
+  }, [fetchCatalog]);
 
-  const getImageUrl = (imageUrl) => {
-    if (!imageUrl) return null;
-    if (imageUrl.startsWith("http")) return imageUrl;
-    return `${API_URL}${imageUrl}`;
-  };
-
-  const isUnlimitedStock = (item) => {
-    return item?.isUnlimitedStock === true || item?.isUnlimitedStock === 1 || item?.isUnlimitedStock === "1";
-  };
-
-  const getStockLabel = (product) => {
-    if (isUnlimitedStock(product)) return "Tersedia";
-    const stock = Number(product.stock) || 0;
-    return stock <= 5 ? `Sisa ${stock}` : `${stock} tersedia`;
-  };
-
-  const isProductAvailable = (product) => {
-    return isUnlimitedStock(product) || Number(product.stock || 0) > 0;
-  };
-
-  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const cartTotal = cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
+  useEffect(() => {
+    if (!selectedProduct) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedProduct]);
 
   const filteredProducts = useMemo(() => {
-    const keyword = searchQuery.trim().toLowerCase();
-    return products.filter((product) => {
-      const matchSearch = !keyword || product.name.toLowerCase().includes(keyword);
-      const matchCategory = selectedCategory === "All" || String(product.categoryId) === selectedCategory;
-      return matchSearch && matchCategory;
-    });
-  }, [products, searchQuery, selectedCategory]);
-
-  const getProductCartQty = (productId) => {
-    return cart.filter((item) => item.id === productId).reduce((sum, item) => sum + item.quantity, 0);
-  };
-
-  const addToCart = (product, qty = 1, notes = "") => {
-    const quantity = Math.max(1, Number(qty) || 1);
-    const cleanNotes = String(notes || "").trim();
-    const currentQty = getProductCartQty(product.id);
-
-    if (!isUnlimitedStock(product) && currentQty + quantity > Number(product.stock || 0)) {
-      showAlert.warning('Stok tidak cukup', 'Jumlah melebihi stok yang tersedia.');
-      return;
-    }
-
-    const cartItemId = `${product.id}-${cleanNotes.toLowerCase() || "regular"}`;
-    setCart((prev) => {
-      const existing = prev.find((item) => item.cartItemId === cartItemId);
-      if (existing) {
-        return prev.map((item) =>
-          item.cartItemId === cartItemId
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      }
-
-      return [
-        ...prev,
-        {
-          cartItemId,
-          id: product.id,
-          packageId: product.packageId || null,
-          name: product.name,
-          categoryName: product.category?.name || null,
-          price: Number(product.price),
-          originalPrice: Number(product.originalPrice ?? product.price),
-          discountAmount: Number(product.discountAmount || 0),
-          imageUrl: product.imageUrl,
-          stock: product.stock,
-          isUnlimitedStock: product.isUnlimitedStock,
-          quantity,
-          notes: cleanNotes,
-        },
-      ];
+    const keyword = searchQuery.trim().toLocaleLowerCase("id-ID");
+    const result = products.filter((product) => {
+      const searchable = `${product.name || ""} ${product.category?.name || ""}`.toLocaleLowerCase("id-ID");
+      const matchesSearch = !keyword || searchable.includes(keyword);
+      const matchesCategory =
+        selectedCategory === ALL_CATEGORIES ||
+        String(product.categoryId) === selectedCategory;
+      return matchesSearch && matchesCategory;
     });
 
-    setSelectedProduct(null);
-    setDetailCartItemId(null);
-    setDetailQty(1);
-    setDetailNotes("");
-  };
-
-  const updateCartQuantity = (cartItemId, quantity) => {
-    setCart((prev) =>
-      prev
-        .map((item) => {
-          if (item.cartItemId !== cartItemId) return item;
-          const nextQty = Math.max(0, Number(quantity) || 0);
-          if (!isUnlimitedStock(item) && nextQty > Number(item.stock || 0)) {
-            showAlert.warning('Stok tidak cukup', 'Jumlah melebihi stok yang tersedia.');
-            return item;
-          }
-          return { ...item, quantity: nextQty };
-        })
-        .filter((item) => item.quantity > 0)
-    );
-  };
-
-  const removeCartItem = (cartItemId) => {
-    setCart((prev) => prev.filter((item) => item.cartItemId !== cartItemId));
-  };
-
-  const decreaseProductQuantity = (productId) => {
-    setCart((prev) => {
-      const regularIndex = prev.findIndex((item) => item.id === productId && !item.notes);
-      const fallbackIndex = prev.findLastIndex((item) => item.id === productId);
-      const targetIndex = regularIndex >= 0 ? regularIndex : fallbackIndex;
-
-      if (targetIndex < 0) return prev;
-
-      return prev
-        .map((item, index) =>
-          index === targetIndex ? { ...item, quantity: item.quantity - 1 } : item
-        )
-        .filter((item) => item.quantity > 0);
+    return [...result].sort((a, b) => {
+      if (sortBy === "price-low") return Number(a.price) - Number(b.price);
+      if (sortBy === "price-high") return Number(b.price) - Number(a.price);
+      if (sortBy === "name") return String(a.name).localeCompare(String(b.name), "id");
+      const promoDifference = Number(Boolean(b.isDiscountActive)) - Number(Boolean(a.isDiscountActive));
+      if (promoDifference) return promoDifference;
+      return String(a.name).localeCompare(String(b.name), "id");
     });
+  }, [products, searchQuery, selectedCategory, sortBy]);
+
+  const getStockLabel = (product) => {
+    if (isUnlimitedStock(product)) return "Stok tersedia";
+    const stock = Number(product.stock) || 0;
+    if (stock <= 0) return "Stok habis";
+    if (stock <= 5) return `Tersisa ${stock}`;
+    return `${stock} tersedia`;
   };
 
-  const openProductDetail = (product) => {
-    const productItems = cart.filter((item) => item.id === product.id);
-    const editableItem =
-      productItems.find((item) => !item.notes) ||
-      (productItems.length === 1 ? productItems[0] : null);
-
-    setSelectedProduct(product);
-    setDetailCartItemId(editableItem?.cartItemId || null);
-    setDetailQty(editableItem?.quantity || 1);
-    setDetailNotes(editableItem?.notes || "");
-  };
-
-  const closeProductDetail = () => {
-    setSelectedProduct(null);
-    setDetailCartItemId(null);
-    setDetailQty(1);
-    setDetailNotes("");
-  };
-
-  const saveProductDetail = () => {
-    if (!selectedProduct) return;
-
-    const quantity = Math.max(0, Number(detailQty) || 0);
-    const cleanNotes = String(detailNotes || "").trim();
-    const cartItemId = `${selectedProduct.id}-${cleanNotes.toLowerCase() || "regular"}`;
-    const otherProductQty = cart
-      .filter((item) => item.id === selectedProduct.id && item.cartItemId !== detailCartItemId)
-      .reduce((sum, item) => sum + item.quantity, 0);
-
-    if (
-      !isUnlimitedStock(selectedProduct) &&
-      otherProductQty + quantity > Number(selectedProduct.stock || 0)
-    ) {
-      showAlert.warning('Stok tidak cukup', 'Jumlah melebihi stok yang tersedia.');
-      return;
-    }
-
-    setCart((prev) => {
-      const withoutEditedItem = detailCartItemId
-        ? prev.filter((item) => item.cartItemId !== detailCartItemId)
-        : prev;
-
-      if (quantity === 0) return withoutEditedItem;
-
-      const sameItem = withoutEditedItem.find((item) => item.cartItemId === cartItemId);
-      if (sameItem) {
-        return withoutEditedItem.map((item) =>
-          item.cartItemId === cartItemId
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      }
-
-      return [
-        ...withoutEditedItem,
-        {
-          cartItemId,
-          id: selectedProduct.id,
-          packageId: selectedProduct.packageId || null,
-          name: selectedProduct.name,
-          categoryName: selectedProduct.category?.name || null,
-          price: Number(selectedProduct.price),
-          imageUrl: selectedProduct.imageUrl,
-          stock: selectedProduct.stock,
-          isUnlimitedStock: selectedProduct.isUnlimitedStock,
-          quantity,
-          notes: cleanNotes,
-        },
-      ];
-    });
-
-    closeProductDetail();
-  };
-
-  const submitTableOrder = async () => {
-    if (!isTableMode) {
-      showAlert.warning('Order meja tidak aktif', 'Silakan hubungi petugas.');
-      return;
-    }
-    if (!tableNumber) {
-      showAlert.error('Nomor meja tidak ditemukan', 'Pindai kembali QR yang tersedia di meja.');
-      return;
-    }
-    if (cart.length === 0) {
-      showAlert.warning('Keranjang kosong', 'Pilih minimal satu menu sebelum mengirim order.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const res = await fetch(`${API_URL}/api/catalog/table-order`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tableNumber,
-          customerName,
-          note: orderNote,
-          items: cart.map((item) => ({
-            productId: item.id,
-            packageId: item.packageId || null,
-            qty: item.quantity,
-            notes: item.notes || null,
-          })),
-        }),
-      });
-
-      const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal mengirim order.");
-
-      const submittedOrder = { ...json.data, status: json.data.status || "NEW" };
-      setOrderSuccess(submittedOrder);
-      window.sessionStorage.setItem(ORDER_SESSION_KEY, JSON.stringify(submittedOrder));
-      setCart([]);
-      setShowCart(false);
-      setCustomerName("");
-      setOrderNote("");
-    } catch (error) {
-      showAlert.error('Order belum terkirim', error.message || 'Periksa koneksi lalu coba lagi.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const openWhatsApp = (product) => {
+  const openWhatsApp = (product = null) => {
     let phone = settings?.phone || "";
+    phone = String(phone).trim();
+
     if (!phone) {
-      showAlert.warning('WhatsApp belum tersedia', 'Nomor WhatsApp toko belum diatur.');
+      showAlert.warning(
+        "WhatsApp belum tersedia",
+        "Nomor WhatsApp toko belum diatur oleh admin."
+      );
       return;
     }
+
     if (phone.startsWith("0")) phone = `62${phone.slice(1)}`;
     phone = phone.replace(/\D/g, "");
     const message = product
-      ? `Halo, saya ingin bertanya tentang produk *${product.name}* (Harga: ${formatRupiah(product.price)}).`
-      : "Halo, saya ingin bertanya tentang katalog toko Anda.";
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+      ? `Halo ${settings?.storeName || "Warna Warni"}, saya tertarik dengan *${product.name}* (${formatRupiah(product.price)}). Apakah masih tersedia?`
+      : `Halo ${settings?.storeName || "Warna Warni"}, saya ingin bertanya tentang koleksi boneka yang tersedia.`;
+
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
   };
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-stone-50 flex items-center justify-center px-6">
-        <div className="w-full max-w-sm space-y-4">
-          <div className="h-20 bg-white border border-stone-100 rounded-2xl animate-pulse" />
-          <div className="h-12 bg-white border border-stone-100 rounded-2xl animate-pulse" />
-          <div className="space-y-3">
-            {[1, 2, 3].map((item) => (
-              <div key={item} className="h-28 bg-white border border-stone-100 rounded-2xl animate-pulse" />
+      <main className="min-h-screen bg-[#fff8f4] text-stone-900">
+        <div className="border-b border-orange-100 bg-white">
+          <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+            <div className="h-14 w-64 animate-pulse rounded-2xl bg-orange-50" />
+            <div className="mt-4 h-12 w-full animate-pulse rounded-2xl bg-stone-100" />
+          </div>
+        </div>
+        <div className="mx-auto max-w-7xl px-3 py-6 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+            {Array.from({ length: 10 }, (_, index) => (
+              <ProductSkeleton key={index} />
             ))}
           </div>
         </div>
@@ -374,206 +262,245 @@ export default function KatalogPage() {
 
   if (loadError) {
     return (
-      <main className="min-h-screen bg-stone-50 flex items-center justify-center px-6 text-center">
-        <div className="w-full max-w-sm bg-white border border-stone-100 rounded-2xl p-6 shadow-sm">
-          <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle size={24} />
+      <main className="flex min-h-screen items-center justify-center bg-[#fff8f4] px-5 text-center">
+        <div className="w-full max-w-md rounded-3xl border border-orange-100 bg-white p-7 shadow-xl shadow-orange-100/60">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500">
+            <AlertCircle size={27} />
           </div>
-          <h1 className="text-lg font-black text-gray-900">Katalog belum terbuka</h1>
-          <p className="text-sm text-gray-500 mt-2">{loadError}</p>
+          <h1 className="text-xl font-black text-stone-950">Katalog belum dapat dimuat</h1>
+          <p className="mt-2 text-sm leading-6 text-stone-500">{loadError}</p>
           <button
             type="button"
             onClick={fetchCatalog}
-            className="mt-5 w-full h-11 rounded-xl bg-gray-900 text-white font-bold"
+            className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-orange-600 font-extrabold text-white shadow-lg shadow-orange-200 transition hover:bg-orange-700"
           >
-            Muat Ulang
+            <RefreshCw size={18} />
+            Coba Lagi
           </button>
         </div>
       </main>
     );
   }
 
+  const storeName = settings?.storeName || "Warna Warni Boneka";
+  const logoUrl = getImageUrl(settings?.logoUrl);
+
   return (
-    <main className="min-h-screen bg-stone-50 text-gray-900 pb-28">
-      <header className="bg-white border-b border-stone-200 sticky top-0 z-40">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center shrink-0">
-              {settings?.logoUrl ? (
-                <img src={getImageUrl(settings.logoUrl)} alt="Logo toko" className="w-full h-full object-cover" />
+    <main className="min-h-screen bg-[#fff8f4] pb-24 text-stone-900 sm:pb-10">
+      <header className="sticky top-0 z-40 border-b border-orange-100 bg-white/95 shadow-sm backdrop-blur">
+        <div className="bg-gradient-to-r from-orange-600 via-rose-500 to-fuchsia-500 text-white">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2 text-xs font-semibold sm:px-6 lg:px-8">
+            <span className="flex items-center gap-1.5">
+              <Sparkles size={14} /> Koleksi boneka pilihan untuk setiap momen
+            </span>
+            <span className="hidden items-center gap-1.5 sm:flex">
+              <ShieldCheck size={14} /> Stok langsung dari toko
+            </span>
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-orange-100 bg-orange-50 shadow-sm sm:h-14 sm:w-14">
+              {logoUrl ? (
+                <CatalogImage src={logoUrl} alt={`Logo ${storeName}`} className="h-full w-full object-contain p-1" eager />
               ) : (
-                <ShoppingBag size={23} className="text-stone-500" />
+                <div className="flex h-full w-full items-center justify-center text-orange-500">
+                  <Store size={26} />
+                </div>
               )}
             </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="font-black text-gray-950 leading-tight truncate">
-                {settings?.storeName || "Warna Warni"}
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-lg font-black tracking-tight text-stone-950 sm:text-xl">
+                {storeName}
               </h1>
-              <p className="text-xs text-gray-500 truncate">
-                {isTableMode ? "Pesanan meja" : settings?.address || "Katalog toko"}
+              <p className="mt-0.5 flex items-center gap-1 truncate text-xs font-medium text-stone-500">
+                <MapPin size={13} className="shrink-0 text-orange-500" />
+                {settings?.address || "Katalog boneka dan hadiah"}
               </p>
             </div>
-            {isTableMode && (
-              <div className="px-3 py-2 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-800 text-sm font-black">
-                Meja {tableNumber}
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => openWhatsApp()}
+              className="hidden h-11 items-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-extrabold text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700 sm:flex"
+            >
+              <WhatsAppLogo size={18} /> Hubungi Toko
+            </button>
           </div>
 
-          {isTableMode && (
-            <div className="mt-4 grid grid-cols-3 rounded-2xl bg-stone-100 border border-stone-200 p-1 text-[11px] font-black text-center">
-              <div className="py-2 rounded-xl bg-white shadow-sm text-gray-950">Pilih</div>
-              <div className="py-2 rounded-xl text-gray-500">Review</div>
-              <div className="py-2 rounded-xl text-gray-500">Kirim</div>
-            </div>
-          )}
-
-          {tableOrderRequested && settings && !settings.enableTableOrder && (
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
-              Order meja sedang tidak aktif. Katalog ditampilkan dalam mode publik biasa.
-            </div>
-          )}
-
-          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-stone-100 border border-stone-200 px-3 h-12">
-            <Search size={18} className="text-gray-400 shrink-0" />
+          <div className="mt-3 flex h-12 items-center gap-2 rounded-2xl border-2 border-orange-500 bg-white px-4 shadow-sm focus-within:ring-4 focus-within:ring-orange-100">
+            <Search size={20} className="shrink-0 text-orange-500" />
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Cari produk"
-              className="bg-transparent outline-none flex-1 text-sm font-semibold placeholder:text-gray-400"
+              placeholder="Cari boneka, ukuran, atau kategori..."
+              aria-label="Cari produk"
+              className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:font-medium placeholder:text-stone-400"
             />
             {searchQuery && (
-              <button type="button" onClick={() => setSearchQuery("")} className="p-1 text-gray-400">
-                <X size={16} />
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Hapus pencarian"
+                className="rounded-full p-1 text-stone-400 hover:bg-stone-100"
+              >
+                <X size={17} />
               </button>
             )}
           </div>
         </div>
       </header>
 
-      <section className="max-w-3xl mx-auto px-4 pt-4">
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
-          {[{ id: "All", name: "Semua" }, ...categories].map((category) => {
-            const id = String(category.id);
-            const active = selectedCategory === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setSelectedCategory(id)}
-                className={`shrink-0 h-10 px-4 rounded-full border text-sm font-bold ${
-                  active
-                    ? "bg-gray-950 text-white border-gray-950"
-                    : "bg-white text-gray-600 border-stone-200"
-                }`}
-              >
-                {category.name}
-              </button>
-            );
-          })}
+      <section className="border-b border-orange-100 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">Belanja berdasarkan</p>
+              <h2 className="mt-0.5 text-lg font-black text-stone-950">Kategori Boneka</h2>
+            </div>
+            <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
+              {products.length} produk
+            </span>
+          </div>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0">
+            {[{ id: ALL_CATEGORIES, name: "Semua Produk" }, ...categories].map((category) => {
+              const id = String(category.id);
+              const active = selectedCategory === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setSelectedCategory(id)}
+                  className={`shrink-0 rounded-2xl border px-4 py-2.5 text-sm font-extrabold transition ${
+                    active
+                      ? "border-orange-600 bg-orange-600 text-white shadow-md shadow-orange-100"
+                      : "border-stone-200 bg-white text-stone-600 hover:border-orange-300 hover:text-orange-700"
+                  }`}
+                >
+                  {category.name}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 pt-2">
+      <section className="mx-auto max-w-7xl px-3 py-5 sm:px-6 lg:px-8">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-extrabold text-stone-950">
+              {filteredProducts.length} produk ditemukan
+            </p>
+            <p className="mt-0.5 hidden text-xs text-stone-500 sm:block">
+              Klik produk untuk melihat foto dan detail lebih lengkap.
+            </p>
+          </div>
+          <label className="flex h-10 items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 shadow-sm">
+            <ArrowDownUp size={15} className="text-orange-500" />
+            <span className="hidden sm:inline">Urutkan</span>
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value)}
+              aria-label="Urutkan produk"
+              className="bg-transparent font-bold outline-none"
+            >
+              <option value="featured">Rekomendasi</option>
+              <option value="name">Nama A-Z</option>
+              <option value="price-low">Harga terendah</option>
+              <option value="price-high">Harga tertinggi</option>
+            </select>
+          </label>
+        </div>
+
         {filteredProducts.length === 0 ? (
-          <div className="py-20 flex flex-col items-center text-gray-400">
-            <ShoppingBag size={46} className="mb-3 opacity-60" />
-            <p className="font-bold">Menu tidak ditemukan</p>
+          <div className="rounded-3xl border border-dashed border-orange-200 bg-white px-6 py-16 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-orange-400">
+              <ShoppingBag size={30} />
+            </div>
+            <h2 className="mt-4 text-lg font-black text-stone-900">Produk tidak ditemukan</h2>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-stone-500">
+              Coba kata pencarian lain atau pilih kategori Semua Produk.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedCategory(ALL_CATEGORIES);
+              }}
+              className="mt-5 rounded-2xl bg-orange-600 px-5 py-3 text-sm font-extrabold text-white"
+            >
+              Tampilkan Semua
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {filteredProducts.map((product) => {
-              const imageUrl = getImageUrl(product.imageUrl);
-              const qtyInCart = getProductCartQty(product.id);
-              const available = isProductAvailable(product);
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+            {filteredProducts.map((product, index) => {
+              const productImage = getImageUrl(product.imageUrl);
+              const available = isAvailable(product);
 
               return (
                 <article
                   key={product.id}
-                  onClick={() => openProductDetail(product)}
-                  className="bg-white border border-stone-200 rounded-2xl p-3 flex gap-3 shadow-sm active:scale-[0.99] transition-transform cursor-pointer"
+                  className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm transition hover:-translate-y-1 hover:border-orange-200 hover:shadow-xl hover:shadow-orange-100/70"
                 >
-                  <div className="w-24 h-24 rounded-2xl bg-stone-100 border border-stone-100 overflow-hidden flex items-center justify-center shrink-0">
-                    {imageUrl ? (
-                      <img src={imageUrl} alt={product.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Package size={28} className="text-stone-300" />
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProduct(product)}
+                    className="relative block aspect-square w-full overflow-hidden bg-orange-50 text-left"
+                    aria-label={`Lihat detail ${product.name}`}
+                  >
+                    <CatalogImage
+                      src={productImage}
+                      alt={product.name}
+                      eager={index < 4}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
+                    {product.isDiscountActive && (
+                      <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-lg bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white shadow-md">
+                        <Tag size={11} /> {product.discountLabel || "Promo"}
+                      </span>
                     )}
-                  </div>
-                  <div className="flex-1 min-w-0 flex flex-col">
-                    <div className="flex-1">
-                      <p className="text-[11px] font-bold text-gray-400 truncate">
-                        {product.category?.name || "Menu"}
-                      </p>
-                      <h2 className="font-black text-gray-950 leading-snug mt-0.5 line-clamp-2">
-                        {product.name}
-                      </h2>
-                      <p className="text-xs font-bold text-gray-500 mt-1">{getStockLabel(product)}</p>
-                      {product.isDiscountActive && (
-                        <span className="inline-flex mt-1 px-2 py-0.5 rounded-md bg-red-50 text-red-600 text-[10px] font-black uppercase">
-                          {product.discountLabel || "Promo"}
+                    {!available && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-stone-950/45">
+                        <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-stone-800">
+                          Stok Habis
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-end justify-between gap-3 mt-2">
-                      <div>
-                        {product.isDiscountActive && <p className="text-[10px] text-gray-400 line-through">{formatRupiah(product.originalPrice)}</p>}
-                        <p className={`font-black ${product.isDiscountActive ? 'text-red-600' : 'text-gray-950'}`}>{formatRupiah(product.price)}</p>
                       </div>
-                      {isTableMode ? (
-                        qtyInCart > 0 ? (
-                          <div
-                            className="h-10 flex items-center rounded-xl border border-emerald-700 overflow-hidden"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => decreaseProductQuantity(product.id)}
-                              className="w-10 h-10 flex items-center justify-center text-emerald-800 active:bg-emerald-50"
-                              aria-label={`Kurangi ${product.name}`}
-                            >
-                              <Minus size={17} />
-                            </button>
-                            <span className="w-8 text-center text-sm font-black text-gray-950">
-                              {qtyInCart}
-                            </span>
-                            <button
-                              type="button"
-                              disabled={!available || (!isUnlimitedStock(product) && qtyInCart >= Number(product.stock || 0))}
-                              onClick={() => addToCart(product)}
-                              className="w-10 h-10 flex items-center justify-center bg-emerald-700 text-white disabled:bg-gray-300"
-                              aria-label={`Tambah ${product.name}`}
-                            >
-                              <Plus size={17} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={!available}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              addToCart(product);
-                            }}
-                            className="h-10 w-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center disabled:bg-gray-300"
-                            aria-label={`Tambah ${product.name}`}
-                          >
-                            <Plus size={18} />
-                          </button>
-                        )
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openWhatsApp(product);
-                          }}
-                          className="h-10 w-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center"
-                        >
-                          <MessageCircle size={18} />
-                        </button>
+                    )}
+                  </button>
+
+                  <div className="flex flex-1 flex-col p-3">
+                    <p className="truncate text-[10px] font-black uppercase tracking-wider text-orange-600">
+                      {product.category?.name || "Boneka"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProduct(product)}
+                      className="mt-1 min-h-10 text-left text-sm font-bold leading-5 text-stone-800 line-clamp-2 hover:text-orange-700"
+                    >
+                      {product.name}
+                    </button>
+                    <div className="mt-2">
+                      {product.isDiscountActive && (
+                        <p className="text-[10px] font-medium text-stone-400 line-through">
+                          {formatRupiah(product.originalPrice)}
+                        </p>
                       )}
+                      <p className={`text-base font-black tracking-tight ${product.isDiscountActive ? "text-red-600" : "text-orange-700"}`}>
+                        {formatRupiah(product.price)}
+                      </p>
                     </div>
+                    <p className={`mt-1 text-[11px] font-bold ${available ? "text-stone-500" : "text-red-500"}`}>
+                      {getStockLabel(product)}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={!available}
+                      onClick={() => openWhatsApp(product)}
+                      className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-2 text-xs font-extrabold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+                    >
+                      <WhatsAppLogo size={15} /> Tanya Produk
+                    </button>
                   </div>
                 </article>
               );
@@ -582,252 +509,106 @@ export default function KatalogPage() {
         )}
       </section>
 
-      {selectedProduct && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 flex items-end"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Detail menu"
-        >
-          <div className="w-full bg-white rounded-t-3xl max-h-[88vh] overflow-y-auto">
-            <div className="max-w-3xl mx-auto">
-              <div className="p-4 flex items-center justify-between border-b border-stone-100">
-                <button type="button" onClick={closeProductDetail} className="p-2 rounded-full bg-stone-100">
-                  <ChevronLeft size={20} />
-                </button>
-                <p className="font-black">Detail Menu</p>
-                <button type="button" onClick={closeProductDetail} className="p-2 rounded-full bg-stone-100">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="p-4">
-                <div className="aspect-[4/3] rounded-3xl bg-stone-100 border border-stone-100 overflow-hidden flex items-center justify-center">
-                  {getImageUrl(selectedProduct.imageUrl) ? (
-                    <img
-                      src={getImageUrl(selectedProduct.imageUrl)}
-                      alt={selectedProduct.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Package size={54} className="text-stone-300" />
-                  )}
-                </div>
-
-                <div className="pt-4">
-                  <p className="text-xs font-bold text-emerald-700">{selectedProduct.category?.name || "Menu"}</p>
-                  <h2 className="text-2xl font-black text-gray-950 mt-1">{selectedProduct.name}</h2>
-                  <div className="mt-3 flex items-center justify-between gap-4">
-                    <div>
-                      {selectedProduct.isDiscountActive && <p className="text-xs text-gray-400 line-through">{formatRupiah(selectedProduct.originalPrice)}</p>}
-                      <p className={`text-xl font-black ${selectedProduct.isDiscountActive ? 'text-red-600' : ''}`}>{formatRupiah(selectedProduct.price)}</p>
-                    </div>
-                    <span className="text-xs font-bold rounded-full bg-stone-100 px-3 py-1.5 text-gray-600">
-                      {getStockLabel(selectedProduct)}
-                    </span>
-                  </div>
-                </div>
-
-                {isTableMode ? (
-                  <div className="pt-5 space-y-3">
-                    <textarea
-                      value={detailNotes}
-                      onChange={(event) => setDetailNotes(event.target.value)}
-                      placeholder="Catatan item"
-                      rows={2}
-                      className="w-full rounded-2xl bg-stone-50 border border-stone-200 px-4 py-3 text-sm outline-none focus:border-emerald-600 resize-none"
-                    />
-
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 flex items-center border border-stone-200 rounded-2xl overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setDetailQty((prev) => Math.max(0, prev - 1))}
-                          className="w-12 h-12 flex items-center justify-center text-gray-600"
-                          aria-label={`Kurangi ${selectedProduct.name}`}
-                        >
-                          <Minus size={18} />
-                        </button>
-                        <div className="w-12 text-center font-black">{detailQty}</div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDetailQty((prev) =>
-                              Math.min(isUnlimitedStock(selectedProduct) ? 999 : Number(selectedProduct.stock || 1), prev + 1)
-                            )
-                          }
-                          className="w-12 h-12 flex items-center justify-center text-gray-600"
-                          aria-label={`Tambah ${selectedProduct.name}`}
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={saveProductDetail}
-                        className={`h-12 flex-1 rounded-2xl text-white font-black flex items-center justify-center gap-2 ${
-                          detailQty === 0
-                            ? detailCartItemId
-                              ? "bg-red-600"
-                              : "bg-gray-700"
-                            : "bg-emerald-700"
-                        }`}
-                      >
-                        {detailQty === 0 ? (
-                          detailCartItemId ? <Trash2 size={18} /> : <X size={18} />
-                        ) : detailCartItemId ? (
-                          <CheckCircle2 size={18} />
-                        ) : (
-                          <Plus size={18} />
-                        )}
-                        {detailQty === 0
-                          ? detailCartItemId
-                            ? "Hapus dari pesanan"
-                            : "Tidak jadi pilih"
-                          : `${detailCartItemId ? "Simpan" : "Tambah"} ${formatRupiah(
-                              Number(selectedProduct.price) * detailQty
-                            )}`}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => openWhatsApp(selectedProduct)}
-                    className="mt-5 w-full h-12 rounded-2xl bg-green-600 text-white font-black flex items-center justify-center gap-2"
-                  >
-                    <MessageCircle size={18} />
-                    Pesan via WhatsApp
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isTableMode && cart.length > 0 && !showCart && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-stone-200 px-4 py-3 shadow-2xl">
-          <div className="max-w-3xl mx-auto flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-gray-500">{cartItemCount} item dipilih</p>
-              <p className="font-black text-gray-950">{formatRupiah(cartTotal)}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowCart(true)}
-              className="h-12 px-5 rounded-2xl bg-gray-950 text-white font-black flex items-center gap-2"
-            >
-              Review
-              <ShoppingBag size={18} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {isTableMode && showCart && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end">
-          <div className="w-full bg-white rounded-t-3xl max-h-[92vh] flex flex-col">
-            <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col min-h-0">
-              <div className="px-4 py-4 border-b border-stone-100 flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-black text-gray-950">Review Pesanan</h2>
-                  <p className="text-xs text-gray-500">Meja {tableNumber}</p>
-                </div>
-                <button type="button" onClick={() => setShowCart(false)} className="p-2 rounded-full bg-stone-100">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="px-4 pt-4">
-                <div className="grid grid-cols-3 rounded-2xl bg-stone-100 border border-stone-200 p-1 text-[11px] font-black text-center">
-                  <div className="py-2 rounded-xl text-gray-500">Pilih</div>
-                  <div className="py-2 rounded-xl bg-white shadow-sm text-gray-950">Review</div>
-                  <div className="py-2 rounded-xl text-gray-500">Kirim</div>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-4 py-3">
-                {cart.map((item) => (
-                  <div key={item.cartItemId} className="py-3 border-b border-stone-100 flex gap-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-black text-sm text-gray-950 truncate">{item.name}</h3>
-                      {item.notes && <p className="text-xs text-emerald-700 mt-0.5 truncate">{item.notes}</p>}
-                      <p className="text-xs font-bold text-gray-500 mt-1">{formatRupiah(item.price)}</p>
-                    </div>
-                    <div className="flex items-center h-10 border border-stone-200 rounded-xl overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => updateCartQuantity(item.cartItemId, item.quantity - 1)}
-                        className="w-9 h-10 flex items-center justify-center text-gray-600"
-                      >
-                        <Minus size={15} />
-                      </button>
-                      <span className="w-8 text-center font-black text-sm">{item.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateCartQuantity(item.cartItemId, item.quantity + 1)}
-                        className="w-9 h-10 flex items-center justify-center text-gray-600"
-                      >
-                        <Plus size={15} />
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeCartItem(item.cartItemId)}
-                      className="h-10 w-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center"
-                    >
-                      <Trash2 size={17} />
-                    </button>
-                  </div>
-                ))}
-
-                <div className="pt-4 space-y-3">
-                  <input
-                    value={customerName}
-                    onChange={(event) => setCustomerName(event.target.value)}
-                    placeholder="Nama pelanggan"
-                    className="w-full h-12 rounded-2xl bg-stone-50 border border-stone-200 px-4 text-sm outline-none focus:border-emerald-600"
-                  />
-                  <textarea
-                    value={orderNote}
-                    onChange={(event) => setOrderNote(event.target.value)}
-                    placeholder="Catatan pesanan"
-                    rows={3}
-                    className="w-full rounded-2xl bg-stone-50 border border-stone-200 px-4 py-3 text-sm outline-none focus:border-emerald-600 resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 border-t border-stone-100 bg-white">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-bold text-gray-500">Total</span>
-                  <span className="text-xl font-black text-gray-950">{formatRupiah(cartTotal)}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={submitTableOrder}
-                  disabled={submitting || cart.length === 0}
-                  className="w-full h-14 rounded-2xl bg-emerald-700 disabled:bg-gray-300 text-white font-black flex items-center justify-center gap-2"
-                >
-                  <Send size={18} />
-                  {submitting ? "Mengirim..." : "Kirim ke Kasir"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!isTableMode && (
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-orange-100 bg-white/95 p-3 backdrop-blur sm:hidden">
         <button
           type="button"
-          onClick={() => openWhatsApp(null)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-green-600 text-white rounded-full flex items-center justify-center shadow-xl z-40"
+          onClick={() => openWhatsApp()}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-sm font-black text-white shadow-lg shadow-emerald-100"
         >
-          <MessageCircle size={28} />
+          <WhatsAppLogo size={19} /> Chat Toko via WhatsApp
         </button>
+      </div>
+
+      {selectedProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Detail ${selectedProduct.name}`}
+          onClick={() => setSelectedProduct(null)}
+        >
+          <div
+            className="max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
+              <button
+                type="button"
+                onClick={() => setSelectedProduct(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-600 sm:hidden"
+                aria-label="Kembali"
+              >
+                <ChevronLeft size={21} />
+              </button>
+              <p className="font-black text-stone-900">Detail Produk</p>
+              <button
+                type="button"
+                onClick={() => setSelectedProduct(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-600 hover:bg-stone-200"
+                aria-label="Tutup detail"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <div className="grid gap-0 md:grid-cols-2">
+              <div className="aspect-square overflow-hidden bg-orange-50">
+                <CatalogImage
+                  src={getImageUrl(selectedProduct.imageUrl)}
+                  alt={selectedProduct.name}
+                  className="h-full w-full object-cover"
+                  eager
+                />
+              </div>
+              <div className="flex flex-col p-5 sm:p-7">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-orange-600">
+                  {selectedProduct.category?.name || "Boneka"}
+                </p>
+                <h2 className="mt-2 text-2xl font-black leading-tight text-stone-950 sm:text-3xl">
+                  {selectedProduct.name}
+                </h2>
+                <div className="mt-5 rounded-2xl bg-orange-50 p-4">
+                  {selectedProduct.isDiscountActive && (
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="rounded-md bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white">
+                        {selectedProduct.discountLabel || "Promo"}
+                      </span>
+                      <span className="text-xs font-semibold text-stone-400 line-through">
+                        {formatRupiah(selectedProduct.originalPrice)}
+                      </span>
+                    </div>
+                  )}
+                  <p className="text-2xl font-black text-orange-700">
+                    {formatRupiah(selectedProduct.price)}
+                  </p>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between rounded-2xl border border-stone-200 px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm font-bold text-stone-500">
+                    <Package size={18} className="text-orange-500" /> Ketersediaan
+                  </span>
+                  <span className={`text-sm font-black ${isAvailable(selectedProduct) ? "text-emerald-700" : "text-red-600"}`}>
+                    {getStockLabel(selectedProduct)}
+                  </span>
+                </div>
+
+                <div className="mt-auto pt-6">
+                  <p className="mb-3 text-xs leading-5 text-stone-500">
+                    Konfirmasi warna, ukuran, dan ketersediaan terbaru langsung dengan toko sebelum memesan.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={!isAvailable(selectedProduct)}
+                    onClick={() => openWhatsApp(selectedProduct)}
+                    className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 disabled:bg-stone-300"
+                  >
+                    <WhatsAppLogo size={20} /> Tanya Produk via WhatsApp
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

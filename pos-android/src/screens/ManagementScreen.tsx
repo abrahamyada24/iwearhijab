@@ -682,7 +682,7 @@ export default function ManagementScreen({ navigation }: any) {
                         </View>
                         <TextInput
                             style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-5 text-gray-800 dark:text-gray-100`}
-                            placeholder="Contoh: Makanan Berat"
+                            placeholder="Contoh: Boneka Karakter"
                             value={categoryName}
                             onChangeText={setCategoryName}
                         />

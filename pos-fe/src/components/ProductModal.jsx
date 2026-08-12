@@ -219,7 +219,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                         <div className="p-5 bg-white rounded-3xl shadow-sm border border-gray-100">
                           <UploadCloud size={40} strokeWidth={1} />
                         </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Select Visual</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Pilih Gambar</span>
                       </div>
                     )}
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -261,7 +261,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
               <div className="lg:col-span-8 space-y-8">
                 {/* Product Name */}
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Menu Identity</label>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Identitas Produk</label>
                   <input
                     required
                     type="text"
@@ -393,7 +393,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                         value={formData.discountLabel}
                         onChange={(e) => setFormData({ ...formData, discountLabel: e.target.value })}
                         className="w-full h-11 px-4 bg-white border border-red-100 rounded-lg text-sm font-bold outline-none focus:border-red-400"
-                        placeholder="Nama promo / event, mis. Kopi Pagi"
+                        placeholder="Nama promo / event, mis. Promo Agustus"
                       />
 
                       <div className="grid grid-cols-2 gap-3">
@@ -439,7 +439,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <div className="flex justify-between items-center mb-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Initial Inventory</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Stok Awal</label>
                       <label className="flex items-center gap-1 cursor-pointer">
                         <input type="checkbox" checked={formData.isUnlimitedStock} onChange={(e) => setFormData({...formData, isUnlimitedStock: e.target.checked})} className="w-3 h-3 text-blue-500 rounded border-gray-300 focus:ring-blue-500" />
                         <span className="text-[9px] font-bold text-gray-500 uppercase">Stok Tak Terbatas</span>
@@ -497,7 +497,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                   <div className="p-6 bg-blue-50/50 rounded-[2rem] border border-blue-100 space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                         <Plus size={18} className="text-blue-500" />
-                        <h4 className="font-black text-sm text-blue-900 uppercase tracking-widest">Product Addons</h4>
+                        <h4 className="font-black text-sm text-blue-900 uppercase tracking-widest">Pilihan Tambahan Produk</h4>
                     </div>
                     <div className="space-y-2">
                         {addons.map(addon => (
@@ -511,9 +511,9 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                         ))}
                     </div>
                     <div className="flex gap-2 pt-2 border-t border-blue-100/50 mt-4">
-                        <input type="text" value={newAddon.name} onChange={(e) => setNewAddon({...newAddon, name: e.target.value})} placeholder="Nama Addon (Cth: Keju)" className="flex-1 px-4 py-2 rounded-xl border border-blue-100 text-sm focus:outline-none focus:border-blue-300 bg-white" />
+                        <input type="text" value={newAddon.name} onChange={(e) => setNewAddon({...newAddon, name: e.target.value})} placeholder="Contoh: Bungkus kado" className="flex-1 px-4 py-2 rounded-xl border border-blue-100 text-sm focus:outline-none focus:border-blue-300 bg-white" />
                         <input type="number" value={newAddon.price} onChange={(e) => setNewAddon({...newAddon, price: e.target.value})} placeholder="Harga" className="w-24 px-4 py-2 rounded-xl border border-blue-100 text-sm focus:outline-none focus:border-blue-300 bg-white" />
-                        <button type="button" onClick={handleAddAddon} className="px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors font-bold text-sm">Add</button>
+                        <button type="button" onClick={handleAddAddon} className="px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors font-bold text-sm">Tambah</button>
                     </div>
                   </div>
                 )}

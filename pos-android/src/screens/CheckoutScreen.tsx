@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, TextInput, Modal, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, TextInput, Modal, FlatList, useWindowDimensions } from 'react-native';
 import tw, { useAppColorScheme } from 'twrnc';
 import { useStore } from '../store/useStore';
 import { getDBConnection } from '../database/db';
@@ -9,9 +9,12 @@ import { PreOrderPaymentStatus, getPaymentStatusLabel } from '../utils/preOrderP
 
 export default function CheckoutScreen({ navigation }: any) {
     useAppColorScheme(tw);
+    const { width, height } = useWindowDimensions();
+    const isTablet = Math.min(width, height) >= 600;
+    const tabletContentStyle = isTablet ? { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const, paddingHorizontal: 24 } : null;
+    const tabletModalStyle = isTablet ? { width: '100%' as const, maxWidth: 680, alignSelf: 'center' as const, borderTopLeftRadius: 24, borderTopRightRadius: 24 } : null;
     const { cart, cartTotal, cartSubtotal, updateCartQuantity, clearCart, discount, discountType, setDiscount } = useStore();
     const settings = useStore(state => state.settings);
-    const pendingOrderContext = useStore(state => state.pendingOrderContext);
     const [paymentMethod, setPaymentMethod] = useState('CASH');
     const [cashAmount, setCashAmount] = useState('');
 
@@ -27,12 +30,6 @@ export default function CheckoutScreen({ navigation }: any) {
     const [discountInput, setDiscountInput] = useState('');
     const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount');
 
-    // Order Type (Dine-in / Take-away)
-    const [orderType, setOrderType] = useState<'TAKE_AWAY' | 'DINE_IN'>('TAKE_AWAY');
-    const [availableTables, setAvailableTables] = useState<any[]>([]);
-    const [selectedTable, setSelectedTable] = useState<any>(null);
-    const [showTableModal, setShowTableModal] = useState(false);
-
     // Pre-order
     const [preOrderDate, setPreOrderDate] = useState('');
     const [showPreOrderInput, setShowPreOrderInput] = useState(false);
@@ -43,12 +40,6 @@ export default function CheckoutScreen({ navigation }: any) {
     const [showSaveModal, setShowSaveModal] = useState(false);
     const [pendingName, setPendingName] = useState('');
 
-    // Take Away Options (Layanan Beli Online)
-    const [takeAwayOption, setTakeAwayOption] = useState('');
-    const [takeAwayOptionsList, setTakeAwayOptionsList] = useState<string[]>([]);
-    const [showTakeAwayModal, setShowTakeAwayModal] = useState(false);
-    const [newTakeAwayOption, setNewTakeAwayOption] = useState('');
-    
     // Loyalty State
     const [usePoints, setUsePoints] = useState(false);
     const [pointsToRedeem, setPointsToRedeem] = useState(0);
@@ -81,23 +72,6 @@ export default function CheckoutScreen({ navigation }: any) {
         loadData();
     }, []);
 
-    useEffect(() => {
-        if (!pendingOrderContext) return;
-
-        if (pendingOrderContext.customerName) {
-            setGuestName(pendingOrderContext.customerName);
-        }
-
-        if (pendingOrderContext.tableNumber) {
-            setOrderType('DINE_IN');
-            setSelectedTable({
-                id: `remote-${pendingOrderContext.tableNumber}`,
-                number: pendingOrderContext.tableNumber,
-                name: 'Order QR',
-            });
-        }
-    }, [pendingOrderContext]);
-
     const loadData = async () => {
         try {
             const db = await getDBConnection();
@@ -108,95 +82,12 @@ export default function CheckoutScreen({ navigation }: any) {
             for (let i = 0; i < resCust.rows.length; i++) arrCust.push(resCust.rows.item(i));
             setCustomers(arrCust);
 
-            // Load Take Away Options from settings (try synced key first, then local key)
-            let optionsLoaded = false;
-            for (const settingsKey of ['takeawayOptions', 'takeAwayOptions']) {
-                const [resSettings] = await db.executeSql(`SELECT value FROM settings WHERE key = ?`, [settingsKey]);
-                if (resSettings.rows.length > 0) {
-                    const optionsStr = resSettings.rows.item(0).value;
-                    if (optionsStr) {
-                        try {
-                            const parsed = JSON.parse(optionsStr);
-                            if (Array.isArray(parsed) && parsed.length > 0) {
-                                setTakeAwayOptionsList(parsed);
-                                optionsLoaded = true;
-                                break;
-                            }
-                        } catch {}
-                    }
-                }
-            }
-            if (!optionsLoaded) {
-                const defaultOptions = ['GoFood', 'GrabFood', 'ShopeeFood'];
-                await db.executeSql(`INSERT OR REPLACE INTO settings (key, value) VALUES ('takeAwayOptions', ?)`, [JSON.stringify(defaultOptions)]);
-                setTakeAwayOptionsList(defaultOptions);
-            }
-
             // Loyalty Config is now used from global settings in useStore
             
         } catch (e) { 
             console.error("Error loading checkout data:", e); 
         }
     };
-
-    const handleSaveTakeAwayOptions = async (newList: string[]) => {
-        try {
-            const db = await getDBConnection();
-            await db.executeSql(`INSERT OR REPLACE INTO settings (key, value) VALUES ('takeAwayOptions', ?)`, [JSON.stringify(newList)]);
-            setTakeAwayOptionsList(newList);
-        } catch (e) {
-            console.error("Error saving takeaway options:", e);
-        }
-    };
-
-    const handleAddTakeAwayOption = () => {
-        const opt = newTakeAwayOption.trim();
-        if (!opt) return;
-        if (takeAwayOptionsList.includes(opt)) {
-            Alert.alert('Info', 'Opsi ini sudah ada.');
-            return;
-        }
-        const newList = [...takeAwayOptionsList, opt];
-        handleSaveTakeAwayOptions(newList);
-        setNewTakeAwayOption('');
-    };
-
-    const handleRemoveTakeAwayOption = (opt: string) => {
-        Alert.alert('Hapus', `Hapus opsi ${opt}?`, [
-            { text: 'Batal', style: 'cancel' },
-            { text: 'Hapus', style: 'destructive', onPress: () => {
-                const newList = takeAwayOptionsList.filter(item => item !== opt);
-                handleSaveTakeAwayOptions(newList);
-                if (takeAwayOption === opt) setTakeAwayOption('');
-            }}
-        ]);
-    };
-
-    const loadAvailableTables = async () => {
-        if (!settings.enableDineTable) return;
-        try {
-            const db = await getDBConnection();
-            const [res] = await db.executeSql("SELECT * FROM dine_tables WHERE status = 'AVAILABLE' ORDER BY number ASC");
-            const arr: any[] = [];
-            for (let i = 0; i < res.rows.length; i++) arr.push(res.rows.item(i));
-            setAvailableTables(arr);
-        } catch (e) { console.error(e); }
-    };
-
-    useEffect(() => {
-        if (orderType === 'DINE_IN') loadAvailableTables();
-        else setSelectedTable(null);
-    }, [orderType]);
-
-    useEffect(() => {
-        if (!pendingOrderContext?.tableNumber || orderType !== 'DINE_IN') return;
-        const existingTable = availableTables.find(table => table.number === pendingOrderContext.tableNumber);
-        setSelectedTable(existingTable || {
-            id: `remote-${pendingOrderContext.tableNumber}`,
-            number: pendingOrderContext.tableNumber,
-            name: 'Order QR',
-        });
-    }, [availableTables, orderType, pendingOrderContext]);
 
     const selectCustomer = (customer: any) => {
         setSelectedCustomer(customer);
@@ -276,14 +167,13 @@ export default function CheckoutScreen({ navigation }: any) {
             Alert.alert('Uang Kurang', `Uang tunai tidak cukup.\nKurang: ${formatRp(amountDueNow - rawCash)}`);
             return;
         }
-        // Meja dine-in bersifat opsional — tidak wajib dipilih
         try {
             const db = await getDBConnection();
             const invoiceNumber = `INV-${Date.now()}`;
             const trxId = Math.random().toString(36).substring(7) + Date.now().toString(36);
             const createdAt = new Date().toISOString();
             const custNameBase = selectedCustomer ? selectedCustomer.name : (guestName.trim() || 'Umum');
-            const custNameFinal = orderType === 'TAKE_AWAY' && takeAwayOption ? `${custNameBase} (${takeAwayOption})` : custNameBase;
+            const custNameFinal = custNameBase;
 
             await db.executeSql(
                 `INSERT INTO transactions (id, invoiceNumber, grandTotal, discountAmount, paymentMethod, cashAmount, changeAmount, customerId, customerName, createdAt, preOrderDate, paymentStatus, paidAmount, remainingAmount, paidAt, orderType, tableName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -297,15 +187,8 @@ export default function CheckoutScreen({ navigation }: any) {
                     paidAmount,
                     remainingAmount,
                     paidAmount > 0 ? createdAt : null,
-                    orderType, selectedTable?.number || null]
+                    'TAKE_AWAY', null]
             );
-
-            // Optional: Mark table as OCCUPIED automatically
-            if (orderType === 'DINE_IN' && selectedTable) {
-                try {
-                    await db.executeSql(`UPDATE dine_tables SET status = 'OCCUPIED', isSynced = 0 WHERE id = ?`, [selectedTable.id]);
-                } catch (e) { console.error("Failed to update table status", e); }
-            }
 
             for (const item of cart) {
                 await db.executeSql(
@@ -339,8 +222,8 @@ export default function CheckoutScreen({ navigation }: any) {
                 paidAmount,
                 remainingAmount,
                 paidAt: paidAmount > 0 ? createdAt : null,
-                orderType,
-                tableName: selectedTable?.number || null
+                orderType: 'TAKE_AWAY',
+                tableName: null
             };
 
             clearCart();
@@ -369,7 +252,7 @@ export default function CheckoutScreen({ navigation }: any) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={tw`p-4`}>
+            <ScrollView contentContainerStyle={[tw`p-4`, tabletContentStyle]}>
                 {/* Customer Selection */}
                 <View style={tw`bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden mb-4`}>
                     <View style={tw`bg-gray-50 dark:bg-gray-900 px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex-row items-center justify-between`}>
@@ -428,80 +311,6 @@ export default function CheckoutScreen({ navigation }: any) {
                         </View>
                     )}
                 </View>
-
-                {/* Jenis Pesanan (Order Type) - Only show if Dine-In Table feature is enabled */}
-                {settings.enableDineTable && (
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden mb-4 p-4`}>
-                        <Text style={tw`font-bold text-gray-700 dark:text-gray-200 text-sm mb-3`}>Jenis Pesanan</Text>
-                        <View style={tw`flex-row gap-3`}>
-                            <TouchableOpacity
-                                style={tw`flex-1 p-3 border rounded-xl flex-row items-center justify-center ${orderType === 'TAKE_AWAY' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900'}`}
-                                onPress={() => setOrderType('TAKE_AWAY')}
-                            >
-                                <Icon name="store" size={18} color={orderType === 'TAKE_AWAY' ? tw.color('orange-600') : tw.color('gray-400')} style={tw`mr-2`} />
-                                <Text style={tw`font-bold text-sm ${orderType === 'TAKE_AWAY' ? 'text-orange-700 dark:text-orange-200' : 'text-gray-600 dark:text-gray-400'}`}>Take Away</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={tw`flex-1 p-3 border rounded-xl flex-row items-center justify-center ${orderType === 'DINE_IN' ? 'border-green-500 bg-green-50 dark:bg-green-900' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900'}`}
-                                onPress={() => setOrderType('DINE_IN')}
-                            >
-                                <Icon name="silverware-fork-knife" size={18} color={orderType === 'DINE_IN' ? tw.color('green-600') : tw.color('gray-400')} style={tw`mr-2`} />
-                                <Text style={tw`font-bold text-sm ${orderType === 'DINE_IN' ? 'text-green-700 dark:text-green-200' : 'text-gray-600 dark:text-gray-400'}`}>Dine In</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Take Away Options Selection */}
-                        {orderType === 'TAKE_AWAY' && (
-                            <View style={tw`mt-4 pt-4 border-t border-gray-100 dark:border-gray-700`}>
-                                <View style={tw`flex-row justify-between items-center mb-2`}>
-                                    <Text style={tw`text-xs font-bold text-gray-500 dark:text-gray-400`}>Layanan Beli Online (Opsional)</Text>
-                                    <TouchableOpacity onPress={() => setShowTakeAwayModal(true)}>
-                                        <Text style={tw`text-xs font-bold text-blue-600`}>Kelola Opsi</Text>
-                                    </TouchableOpacity>
-                                </View>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`flex-row gap-2`}>
-                                    <TouchableOpacity 
-                                        style={tw`px-4 py-2 rounded-full border ${!takeAwayOption ? 'bg-orange-600 border-orange-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}
-                                        onPress={() => setTakeAwayOption('')}
-                                    >
-                                        <Text style={tw`text-xs font-bold ${!takeAwayOption ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}>Standar</Text>
-                                    </TouchableOpacity>
-                                    {takeAwayOptionsList.map(opt => (
-                                        <TouchableOpacity 
-                                            key={opt}
-                                            style={tw`px-4 py-2 rounded-full border ${takeAwayOption === opt ? 'bg-orange-600 border-orange-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}
-                                            onPress={() => setTakeAwayOption(opt)}
-                                        >
-                                            <Text style={tw`text-xs font-bold ${takeAwayOption === opt ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}>{opt}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-                            </View>
-                        )}
-
-                        {/* Table Selection when Dine-in and feature enabled */}
-                        {orderType === 'DINE_IN' && (
-                            <TouchableOpacity
-                                style={tw`mt-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 flex-row items-center justify-between`}
-                                onPress={() => setShowTableModal(true)}
-                            >
-                                <View style={tw`flex-row items-center`}>
-                                    <View style={tw`w-8 h-8 rounded-full ${selectedTable ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-200 dark:bg-gray-700'} items-center justify-center mr-3`}>
-                                        <Icon name="silverware-fork-knife" size={14} color={selectedTable ? tw.color('green-600') : tw.color('gray-500')} />
-                                    </View>
-                                    <View>
-                                        <Text style={tw`text-xs text-gray-500 dark:text-gray-400`}>Pilih Meja</Text>
-                                        <Text style={tw`font-bold ${selectedTable ? 'text-green-700 dark:text-green-400 text-sm' : 'text-gray-800 dark:text-gray-100'}`}>
-                                            {selectedTable ? `Meja ${selectedTable.number}` : 'Belum pilih meja'}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <Icon name="chevron-right" size={20} color={tw.color('gray-400')} />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                )}
 
                 {/* Pre-Order Section */}
                 {settings.enablePreOrder && (
@@ -780,7 +589,7 @@ export default function CheckoutScreen({ navigation }: any) {
             {/* Customer Picker Modal */}
             <Modal visible={showCustomerModal} animationType="slide" transparent>
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6 max-h-[80%]`}>
+                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6 max-h-[80%]`, tabletModalStyle]}>
                         <View style={tw`flex-row justify-between items-center mb-4`}>
                             <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Pilih Pelanggan</Text>
                             <TouchableOpacity onPress={() => setShowCustomerModal(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}>
@@ -828,7 +637,7 @@ export default function CheckoutScreen({ navigation }: any) {
             {/* Discount Modal */}
             <Modal visible={showDiscountModal} transparent animationType="slide">
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`}>
+                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`, tabletModalStyle]}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
                             <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Tambah Diskon</Text>
                             <TouchableOpacity onPress={() => setShowDiscountModal(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}><Icon name="close" size={20} color={tw.color('gray-600')} /></TouchableOpacity>
@@ -857,97 +666,17 @@ export default function CheckoutScreen({ navigation }: any) {
             {/* Save Pending Modal */}
             <Modal visible={showSaveModal} transparent animationType="slide">
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`}>
+                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`, tabletModalStyle]}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
                             <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Simpan Penjualan</Text>
                             <TouchableOpacity onPress={() => setShowSaveModal(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}><Icon name="close" size={20} color={tw.color('gray-600')} /></TouchableOpacity>
                         </View>
                         <TextInput style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-5 text-gray-800 dark:text-gray-100 font-bold`}
-                            placeholder="Contoh: Meja 1, Pesanan Pak Budi..."
+                            placeholder="Contoh: Pesanan Ibu Rina atau Kado Ulang Tahun"
                             value={pendingName} onChangeText={setPendingName} />
                         <TouchableOpacity style={tw`bg-amber-500 py-4 rounded-xl items-center`} onPress={handleSavePending}>
                             <Text style={tw`text-white font-black text-base`}>Simpan & Kembali ke Kasir</Text>
                         </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-            {/* Table Selection Modal */}
-            <Modal visible={showTableModal} animationType="slide" transparent>
-                <View style={tw`flex-1 bg-black/60 justify-end`}>
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl h-[60%] p-6`}>
-                        <View style={tw`flex-row justify-between items-center mb-5`}>
-                            <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Pilih Meja</Text>
-                            <TouchableOpacity onPress={() => setShowTableModal(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}>
-                                <Icon name="close" size={20} color={tw.color('gray-600')} />
-                            </TouchableOpacity>
-                        </View>
-                        <FlatList
-                            data={availableTables}
-                            keyExtractor={item => String(item.id)}
-                            numColumns={3}
-                            ListEmptyComponent={() => (
-                                <Text style={tw`text-center text-gray-500 py-10`}>Tidak ada meja yang tersedia.</Text>
-                            )}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={tw`flex-1 m-1.5 p-4 rounded-xl items-center justify-center border ${selectedTable?.id === item.id ? 'bg-green-50 border-green-500 dark:bg-green-900 border-2' : 'bg-gray-50 border-gray-200 dark:bg-gray-900 dark:border-gray-700'}`}
-                                    onPress={() => {
-                                        setSelectedTable(item);
-                                        setShowTableModal(false);
-                                    }}
-                                >
-                                    <Text style={tw`font-black text-lg ${selectedTable?.id === item.id ? 'text-green-700 dark:text-green-400' : 'text-gray-800 dark:text-gray-100'}`}>{item.number}</Text>
-                                    {item.capacity ? <Text style={tw`text-[10px] text-gray-500`}>{item.capacity} kursi</Text> : null}
-                                </TouchableOpacity>
-                            )}
-                        />
-                    </View>
-                </View>
-            </Modal>
-            {/* Take Away Options Modal */}
-            <Modal visible={showTakeAwayModal} transparent animationType="slide">
-                <View style={tw`flex-1 bg-black/50 justify-end`}>
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6 h-[70%]`}>
-                        <View style={tw`flex-row justify-between items-center mb-5`}>
-                            <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Layanan Beli Online</Text>
-                            <TouchableOpacity onPress={() => setShowTakeAwayModal(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}><Icon name="close" size={20} color={tw.color('gray-600')} /></TouchableOpacity>
-                        </View>
-                        
-                        <View style={tw`flex-row gap-2 mb-4`}>
-                            <TextInput 
-                                style={tw`flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-gray-100`}
-                                placeholder="Contoh: ShopeeFood"
-                                placeholderTextColor={tw.color('gray-400')}
-                                value={newTakeAwayOption}
-                                onChangeText={setNewTakeAwayOption}
-                            />
-                            <TouchableOpacity 
-                                style={tw`bg-blue-600 px-5 rounded-xl justify-center items-center`}
-                                onPress={handleAddTakeAwayOption}
-                            >
-                                <Icon name="plus" size={20} color="white" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text style={tw`text-xs font-bold text-gray-500 mb-2 mt-2`}>Daftar Layanan Tersimpan</Text>
-                        <FlatList
-                            data={takeAwayOptionsList}
-                            keyExtractor={item => item}
-                            renderItem={({ item }) => (
-                                <View style={tw`flex-row justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800`}>
-                                    <Text style={tw`font-bold text-gray-800 dark:text-gray-100`}>{item}</Text>
-                                    <TouchableOpacity 
-                                        style={tw`p-2 bg-red-50 dark:bg-red-900/30 rounded-full`}
-                                        onPress={() => handleRemoveTakeAwayOption(item)}
-                                    >
-                                        <Icon name="close" size={16} color={tw.color('red-500')} />
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                            ListEmptyComponent={() => (
-                                <Text style={tw`text-center text-gray-500 py-4`}>Belum ada layanan tersimpan.</Text>
-                            )}
-                        />
                     </View>
                 </View>
             </Modal>

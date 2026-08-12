@@ -111,7 +111,7 @@ export default function CategoryModal({ isOpen, onClose, onSave, initialData }) 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-lg text-gray-900 font-bold text-base focus:outline-none focus:border-blue-500 focus:bg-white transition-all placeholder:text-gray-400"
-                  placeholder="Contoh: Makanan"
+                  placeholder="Contoh: Boneka Karakter"
                 />
               </div>
 

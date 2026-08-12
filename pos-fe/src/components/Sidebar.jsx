@@ -124,7 +124,7 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
           {/* Brand Header - Identik dengan Header Kasir */}
           <Link href="/" className="h-16 lg:h-20 flex items-center px-6 border-b border-gray-100 flex-shrink-0" title="Kembali ke dashboard">
             <div className="w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center flex-shrink-0 mr-3">
-              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+              <img src="/icon.png" alt="Logo Warna Warni" className="w-full h-full object-contain" />
             </div>
             <div className="min-w-0">
               <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">{settings?.storeName || 'Warna Warni'}</h1>

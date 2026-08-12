@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert, PermissionsAndroid, Platform, View, Text, TouchableOpacity,
-    ScrollView, TextInput, Switch, Image, LayoutAnimation, UIManager, Linking
+    ScrollView, TextInput, Switch, Image, LayoutAnimation, UIManager, Linking, useWindowDimensions
 } from 'react-native';
 import tw, { useAppColorScheme } from 'twrnc';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -63,6 +63,8 @@ function SectionItem({ icon, iconColor, label, sublabel, isOpen, onPress, childr
 }
 
 export default function SettingsScreen({ navigation }: any) {
+    const { width, height } = useWindowDimensions();
+    const isTablet = Math.min(width, height) >= 600;
     const { settings, setSettings } = useStore();
     const [storeName, setStoreName] = useState<string>(settings?.storeName || 'Warna Warni');
     const [storeAddress, setStoreAddress] = useState<string>(settings?.storeAddress || '');
@@ -584,7 +586,7 @@ export default function SettingsScreen({ navigation }: any) {
                 </View>
             ) : null}
 
-            <ScrollView contentContainerStyle={tw`p-4 pb-10`}>
+            <ScrollView contentContainerStyle={[tw`p-4 pb-10`, isTablet && { width: '100%', maxWidth: 960, alignSelf: 'center', paddingHorizontal: 24 }]}>
                 {/* ── PROFIL TOKO ────────────────────────────────────────────────── */}
                 <SectionItem
                     icon="storefront-outline" iconColor={tw.color('blue-600')}
@@ -594,7 +596,7 @@ export default function SettingsScreen({ navigation }: any) {
                     <View style={tw`pt-4`}>
                         <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Nama Toko (Tercetak di Struk)</Text>
                         <TextInput style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 font-bold text-gray-800 dark:text-gray-100 mb-3`}
-                            value={storeName} onChangeText={setStoreName} placeholder="Warung Makan Barokah" />
+                            value={storeName} onChangeText={setStoreName} placeholder="Warna Warni Boneka" />
 
                         <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Alamat Toko</Text>
                         <TextInput style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-gray-100 mb-3`}

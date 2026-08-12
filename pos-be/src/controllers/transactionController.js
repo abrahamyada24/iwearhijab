@@ -46,8 +46,8 @@ exports.createTransaction = async (req, res) => {
     try {
         const {
             userId, customerId, customerName, items, payment,
-            orderType, tableNumber, note,
-            preOrderDate, discountAmount, discountType, takeawayOption,
+            orderType, note,
+            preOrderDate, discountAmount, discountType,
             loyaltyPointsRedeemed
         } = req.body;
 
@@ -232,7 +232,7 @@ exports.createTransaction = async (req, res) => {
                     shiftId: activeShift?.id || null,
                     userId: req.user.id,
                     customerId: customerId ? parseInt(customerId) : null,
-                    customerName: takeawayOption ? `${customerName || 'Umum'} (${takeawayOption})` : (customerName || null),
+                    customerName: customerName || null,
                     invoiceNumber,
                     subTotal,
                     taxAmount,
@@ -241,8 +241,8 @@ exports.createTransaction = async (req, res) => {
                     cashAmount: payment.cashAmount != null ? parseFloat(payment.cashAmount) : null,
                     changeAmount: payment.changeAmount != null ? parseFloat(payment.changeAmount) : null,
                     status: initialStatus,
-                    orderType: orderType || 'TAKE_AWAY',
-                    tableNumber: tableNumber || null,
+                    orderType: orderType === 'PRE_ORDER' || preOrderDate ? 'PRE_ORDER' : 'TAKE_AWAY',
+                    tableNumber: null,
                     note: note || null,
                     preOrderDate: preOrderDate ? new Date(preOrderDate) : null,
                     preOrderConfirmed: false,

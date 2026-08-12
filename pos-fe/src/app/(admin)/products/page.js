@@ -159,7 +159,7 @@ export default function ProductsPage() {
                 setIsModalOpen(false);
                 // REFRESH DATA DARI SERVER
                 await fetchDataMaster();
-                showAlert.success("Berhasil!", editingProduct ? "Menu diperbarui." : "Menu baru ditambahkan.");
+                showAlert.success("Berhasil!", editingProduct ? "Produk diperbarui." : "Produk baru ditambahkan.");
             } else {
                 showAlert.error("Gagal", result.message || result.error || "Cek kembali data input.");
             }
@@ -177,7 +177,7 @@ export default function ProductsPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                         <input
                             type="text"
-                            placeholder="Cari menu / SKU..."
+                            placeholder="Cari produk / SKU..."
                             value={searchQuery}
                             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                             className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:border-blue-500 shadow-sm transition-all"
@@ -198,7 +198,7 @@ export default function ProductsPage() {
                     </div>
                 </div>
                 <button onClick={handleAdd} className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-100 transition-all active:scale-95">
-                    <Plus size={18} /> Tambah Menu
+                    <Plus size={18} /> Tambah Produk
                 </button>
             </div>
 
@@ -208,7 +208,7 @@ export default function ProductsPage() {
                 {currentPage === 1 && !searchQuery && selectedCategory === 'Semua' && (
                     <div onClick={handleAdd} className="md:col-span-1 md:row-span-1 border-2 border-dashed border-gray-300 rounded-3xl flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all cursor-pointer bg-gray-50/50 group">
                         <div className="p-3 bg-white rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform"><Plus size={24} /></div>
-                        <span className="font-medium text-sm">Tambah Menu Baru</span>
+                        <span className="font-medium text-sm">Tambah Produk Baru</span>
                     </div>
                 )}
 

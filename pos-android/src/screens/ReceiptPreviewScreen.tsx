@@ -123,16 +123,6 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
             text += `STATUS BAYAR: ${paymentStatusLabel}\n`;
         }
 
-        // Order Type
-        if (receiptData.orderType && settings.enableDineTable) {
-            let orderLine = receiptData.orderType === 'DINE_IN' ? '=== DINE IN' : '=== TAKE AWAY';
-            if (receiptData.orderType === 'DINE_IN' && receiptData.tableName) {
-                orderLine += ` (Meja ${receiptData.tableName})`;
-            }
-            orderLine += ' ===';
-            text += center(orderLine, WIDTH) + '\n';
-        }
-
         text += LINE;
 
         // Items
@@ -353,12 +343,6 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
                                     STATUS BAYAR: {paymentStatusLabel}
                                 </Text>
                             </>
-                        ) : null}
-
-                        {receiptData.orderType && settings.enableDineTable ? (
-                            <Text style={tw`text-center font-mono text-[11px] font-bold text-black ${receiptData.preOrderDate ? 'mt-1' : 'mt-2'}`}>
-                                === {receiptData.orderType === 'DINE_IN' ? 'DINE IN' : 'TAKE AWAY'}{receiptData.orderType === 'DINE_IN' && receiptData.tableName ? ` (Meja ${receiptData.tableName})` : ''} ===
-                            </Text>
                         ) : null}
 
                         <View style={tw`w-full border-t border-dashed border-gray-400 my-2`} />

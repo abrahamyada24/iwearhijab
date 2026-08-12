@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, ScrollView,
-    Modal, TextInput, Alert, Platform, KeyboardAvoidingView,
+    Modal, TextInput, Alert, Platform, KeyboardAvoidingView, useWindowDimensions,
 } from 'react-native';
 import tw, { useAppColorScheme } from 'twrnc';
 import Share, { Social } from 'react-native-share';
@@ -146,6 +146,9 @@ function SimpleBarChart({ data }: { data: { label: string; value: number }[] }) 
 // Main Report Screen
 export default function ReportScreen({ navigation }: any) {
     useAppColorScheme(tw);
+    const { width, height } = useWindowDimensions();
+    const isTablet = Math.min(width, height) >= 600;
+    const tabletModalStyle = isTablet ? { width: '100%' as const, maxWidth: 720, alignSelf: 'center' as const, borderTopLeftRadius: 24, borderTopRightRadius: 24 } : null;
     const settings = useStore(state => state.settings);
     const user = useStore(state => state.user);
     const [mainTab, setMainTab] = useState<'penjualan' | 'pengeluaran'>('penjualan');
@@ -675,8 +678,8 @@ export default function ReportScreen({ navigation }: any) {
                 tanggalBayar: (row.paidAt || row.createdAt)?.substring(0, 16) || '',
                 pelanggan: row.customerName || '',
                 noHp: row.customerPhone || '',
-                tipeOrder: row.orderType === 'DINE_IN' ? 'DINE IN' : 'TAKE AWAY',
-                meja: row.tableName || '',
+                tipeOrder: row.preOrderDate ? 'PRE-ORDER' : 'PENJUALAN TOKO',
+                meja: '',
                 produk: row.productName || '',
                 catatan: row.itemNotes || '',
                 hargaSatuan: row.price || 0,
@@ -1561,7 +1564,7 @@ export default function ReportScreen({ navigation }: any) {
             {/* Export Modal */}
             <Modal visible={showExportModal} transparent animationType="slide">
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`}>
+                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`, tabletModalStyle]}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
                             <View>
                                 <Text style={tw`text-xl font-black text-gray-800 dark:text-gray-100`}>Export Laporan</Text>
@@ -1638,6 +1641,7 @@ export default function ReportScreen({ navigation }: any) {
             </Modal>
 
 
+            <View style={[tw`flex-1 w-full`, isTablet && { maxWidth: 1100, alignSelf: 'center' }]}>
     {/* Main Sub-Tabs */}
             <View style={tw`bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-800 flex-row`}>
                 {(['penjualan', 'pengeluaran'] as const).map(tab => (
@@ -1734,11 +1738,12 @@ export default function ReportScreen({ navigation }: any) {
             {mainTab === 'penjualan' && salesSubTab === 'shift' && ShiftReportContent()}
             {mainTab === 'penjualan' && salesSubTab === 'laba_rugi' && ProfitContent()}
             {mainTab === 'penjualan' && salesSubTab === 'jam_sibuk' && PeakHoursContent()}
+            </View>
 
             {/* Transaction Detail Modal */}
             <Modal visible={!!selectedTrx} animationType="slide" transparent>
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl max-h-[80%] p-6`}>
+                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl max-h-[80%] p-6`, tabletModalStyle]}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
                             <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Detail Transaksi</Text>
                             <TouchableOpacity onPress={() => setSelectedTrx(null)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}>
@@ -1846,7 +1851,7 @@ export default function ReportScreen({ navigation }: any) {
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
                     style={tw`flex-1 bg-black/50 justify-end`}
                 >
-                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`}>
+                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`, tabletModalStyle]}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
                             <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Tambah Pengeluaran</Text>
                             <TouchableOpacity onPress={() => setShowAddExpense(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}>

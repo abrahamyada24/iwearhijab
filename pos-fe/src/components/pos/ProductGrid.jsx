@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Minus, Package, Plus, Utensils } from 'lucide-react';
+import { Minus, Package, Plus } from 'lucide-react';
 
 const ProductSkeleton = () => (
     <div className="bg-white rounded-xl lg:rounded-2xl p-2 lg:p-3 border border-gray-100 flex flex-col h-full animate-pulse">
@@ -45,7 +45,7 @@ const ProductCard = ({ product, cart, addToCart, updateQty, getImageUrl }) => {
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-400">
-                        <Utensils size={32} />
+                        <Package size={32} />
                     </div>
                 )}
 

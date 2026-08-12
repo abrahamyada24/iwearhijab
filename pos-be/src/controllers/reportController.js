@@ -93,9 +93,9 @@ exports.getDashboardStats = async (req, res) => {
             .filter(t => t.payments.some(p => p.paymentType === 'TRANSFER'))
             .reduce((sum, t) => sum + Number(t.grandTotal), 0);
 
-        // 4. Order type breakdown (Dine In vs Take Away)
-        const dineInCount = transactions.filter(t => t.orderType === 'DINE_IN').length;
-        const takeAwayCount = transactions.filter(t => t.orderType === 'TAKE_AWAY').length;
+        // 4. Retail order breakdown.
+        const preOrderCount = transactions.filter(t => t.orderType === 'PRE_ORDER' || t.preOrderDate).length;
+        const retailCount = transactions.length - preOrderCount;
 
         // 5. Category breakdown
         const categoryMap = {};
@@ -201,8 +201,8 @@ exports.getDashboardStats = async (req, res) => {
                     transfer: transferRevenue
                 },
                 orderTypeBreakdown: {
-                    dineIn: dineInCount,
-                    takeAway: takeAwayCount
+                    retail: retailCount,
+                    preOrder: preOrderCount
                 },
                 categoryBreakdown,
                 topProducts,
@@ -246,8 +246,7 @@ exports.exportTransactionReport = async (req, res) => {
                 'Tanggal': t.createdAt.toISOString(),
                 'Kasir': t.user?.name || '-',
                 'Pelanggan': t.customer?.name || t.customerName || 'Guest',
-                'Tipe Order': t.orderType || '-',
-                'No. Meja': t.tableNumber || '-',
+                'Jenis Penjualan': t.orderType === 'PRE_ORDER' || t.preOrderDate ? 'PRE-ORDER' : 'PENJUALAN TOKO',
                 'Subtotal': Number(t.subTotal),
                 'Diskon': Number(t.discountAmount),
                 'Pajak': Number(t.taxAmount),
