@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    View, Text, TouchableOpacity, FlatList, TextInput, Alert, Modal, ScrollView
+    View, Text, TouchableOpacity, FlatList, TextInput, Alert, Modal, ScrollView, Image
 } from 'react-native';
 import tw, { useAppColorScheme } from 'twrnc';
 import { getDBConnection } from '../database/db';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { resolveApiAssetUrl } from '../services/api';
 
 type ContactTab = 'supplier' | 'customer';
 
@@ -22,6 +23,7 @@ export default function ContactScreen({ navigation }: any) {
     const [editing, setEditing] = useState<any>(null);
     const [formName, setFormName] = useState('');
     const [formPhone, setFormPhone] = useState('');
+    const [formEmail, setFormEmail] = useState('');
     const [formAddress, setFormAddress] = useState('');
     const [formNotes, setFormNotes] = useState('');
     const [formLoyalty, setFormLoyalty] = useState('0');
@@ -55,6 +57,7 @@ export default function ContactScreen({ navigation }: any) {
         setEditing(null);
         setFormName('');
         setFormPhone('');
+        setFormEmail('');
         setFormAddress('');
         setFormNotes('');
         setFormLoyalty('0');
@@ -70,6 +73,7 @@ export default function ContactScreen({ navigation }: any) {
         setEditing(item);
         setFormName(item.name || '');
         setFormPhone(item.phone || '');
+        setFormEmail(item.email || '');
         setFormAddress(item.address || '');
         setFormNotes(item.notes || '');
         setFormLoyalty((item.loyaltyDiscount || 0).toString());
@@ -80,6 +84,7 @@ export default function ContactScreen({ navigation }: any) {
 
     const handleSave = async () => {
         if (!formName.trim()) return Alert.alert('Validasi', 'Nama wajib diisi.');
+        if (formPhone.trim().length > 20) return Alert.alert('Validasi', 'Nomor telepon maksimal 20 karakter.');
         try {
             const db = await getDBConnection();
             if (activeTab === 'supplier') {
@@ -97,15 +102,20 @@ export default function ContactScreen({ navigation }: any) {
             } else {
                 const loyalty = parseFloat(formLoyalty.replace(/[^0-9.]/g, '') || '0');
                 const points = parseInt(formPoints.replace(/[^0-9]/g, '') || '0');
+                if (loyalty < 0 || loyalty > 100) return Alert.alert('Validasi', 'Diskon pelanggan harus antara 0 sampai 100%.');
+                if (formPhone.trim()) {
+                    const [duplicateResult] = await db.executeSql('SELECT id FROM customers WHERE phone = ? AND id != ? LIMIT 1', [formPhone.trim(), editing?.id || -1]);
+                    if (duplicateResult.rows.length > 0) return Alert.alert('Nomor sudah terdaftar', 'Pilih atau edit pelanggan yang sudah menggunakan nomor tersebut.');
+                }
                 if (editing) {
                     await db.executeSql(
-                        'UPDATE customers SET name = ?, phone = ?, notes = ?, loyaltyDiscount = ?, points = ?, isSynced = 0 WHERE id = ?',
-                        [formName.trim(), formPhone, formNotes, loyalty, points, editing.id]
+                        'UPDATE customers SET name = ?, phone = ?, email = ?, notes = ?, loyaltyDiscount = ?, points = ?, isSynced = 0 WHERE id = ?',
+                        [formName.trim(), formPhone.trim() || null, formEmail.trim() || null, formNotes.trim() || null, loyalty, points, editing.id]
                     );
                 } else {
                     await db.executeSql(
-                        'INSERT INTO customers (name, phone, notes, loyaltyDiscount, points, isSynced) VALUES (?, ?, ?, ?, ?, 0)',
-                        [formName.trim(), formPhone, formNotes, loyalty, points]
+                        'INSERT INTO customers (name, phone, email, notes, loyaltyDiscount, points, isSynced) VALUES (?, ?, ?, ?, ?, ?, 0)',
+                        [formName.trim(), formPhone.trim() || null, formEmail.trim() || null, formNotes.trim() || null, loyalty, points]
                     );
                 }
             }
@@ -138,15 +148,21 @@ export default function ContactScreen({ navigation }: any) {
     const data = activeTab === 'supplier' ? suppliers : customers;
     const filtered = searchQuery.trim()
         ? data.filter(d => d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (d.phone || '').includes(searchQuery))
+            (d.phone || '').includes(searchQuery) ||
+            (d.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (d.memberId || '').toLowerCase().includes(searchQuery.toLowerCase()))
         : data;
 
     const renderContactItem = ({ item }: { item: any }) => (
         <View style={tw`bg-white dark:bg-gray-800 flex-row items-center px-5 py-4 border-b border-gray-100 dark:border-gray-800`}>
             {/* Avatar */}
-            <View style={tw`w-11 h-11 bg-gray-100 dark:bg-gray-700 rounded-full items-center justify-center mr-4`}>
-                <Icon name="account" size={20} color={tw.color('gray-500')} />
-            </View>
+            {activeTab === 'customer' && item.imageUrl ? (
+                <Image source={{ uri: resolveApiAssetUrl(item.imageUrl) || item.imageUrl }} style={tw`w-11 h-11 rounded-full mr-4 bg-gray-100`} />
+            ) : (
+                <View style={tw`w-11 h-11 bg-gray-100 dark:bg-gray-700 rounded-full items-center justify-center mr-4`}>
+                    <Icon name="account" size={20} color={tw.color('gray-500')} />
+                </View>
+            )}
 
             {/* Info */}
             <TouchableOpacity style={tw`flex-1`} onPress={() => openEdit(item)} activeOpacity={0.7}>
@@ -156,6 +172,11 @@ export default function ContactScreen({ navigation }: any) {
                 ) : null}
                 {activeTab === 'customer' && (
                     <View style={tw`flex-row items-center mt-1 flex-wrap gap-1`}>
+                        {item.memberId ? (
+                            <View style={tw`bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full`}>
+                                <Text style={tw`text-[10px] font-black text-gray-600`}>{item.memberId}</Text>
+                            </View>
+                        ) : null}
                         {item.points > 0 && (
                             <View style={tw`bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full`}>
                                 <Text style={tw`text-[10px] font-black text-blue-600`}>{item.points} Poin</Text>
@@ -322,6 +343,30 @@ export default function ContactScreen({ navigation }: any) {
                                 value={formPhone}
                                 onChangeText={setFormPhone}
                             />
+
+                            {activeTab === 'customer' && (
+                                <>
+                                    <View style={tw`flex-row items-center mb-1`}>
+                                        <Icon name="email-outline" size={14} color={tw.color('gray-500')} style={tw`mr-2`} />
+                                        <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300`}>Email</Text>
+                                    </View>
+                                    <TextInput
+                                        style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-gray-100 mb-4`}
+                                        placeholder="email@pelanggan.com"
+                                        placeholderTextColor={tw.color('gray-400')}
+                                        keyboardType="email-address"
+                                        autoCapitalize="none"
+                                        value={formEmail}
+                                        onChangeText={setFormEmail}
+                                    />
+                                    {editing?.memberId ? (
+                                        <View style={tw`bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 mb-4`}>
+                                            <Text style={tw`text-[10px] text-orange-600 font-bold uppercase`}>Member ID</Text>
+                                            <Text style={tw`text-sm text-gray-800 font-black mt-0.5`}>{editing.memberId}</Text>
+                                        </View>
+                                    ) : null}
+                                </>
+                            )}
 
                             {/* Address (supplier only) */}
                             {activeTab === 'supplier' && (

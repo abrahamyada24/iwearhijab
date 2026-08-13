@@ -13,7 +13,7 @@ exports.getPublicCatalog = async (req, res) => {
                     { isUnlimitedStock: true }
                 ]
             },
-            include: { category: true },
+            include: { category: true, addons: true },
             orderBy: { name: 'asc' }
         });
 

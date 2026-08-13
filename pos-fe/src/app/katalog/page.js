@@ -592,6 +592,25 @@ export default function KatalogPage() {
                   </span>
                 </div>
 
+                {Array.isArray(selectedProduct.addons) && selectedProduct.addons.length > 0 && (
+                  <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
+                    <p className="text-xs font-black uppercase tracking-[0.12em] text-orange-700">
+                      Opsi tambahan tersedia
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {selectedProduct.addons.map((addon) => (
+                        <div key={addon.id} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-semibold text-stone-700">{addon.name}</span>
+                          <span className="shrink-0 font-black text-orange-700">+ {formatRupiah(addon.price)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-[11px] leading-4 text-stone-500">
+                      Pilih jumlah dan detailnya saat menghubungi toko melalui WhatsApp.
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-auto pt-6">
                   <p className="mb-3 text-xs leading-5 text-stone-500">
                     Konfirmasi warna, ukuran, dan ketersediaan terbaru langsung dengan toko sebelum memesan.

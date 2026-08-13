@@ -43,6 +43,7 @@ pos-android/.bundle/
 # Desktop build artifacts
 pos-desktop/dist/
 pos-desktop/release/
+releases/
 
 # Credentials and local database exports
 *.pem

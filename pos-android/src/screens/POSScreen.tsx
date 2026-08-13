@@ -31,7 +31,7 @@ export default function POSScreen({ navigation, route }: any) {
     const [addonNotes, setAddonNotes] = useState('');
     // Per-product add-ons
     const [productAddons, setProductAddons] = useState<any[]>([]);
-    const [selectedAddons, setSelectedAddons] = useState<number[]>([]); // addon IDs
+    const [addonQuantities, setAddonQuantities] = useState<Record<number, number>>({});
     const [addonProductItem, setAddonProductItem] = useState<any>(null);
     // Qty edit
     const [showQtyModal, setShowQtyModal] = useState(false);
@@ -115,6 +115,9 @@ export default function POSScreen({ navigation, route }: any) {
                 isUnlimitedStock: localProduct?.isUnlimitedStock ?? item.isUnlimitedStock ?? 1,
                 imageUrl: localProduct?.imageUrl ?? item.imageUrl ?? null,
                 notes: item.notes || undefined,
+                customerNotes: item.customerNotes || undefined,
+                addons: Array.isArray(item.addons) ? item.addons : [],
+                addonIds: Array.isArray(item.addonIds) ? item.addonIds : [],
                 quantity,
                 cartItemId: `${localProduct?.id || item.id || item.productId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
             });
@@ -310,7 +313,24 @@ export default function POSScreen({ navigation, route }: any) {
             Alert.alert('Batas Stok', 'Batas maksimal stok yang tersedia telah tercapai.');
             return;
         }
-        // Gabung QTY jika item sama (retail style)
+        try {
+            const db = await getDBConnection();
+            const [aRes] = await db.executeSql('SELECT * FROM product_addons WHERE productId = ? ORDER BY id', [item.id]);
+            const addons: any[] = [];
+            for (let i = 0; i < aRes.rows.length; i++) addons.push(aRes.rows.item(i));
+            if (addons.length > 0) {
+                setProductAddons(addons);
+                setAddonQuantities({});
+                setAddonNotes('');
+                setAddonProductItem(item);
+                setSelectedProductForAddon(null);
+                setAddonModalVisible(true);
+                return;
+            }
+        } catch (error) {
+            console.warn('Gagal memuat opsi tambahan produk:', error);
+        }
+        // Produk tanpa opsi tetap digabung seperti alur retail biasa.
         addToCart(item);
     };
 
@@ -322,15 +342,20 @@ export default function POSScreen({ navigation, route }: any) {
             const addons: any[] = [];
             for (let i = 0; i < aRes.rows.length; i++) addons.push(aRes.rows.item(i));
             setProductAddons(addons);
-            setSelectedAddons([]);
-            setAddonNotes(cartItem.notes || '');
+            const existingAddons = Array.isArray(cartItem.addons) && cartItem.addons.length > 0
+                ? cartItem.addons
+                : (Array.isArray(cartItem.addonIds) ? cartItem.addonIds.map((id: number) => ({ id, quantity: 1 })) : []);
+            setAddonQuantities(Object.fromEntries(
+                existingAddons.map((addon: any) => [Number(addon.id), Number(addon.quantity || 1)])
+            ));
+            setAddonNotes(cartItem.customerNotes || (cartItem.addonIds?.length ? '' : cartItem.notes) || '');
             setAddonProductItem(null);       // not a new product — it's an existing cart line
             setSelectedProductForAddon(cartItem); // use this to track which cart line we're editing
             setAddonModalVisible(true);
         } catch {
             // No DB → just open notes
             setProductAddons([]);
-            setSelectedAddons([]);
+            setAddonQuantities({});
             setAddonNotes(cartItem.notes || '');
             setAddonProductItem(null);
             setSelectedProductForAddon(cartItem);
@@ -339,24 +364,43 @@ export default function POSScreen({ navigation, route }: any) {
     };
 
     // Confirm editing add-ons + notes for an existing cart item
-    const handleConfirmCartEdit = () => {
-        if (!selectedProductForAddon) return;
-        const chosenAddons = productAddons.filter(a => selectedAddons.includes(a.id));
-        const extraPrice = chosenAddons.reduce((sum, a) => sum + a.price, 0);
-        const addonLabel = chosenAddons.map(a => a.name).join(', ');
-        const noteStr = [addonLabel, addonNotes.trim()].filter(Boolean).join(' | ');
-        // Base price = original product price (strip any previous add-on price)
-        const basePrice = selectedProductForAddon.basePrice ?? selectedProductForAddon.price;
-        updateCartItem(selectedProductForAddon.cartItemId, {
+    const handleConfirmAddon = () => {
+        const targetProduct = selectedProductForAddon || addonProductItem;
+        if (!targetProduct) return;
+        const chosenAddons = productAddons
+            .map(a => ({ ...a, quantity: Number(addonQuantities[Number(a.id)] || 0) }))
+            .filter(a => a.quantity > 0);
+        const extraPrice = chosenAddons.reduce((sum, a) => sum + (Number(a.price || 0) * a.quantity), 0);
+        const addonLabel = chosenAddons.length > 0
+            ? `Opsi: ${chosenAddons.map(a => `${a.name}${a.quantity > 1 ? ` x${a.quantity}` : ''}`).join(', ')}`
+            : '';
+        const cleanCustomerNotes = addonNotes.trim();
+        const noteStr = [addonLabel, cleanCustomerNotes].filter(Boolean).join(' | ');
+        const basePrice = Number(targetProduct.basePrice ?? targetProduct.price ?? 0);
+        const baseOriginalPrice = Number(targetProduct.baseOriginalPrice ?? targetProduct.originalPrice ?? targetProduct.price ?? 0);
+        const addonData = chosenAddons.map(addon => ({
+            id: Number(addon.id),
+            name: addon.name,
+            price: Number(addon.price || 0),
+            quantity: addon.quantity,
+        }));
+        const patch = {
             notes: noteStr || undefined,
+            customerNotes: cleanCustomerNotes || undefined,
             price: basePrice + extraPrice,
-            // Also store basePrice so re-editing doesn't double-add prices
-            ...({ basePrice } as any),
-        });
+            basePrice,
+            originalPrice: baseOriginalPrice + extraPrice,
+            baseOriginalPrice,
+            addons: addonData,
+            addonIds: addonData.map(addon => addon.id),
+        };
+        if (selectedProductForAddon) updateCartItem(selectedProductForAddon.cartItemId, patch);
+        else addToCartNewLine({ ...addonProductItem, ...patch });
         setAddonModalVisible(false);
         setSelectedProductForAddon(null);
+        setAddonProductItem(null);
         setProductAddons([]);
-        setSelectedAddons([]);
+        setAddonQuantities({});
         setAddonNotes('');
     };
 
@@ -895,31 +939,44 @@ export default function POSScreen({ navigation, route }: any) {
                 <View style={tw`flex-1 bg-black/50 justify-center px-4`}>
                     <View style={tw`bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl`}>
                         <Text style={tw`font-black text-xl text-gray-800 dark:text-gray-100 mb-1`}>
-                            {selectedProductForAddon ? 'Edit Add-on & Catatan' : 'Add-on / Catatan'}
+                            {selectedProductForAddon ? 'Edit Opsi & Catatan' : 'Opsi Tambahan'}
                         </Text>
                         <Text style={tw`text-sm text-gray-500 dark:text-gray-400 mb-4`}>
-                            {selectedProductForAddon?.name}
+                            {selectedProductForAddon?.name || addonProductItem?.name}
                         </Text>
 
-                        {/* Add-on checkboxes */}
+                        {/* Retail option quantity controls */}
                         {productAddons.length > 0 && (
                             <View style={tw`mb-4`}>
                                 {productAddons.map(addon => {
-                                    const checked = selectedAddons.includes(addon.id);
+                                    const addonId = Number(addon.id);
+                                    const quantity = Number(addonQuantities[addonId] || 0);
+                                    const updateAddonQuantity = (delta: number) => setAddonQuantities(prev => {
+                                        const nextQuantity = Math.min(99, Math.max(0, Number(prev[addonId] || 0) + delta));
+                                        const next = { ...prev };
+                                        if (nextQuantity === 0) delete next[addonId];
+                                        else next[addonId] = nextQuantity;
+                                        return next;
+                                    });
                                     return (
-                                        <TouchableOpacity
+                                        <View
                                             key={addon.id}
                                             style={tw`flex-row items-center py-2.5 border-b border-gray-100 dark:border-gray-700`}
-                                            onPress={() => setSelectedAddons(prev =>
-                                                checked ? prev.filter(id => id !== addon.id) : [...prev, addon.id]
-                                            )}
                                         >
-                                            <View style={tw`w-5 h-5 rounded border ${checked ? 'bg-blue-600 border-blue-600' : 'border-gray-300'} items-center justify-center mr-3`}>
-                                                {checked && <Icon name="check" size={12} color="white" />}
-                                            </View>
                                             <Text style={tw`flex-1 font-bold text-gray-800 dark:text-gray-100`}>{addon.name}</Text>
-                                            {addon.price > 0 && <Text style={tw`text-blue-600 font-bold text-sm`}>+Rp {addon.price.toLocaleString('id-ID')}</Text>}
-                                        </TouchableOpacity>
+                                            <View style={tw`items-end`}>
+                                                {addon.price > 0 && <Text style={tw`text-orange-600 font-bold text-xs mb-1`}>+Rp {addon.price.toLocaleString('id-ID')}</Text>}
+                                                <View style={tw`flex-row items-center border border-orange-200 dark:border-orange-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900`}>
+                                                    <TouchableOpacity disabled={quantity === 0} onPress={() => updateAddonQuantity(-1)} style={tw`w-9 h-9 items-center justify-center`}>
+                                                        <Icon name="minus" size={15} color={tw.color(quantity === 0 ? 'gray-300' : 'gray-600')} />
+                                                    </TouchableOpacity>
+                                                    <Text style={tw`w-8 text-center font-black text-gray-800 dark:text-gray-100`}>{quantity}</Text>
+                                                    <TouchableOpacity disabled={quantity >= 99} onPress={() => updateAddonQuantity(1)} style={tw`w-9 h-9 items-center justify-center`}>
+                                                        <Icon name="plus" size={15} color={tw.color(quantity >= 99 ? 'gray-300' : 'orange-600')} />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        </View>
                                     );
                                 })}
                             </View>
@@ -936,13 +993,13 @@ export default function POSScreen({ navigation, route }: any) {
                         <View style={tw`flex-row gap-3`}>
                             <TouchableOpacity
                                 style={tw`flex-1 py-3 border border-gray-300 dark:border-gray-600 rounded-xl items-center`}
-                                onPress={() => { setAddonModalVisible(false); setAddonProductItem(null); setSelectedProductForAddon(null); }}
+                                onPress={() => { setAddonModalVisible(false); setAddonProductItem(null); setSelectedProductForAddon(null); setAddonQuantities({}); }}
                             >
                                 <Text style={tw`font-bold text-gray-600 dark:text-gray-300`}>Batal</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={tw`flex-1 bg-blue-600 py-3 rounded-xl items-center`}
-                                onPress={handleConfirmCartEdit}
+                                onPress={handleConfirmAddon}
                             >
                                 <Text style={tw`font-bold text-white`}>Simpan</Text>
                             </TouchableOpacity>

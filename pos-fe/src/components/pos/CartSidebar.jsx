@@ -35,7 +35,8 @@ export default function CartSidebar({
     isSavingTransaction,
     savedTransactionCount,
     onOpenSavedTransactions,
-    onUpdateItemNotes
+    onUpdateItemNotes,
+    onEditItemAddons
 }) {
   const [editingNoteId, setEditingNoteId] = useState(null);
   const clearCart = async () => {
@@ -186,13 +187,31 @@ export default function CartSidebar({
                                 </div>
                             </div>
 
+                            {item.addons?.length > 0 && (
+                                <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50 px-2.5 py-2 text-[10px] text-orange-800">
+                                    <p className="font-black uppercase tracking-wide">Opsi tambahan</p>
+                                    {item.addons.map(addon => (
+                                        <div key={addon.id} className="mt-1 flex justify-between gap-2">
+                                            <span className="truncate">{addon.name}{Number(addon.quantity || 1) > 1 ? ` ×${Number(addon.quantity)}` : ''}</span>
+                                            <span className="shrink-0 font-bold">+ Rp {(Number(addon.price || 0) * Number(addon.quantity || 1)).toLocaleString('id-ID')}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {item.hasAvailableAddons && (
+                                <button type="button" onClick={() => onEditItemAddons?.(item)} className="mt-2 flex items-center gap-1 text-[10px] font-bold text-orange-700 hover:text-orange-800">
+                                    <Plus size={11} /> Ubah opsi
+                                </button>
+                            )}
+
                             {/* Per-item Notes */}
                             {editingNoteId === item.id ? (
                                 <input
                                     autoFocus
                                     type="text"
                                     placeholder="Catatan item..."
-                                    defaultValue={item.notes || ''}
+                                    defaultValue={item.customerNotes ?? item.notes ?? ''}
                                     onBlur={(e) => {
                                         onUpdateItemNotes && onUpdateItemNotes(item.id, e.target.value);
                                         setEditingNoteId(null);
@@ -211,7 +230,7 @@ export default function CartSidebar({
                                     className="flex items-center gap-1 mt-2 text-[10px] text-gray-400 hover:text-blue-500 transition-colors"
                                 >
                                     <MessageSquare size={10} />
-                                    {item.notes ? <span className="text-blue-500 italic">{item.notes}</span> : 'Tambah catatan'}
+                                    {item.customerNotes || (!item.addons?.length && item.notes) ? <span className="text-blue-500 italic">{item.customerNotes || item.notes}</span> : 'Tambah catatan'}
                                 </button>
                             )}
                         </div>

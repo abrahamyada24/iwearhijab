@@ -11,6 +11,10 @@ Branch pembaruan ini mengambil baseline terkomit terbaru dari `AndroidPos-web`, 
 - katalog publik retail dengan tombol WhatsApp;
 - perbaikan struk, rasio logo thermal, dan konfigurasi endpoint per perangkat;
 - export laporan PDF/CSV dengan dialog penyimpanan Android serta autentikasi cookie pada web/desktop.
+- opsi tambahan retail per produk (misalnya bungkus kado/kartu ucapan), termasuk jumlah, harga, sinkronisasi, dan catatan pada nota;
+- jadwal promo yang dapat diaktifkan terpisah berdasarkan tanggal, jam, dan hari;
+- data pelanggan seragam di web dan Android, termasuk email, catatan, member ID, diskon, dan poin;
+- unduh/bagikan struk sebagai PNG dari kasir maupun riwayat transaksi web.
 
 ## Adaptasi retail
 
@@ -28,8 +32,10 @@ Model dan kolom database meja lama sengaja tidak dijatuhkan pada pembaruan ini. 
 2. Isi environment backend berdasarkan `pos-be/.env.example` dan frontend berdasarkan `pos-fe/.env.example`.
 3. Isi `LICENSE_CODE_SECRET` backend dengan secret acak yang kuat dan simpan di pengelola secret deployment.
 4. Jalankan `npm install` dan `npx prisma generate` di `pos-be`.
-5. Tinjau perubahan schema lisensi (`StoreLicense` dan `LicenseActivation`) sebelum menjalankan prosedur migrasi database yang berlaku di server produksi.
+5. Tinjau perubahan schema lisensi (`StoreLicense` dan `LicenseActivation`) serta kolom `Customer.notes` sebelum menjalankan prosedur migrasi database yang berlaku di server produksi.
 6. Jalankan test backend dan build frontend sebelum mengganti proses produksi.
 7. Pasang APK baru setelah backend dan web baru aktif agar format sinkronisasi dan lisensinya sama.
+
+Rilis aplikasi hasil sinkronisasi ini menggunakan versi Android `1.3.0` (`versionCode 3`) dan desktop `1.3.0`. Backend harus diperbarui lebih dahulu sebelum frontend agar total opsi tambahan divalidasi dan dihitung ulang di server.
 
 Jangan menjalankan reset data outlet sebagai bagian deployment. Reset merupakan operasi terpisah dan harus selalu didahului backup serta persetujuan eksplisit pemilik data.

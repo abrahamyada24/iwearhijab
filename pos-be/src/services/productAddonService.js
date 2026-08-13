@@ -1,0 +1,59 @@
+const normalizeAddonIds = (value) => {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .map(item => Number(item))
+    .filter(item => Number.isInteger(item) && item > 0))];
+};
+
+const normalizeAddonSelections = (value, productName = 'produk') => {
+  if (!Array.isArray(value)) return [];
+
+  const quantities = new Map();
+  for (const rawSelection of value) {
+    const isObjectSelection = rawSelection && typeof rawSelection === 'object' && !Array.isArray(rawSelection);
+    const id = Number(isObjectSelection ? rawSelection.id : rawSelection);
+    const quantity = Number(isObjectSelection ? (rawSelection.quantity ?? rawSelection.qty ?? 1) : 1);
+    if (!Number.isInteger(id) || id <= 0) continue;
+    if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 99) {
+      throw new Error(`Jumlah opsi tambahan untuk ${productName} harus antara 1 sampai 99.`);
+    }
+    const nextQuantity = (quantities.get(id) || 0) + quantity;
+    if (nextQuantity > 99) {
+      throw new Error(`Jumlah opsi tambahan untuk ${productName} harus antara 1 sampai 99.`);
+    }
+    quantities.set(id, nextQuantity);
+  }
+
+  return [...quantities.entries()].map(([id, quantity]) => ({ id, quantity }));
+};
+
+const resolveSelectedAddons = (availableAddons, rawSelections, productName = 'produk') => {
+  const requestedSelections = normalizeAddonSelections(rawSelections, productName);
+  if (requestedSelections.length === 0) return [];
+
+  const available = Array.isArray(availableAddons) ? availableAddons : [];
+  const selected = requestedSelections.map(({ id, quantity }) => {
+    const addon = available.find(item => Number(item.id) === id);
+    return addon ? { ...addon, quantity } : null;
+  }).filter(Boolean);
+
+  if (selected.length !== requestedSelections.length) {
+    throw new Error(`Pilihan opsi tambahan untuk ${productName} tidak valid.`);
+  }
+  return selected;
+};
+
+const buildAddonItemNotes = (selectedAddons, customerNotes) => {
+  const addonLabel = selectedAddons.length > 0
+    ? `Opsi: ${selectedAddons.map(addon => `${addon.name}${Number(addon.quantity || 1) > 1 ? ` x${Number(addon.quantity)}` : ''}`).join(', ')}`
+    : '';
+  const normalizedNotes = String(customerNotes || '').trim();
+  return [addonLabel, normalizedNotes].filter(Boolean).join(' | ') || null;
+};
+
+module.exports = {
+  normalizeAddonIds,
+  normalizeAddonSelections,
+  resolveSelectedAddons,
+  buildAddonItemNotes,
+};

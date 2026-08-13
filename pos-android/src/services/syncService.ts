@@ -190,10 +190,10 @@ export const syncService = {
                             if (Number(localCustomer.isSynced) === 0) {
                                 await tx.executeSql('UPDATE customers SET serverId = COALESCE(serverId, ?) WHERE id = ?', [c.id, localCustomer.id]);
                             } else {
-                                await tx.executeSql('UPDATE customers SET name = ?, phone = ?, notes = ?, loyaltyDiscount = ?, points = ?, serverId = ?, isSynced = 1 WHERE id = ?', [c.name, c.phone, c.notes, c.loyaltyDiscount || 0, c.points || 0, c.id, localCustomer.id]);
+                                await tx.executeSql('UPDATE customers SET name = ?, phone = ?, email = ?, notes = ?, imageUrl = ?, displayType = ?, memberId = ?, loyaltyDiscount = ?, points = ?, serverId = ?, isSynced = 1 WHERE id = ?', [c.name, c.phone, c.email || null, c.notes || null, c.imageUrl || null, c.displayType || 'normal', c.memberId || null, c.loyaltyDiscount || 0, c.points || 0, c.id, localCustomer.id]);
                             }
                         } else {
-                            await tx.executeSql('INSERT INTO customers (name, phone, notes, loyaltyDiscount, points, serverId, isSynced) VALUES (?, ?, ?, ?, ?, ?, 1)', [c.name, c.phone, c.notes, c.loyaltyDiscount || 0, c.points || 0, c.id]);
+                            await tx.executeSql('INSERT INTO customers (name, phone, email, notes, imageUrl, displayType, memberId, loyaltyDiscount, points, serverId, isSynced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)', [c.name, c.phone, c.email || null, c.notes || null, c.imageUrl || null, c.displayType || 'normal', c.memberId || null, c.loyaltyDiscount || 0, c.points || 0, c.id]);
                         }
                     }
                 }

@@ -13,6 +13,7 @@ import PaymentModal from '@/components/pos/PaymentModal';
 import ReceiptPreviewModal from '@/components/pos/ReceiptPreviewModal';
 import SavedTransactionModal from '@/components/pos/SavedTransactionModal';
 import ShiftGuardModal from '@/components/pos/ShiftGuardModal';
+import AddonModal from '@/components/pos/AddonModal';
 
 // Import SweetAlert
 import { showAlert } from '@/utils/swal';
@@ -70,6 +71,9 @@ export default function POSPage() {
   const [savedTransactionCount, setSavedTransactionCount] = useState(0);
   const [isSavingTransaction, setIsSavingTransaction] = useState(false);
   const [activeSavedTransactionId, setActiveSavedTransactionId] = useState(null);
+  const [addonProduct, setAddonProduct] = useState(null);
+  const [selectedAddonQuantities, setSelectedAddonQuantities] = useState({});
+  const [addonNotes, setAddonNotes] = useState('');
 
   // Retail transaction type
   const [orderType, setOrderType] = useState('TAKE_AWAY');
@@ -267,7 +271,14 @@ export default function POSPage() {
   }, [memberSearch, members]);
 
   // --- LOGIC CART ---
-  const addToCart = (product) => {
+  const buildItemNotes = (addons, customerNotes) => {
+    const addonLabel = addons.length > 0
+      ? `Opsi: ${addons.map(addon => `${addon.name}${Number(addon.quantity || 1) > 1 ? ` x${Number(addon.quantity)}` : ''}`).join(', ')}`
+      : '';
+    return [addonLabel, customerNotes.trim()].filter(Boolean).join(' | ') || null;
+  };
+
+  const addProductDirectly = (product) => {
     if (product.stock <= 0 && !product.isUnlimitedStock) return showAlert.warning("Stok Habis", "Produk ini tidak bisa dipilih.");
     
     const existing = cart.find(item => item.id === product.id);
@@ -275,8 +286,69 @@ export default function POSPage() {
         if (existing.qty + 1 > product.stock && !product.isUnlimitedStock) return showAlert.warning("Stok Terbatas", "Jumlah melebihi stok yang tersedia.");
         setCart(cart.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item));
     } else {
-        setCart([...cart, { ...product, qty: 1 }]);
+        setCart([...cart, { ...product, qty: 1, addons: [], customerNotes: '', notes: null }]);
     }
+  };
+
+  const openAddonModal = (product) => {
+    if (product.stock <= 0 && !product.isUnlimitedStock) {
+      showAlert.warning('Stok Habis', 'Produk ini tidak bisa dipilih.');
+      return;
+    }
+    const existing = cart.find(item => String(item.id) === String(product.id));
+    setAddonProduct(product);
+    setSelectedAddonQuantities(Object.fromEntries(
+      (existing?.addons || []).map(addon => [Number(addon.id), Number(addon.quantity || 1)])
+    ));
+    setAddonNotes(existing?.customerNotes || '');
+  };
+
+  const addToCart = (product) => {
+    if (Array.isArray(product.addons) && product.addons.length > 0) {
+      openAddonModal(product);
+      return;
+    }
+    addProductDirectly(product);
+  };
+
+  const confirmAddonSelection = () => {
+    if (!addonProduct) return;
+    const selectedAddons = addonProduct.addons
+      .map(addon => ({ ...addon, quantity: Number(selectedAddonQuantities[Number(addon.id)] || 0) }))
+      .filter(addon => addon.quantity > 0);
+    const addonTotal = selectedAddons.reduce(
+      (total, addon) => total + (Number(addon.price || 0) * addon.quantity),
+      0
+    );
+    const basePrice = Number(addonProduct.effectivePrice ?? addonProduct.price ?? 0);
+    const baseOriginalPrice = Number(addonProduct.originalPrice ?? addonProduct.price ?? 0);
+    const configuredItem = {
+      ...addonProduct,
+      basePrice,
+      baseOriginalPrice,
+      price: basePrice + addonTotal,
+      originalPrice: baseOriginalPrice + addonTotal,
+      addons: selectedAddons,
+      hasAvailableAddons: true,
+      customerNotes: addonNotes.trim(),
+      notes: buildItemNotes(selectedAddons, addonNotes),
+    };
+    const existing = cart.find(item => String(item.id) === String(addonProduct.id));
+    setCart(current => existing
+      ? current.map(item => String(item.id) === String(addonProduct.id) ? { ...configuredItem, qty: item.qty } : item)
+      : [...current, { ...configuredItem, qty: 1 }]
+    );
+    setAddonProduct(null);
+    setSelectedAddonQuantities({});
+    setAddonNotes('');
+  };
+
+  const updateItemNotes = (id, notes) => {
+    setCart(current => current.map(item => item.id === id ? {
+      ...item,
+      customerNotes: notes.trim(),
+      notes: buildItemNotes(item.addons || [], notes),
+    } : item));
   };
 
   const updateQty = (id, delta) => {
@@ -354,7 +426,14 @@ export default function POSPage() {
               userId: userId, 
               customerId: selectedMember?.id || null,
               customerName: selectedMember?.name || guestCustomerName.trim() || null,
-              items: cart.map(c => ({ productId: c.id, packageId: c.packageId || null, qty: c.qty, notes: c.notes || null })),
+              items: cart.map(c => ({
+                productId: c.id,
+                packageId: c.packageId || null,
+                qty: c.qty,
+                addons: (c.addons || []).map(addon => ({ id: addon.id, quantity: Number(addon.quantity || 1) })),
+                addonIds: (c.addons || []).map(addon => addon.id),
+                notes: c.customerNotes || (c.addons?.length ? null : c.notes) || null,
+              })),
               payment: {
                 type,
                 amount: grandTotal,
@@ -669,6 +748,11 @@ export default function POSPage() {
         isSavingTransaction={isSavingTransaction}
         savedTransactionCount={savedTransactionCount}
         onOpenSavedTransactions={() => setIsSavedTransactionModalOpen(true)}
+        onUpdateItemNotes={updateItemNotes}
+        onEditItemAddons={(item) => {
+          const product = products.find(candidate => String(candidate.id) === String(item.id));
+          if (product) openAddonModal(product);
+        }}
         // Logout sekarang dihandle Header, tapi jika butuh di mobile menu:
         handleLogout={async () => {
             const confirmed = await showAlert.confirm('Keluar Kasir?', 'Sesi kasir akan diakhiri.', 'Ya, Keluar');
@@ -689,6 +773,21 @@ export default function POSPage() {
          setOpeningCash={setOpeningCash}
          onOpenShift={handleOpenShift}
          currentUser={currentUser}
+      />
+
+      <AddonModal
+        isOpen={Boolean(addonProduct)}
+        product={addonProduct}
+        quantities={selectedAddonQuantities}
+        setQuantities={setSelectedAddonQuantities}
+        notes={addonNotes}
+        setNotes={setAddonNotes}
+        onClose={() => {
+          setAddonProduct(null);
+          setSelectedAddonQuantities({});
+          setAddonNotes('');
+        }}
+        onConfirm={confirmAddonSelection}
       />
       
       <MemberModal 

@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Calendar,
   CreditCard,
+  Download,
   FileText,
   Loader2,
   Package,
   Printer,
   RotateCcw,
+  Share2,
   Store,
   User,
   X,
@@ -19,6 +21,8 @@ import {
   getPaperWidthMm,
 } from "@/utils/devicePreferences";
 import { useStore } from "@/store/useStore";
+import { showAlert } from "@/utils/swal";
+import { createReceiptImageBlob, downloadReceiptImage, getReceiptImageFilename, shareReceiptImage } from "@/utils/receiptImage";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -30,8 +34,10 @@ export default function TransactionDetailModal({
   isReturning = false,
   onReturn,
 }) {
+  const receiptRef = useRef(null);
   const [storeSettings, setStoreSettings] = useState(null);
   const [devicePreferences, setDevicePreferences] = useState(DEFAULT_DEVICE_PREFERENCES);
+  const [isExportingImage, setIsExportingImage] = useState(false);
   const license = useStore((state) => state.license);
 
   useEffect(() => {
@@ -98,6 +104,41 @@ export default function TransactionDetailModal({
   const isReturned = transaction.status === "RETURNED";
   const orderLabel = transaction.orderType === "PRE_ORDER" ? "Pre-order" : "Penjualan toko";
   const showLitePosBranding = !(license?.isActive && license?.plan === "PREMIUM");
+
+  const createHistoryReceiptImage = async () => {
+    if (!receiptRef.current) throw new Error("Nota belum siap dibuat menjadi gambar.");
+    return createReceiptImageBlob(receiptRef.current);
+  };
+
+  const handleDownloadImage = async () => {
+    if (isExportingImage) return;
+    setIsExportingImage(true);
+    try {
+      const filename = getReceiptImageFilename(transaction.invoiceNumber);
+      const blob = await createHistoryReceiptImage();
+      downloadReceiptImage(blob, filename);
+      showAlert.success("Gambar Disimpan", `${filename} berhasil diunduh.`);
+    } catch (error) {
+      showAlert.error("Gagal Membuat Gambar", error?.message || "Nota belum dapat diunduh.");
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  const handleShareImage = async () => {
+    if (isExportingImage) return;
+    setIsExportingImage(true);
+    try {
+      const filename = getReceiptImageFilename(transaction.invoiceNumber);
+      const blob = await createHistoryReceiptImage();
+      const result = await shareReceiptImage({ blob, filename, title: `Struk ${transaction.invoiceNumber}`, text: `Struk transaksi ${storeName}` });
+      if (result === "downloaded") await showAlert.info("Gambar Struk Diunduh", "Pilih gambar dari folder Download saat membuka WhatsApp.");
+    } catch (error) {
+      if (error?.name !== "AbortError") showAlert.error("Gagal Membagikan Gambar", error?.message || "Menu berbagi belum dapat dibuka.");
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -260,7 +301,13 @@ export default function TransactionDetailModal({
           </div>
         </div>
 
-        <div id="history-receipt-print" className="hidden text-[10px]">
+        <div
+          id="history-receipt-print"
+          ref={receiptRef}
+          aria-hidden="true"
+          className="fixed -left-[10000px] top-0 block bg-white font-mono text-[10px] text-black"
+          style={{ width: `${paperWidthMm}mm`, padding: `${devicePreferences.printMarginMm}mm`, boxSizing: "border-box", lineHeight: 1.25 }}
+        >
           <div style={{ textAlign: "center", marginBottom: "12px" }}>
             {storeLogo && (
               <img
@@ -300,6 +347,7 @@ export default function TransactionDetailModal({
                 <span>{item.qty} x {formatNumber(item.price)}</span>
                 <span>{formatNumber(Number(item.price) * Number(item.qty))}</span>
               </div>
+              {item.notes && <div style={{ fontSize: "9px", fontStyle: "italic" }}>CATATAN: {item.notes}</div>}
             </div>
           ))}
 
@@ -344,6 +392,22 @@ export default function TransactionDetailModal({
             className="ml-auto h-11 rounded-xl bg-gray-100 px-4 text-xs font-black text-gray-600 hover:bg-gray-200"
           >
             Tutup
+          </button>
+          <button
+            type="button"
+            disabled={isExportingImage}
+            onClick={handleDownloadImage}
+            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-xs font-black text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          >
+            {isExportingImage ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />} PNG
+          </button>
+          <button
+            type="button"
+            disabled={isExportingImage}
+            onClick={handleShareImage}
+            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {isExportingImage ? <Loader2 className="animate-spin" size={16} /> : <Share2 size={16} />} Bagikan
           </button>
           <button
             type="button"

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 
 const APP_URL = process.env.LITEPOS_APP_URL || 'https://lite-pos-warnawarni.vercel.app';
@@ -59,6 +59,10 @@ function createWindow() {
 
   win.maximize();
   win.setMenuBarVisibility(false);
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
   win.loadURL(APP_URL);
 }
 
