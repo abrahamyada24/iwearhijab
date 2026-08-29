@@ -23,6 +23,7 @@ import {
   getShiftReminder,
 } from '@/utils/shiftReminder';
 import { getPosPendingTransactions } from '@/utils/savedTransactions';
+import { getCartItemLineTotal } from '@/utils/cartPricing';
 import { useStore } from '@/store/useStore';
 
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -316,18 +317,14 @@ export default function POSPage() {
     const selectedAddons = addonProduct.addons
       .map(addon => ({ ...addon, quantity: Number(selectedAddonQuantities[Number(addon.id)] || 0) }))
       .filter(addon => addon.quantity > 0);
-    const addonTotal = selectedAddons.reduce(
-      (total, addon) => total + (Number(addon.price || 0) * addon.quantity),
-      0
-    );
     const basePrice = Number(addonProduct.effectivePrice ?? addonProduct.price ?? 0);
     const baseOriginalPrice = Number(addonProduct.originalPrice ?? addonProduct.price ?? 0);
     const configuredItem = {
       ...addonProduct,
       basePrice,
       baseOriginalPrice,
-      price: basePrice + addonTotal,
-      originalPrice: baseOriginalPrice + addonTotal,
+      price: basePrice,
+      originalPrice: baseOriginalPrice,
       addons: selectedAddons,
       hasAvailableAddons: true,
       customerNotes: addonNotes.trim(),
@@ -369,7 +366,7 @@ export default function POSPage() {
   const removeFromCart = (id) => setCart(cart.filter(item => item.id !== id));
 
   // --- CALCULATIONS ---
-  const subTotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.qty), 0);
+  const subTotal = cart.reduce((sum, item) => sum + getCartItemLineTotal(item), 0);
   const taxAmount = subTotal * taxRate;
   const grandTotal = subTotal + taxAmount;
   

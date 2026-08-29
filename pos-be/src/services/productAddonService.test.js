@@ -5,6 +5,7 @@ const {
   normalizeAddonSelections,
   resolveSelectedAddons,
   buildAddonItemNotes,
+  calculateAddonAwareLinePricing,
 } = require('./productAddonService');
 
 test('normalizeAddonIds hanya menerima ID positif dan unik', () => {
@@ -42,4 +43,14 @@ test('buildAddonItemNotes menyimpan opsi retail dan catatan pelanggan', () => {
     'warna pita merah'
   );
   assert.equal(notes, 'Opsi: Bungkus Kado x2, Kartu Ucapan | warna pita merah');
+});
+
+test('harga produk dan jumlah opsi tambahan dihitung terpisah', () => {
+  const pricing = calculateAddonAwareLinePricing(
+    { effectivePrice: 8500, originalPrice: 8500 },
+    [{ price: 1000, quantity: 10 }],
+    10
+  );
+  assert.equal(pricing.lineTotal, 95000);
+  assert.equal(pricing.price, 9500);
 });
