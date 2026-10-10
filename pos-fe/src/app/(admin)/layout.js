@@ -11,6 +11,7 @@ export default function AdminLayout({ children }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const fetchSettings = useStore(state => state.fetchSettings);
   const isAuthenticated = useStore(state => state.isAuthenticated);
+  const settings = useStore(state => state.settings);
 
   useEffect(() => {
     const applySavedTheme = () => applyWebTheme(getDevicePreferences().theme);
@@ -33,17 +34,17 @@ export default function AdminLayout({ children }) {
       if (document.visibilityState === 'visible') refreshSettings();
     };
 
-    refreshSettings();
+    if (!settings) refreshSettings();
     window.addEventListener('focus', refreshSettings);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    const interval = window.setInterval(refreshSettings, 5000);
+    const interval = window.setInterval(refreshSettings, 5 * 60 * 1000);
 
     return () => {
       window.removeEventListener('focus', refreshSettings);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.clearInterval(interval);
     };
-  }, [fetchSettings, isAuthenticated]);
+  }, [fetchSettings, isAuthenticated, settings]);
 
   return (
     <AuthGuard>

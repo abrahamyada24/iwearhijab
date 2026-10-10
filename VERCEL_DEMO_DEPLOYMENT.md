@@ -70,6 +70,10 @@ Periksa daftar file sebelum commit dengan `git status --short`. Jangan menambahk
 7. Jangan isi Output Directory.
 8. Tambahkan environment variables sebelum deploy.
 
+File `pos-be/vercel.json` menetapkan Function ke region Singapore (`sin1`),
+dekat dengan TiDB `ap-southeast-1`. Jangan hapus konfigurasi ini: region default
+Vercel adalah Washington (`iad1`) dan menambah latency pada setiap query database.
+
 Environment wajib:
 
 ```text
@@ -104,6 +108,15 @@ Hasil yang benar:
 ```
 
 Jika muncul `P1001`, periksa allowlist TiDB, hostname, port `4000`, dan `sslaccept=strict`. Jika muncul error autentikasi database, periksa user `litepos_demo_app` dan password tanpa menampilkan nilainya di screenshot.
+
+Jika log deployment masih menampilkan `Running build in Washington`, itu adalah
+lokasi mesin build dan bukan bukti lokasi runtime Function. Setelah deploy, buka
+**Project Settings > Functions** dan pastikan Function Region mengikuti `sin1`.
+
+Jika transaksi menampilkan `isolation level 'SERIALIZABLE' is not supported`,
+pastikan perubahan controller terbaru sudah ter-deploy. LitePOS memakai
+`RepeatableRead`, isolation level yang didukung TiDB; jangan mengaktifkan
+`tidb_skip_isolation_level_check` untuk menyamarkan ketidakcocokan tersebut.
 
 ## 6. Hubungkan Cloudflare Pages ke Vercel
 

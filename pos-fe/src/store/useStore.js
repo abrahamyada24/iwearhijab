@@ -50,7 +50,6 @@ export const useStore = create(
               settings: null
             });
 
-            if (!data.user?.mustChangePassword) await get().fetchSettings();
             return { success: true, mustChangePassword: Boolean(data.user?.mustChangePassword) };
           }
           return { success: false, message: data.message, code: data.code };

@@ -107,11 +107,12 @@ export default function POSPage() {
 
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-            const [prodRes, catRes, memRes, pkgRes] = await Promise.all([
+            const [prodRes, catRes, memRes, pkgRes, settingsRes] = await Promise.all([
                 fetch(`${API_URL}/api/products`, { headers }),
                 fetch(`${API_URL}/api/products/categories`, { headers }),
                 fetch(`${API_URL}/api/customers`, { headers }),
-                fetch(`${API_URL}/api/packages`, { headers })
+                fetch(`${API_URL}/api/packages`, { headers }),
+                fetch(`${API_URL}/api/settings`, { headers, cache: 'no-store' })
             ]);
 
             const prodData = await prodRes.json();
@@ -141,9 +142,8 @@ export default function POSPage() {
             if (catData.success) setCategories([{ id: 0, name: 'Semua' }, ...catData.data, ...(pkgData.success && pkgData.data.some(pkg => pkg.isActive) ? [{ id: 'PACKAGE', name: 'Paket' }] : [])]);
             if (memData.success) setMembers(memData.data);
 
-            // Fetch store settings and tax
+            // Store settings ikut dimuat paralel bersama data master.
             try {
-                const settingsRes = await fetch(`${API_URL}/api/settings`, { headers });
                 const settingsData = await settingsRes.json();
                 
                 if (settingsData.success && settingsData.data) {

@@ -710,7 +710,7 @@ exports.pushLocalData = async (req, res) => {
                   }
               });
           }
-          }, { isolationLevel: 'Serializable' });
+          }, { isolationLevel: 'RepeatableRead' });
           savedTransactions++;
         }
         syncedTransactionIds.push(tx.id);
@@ -790,7 +790,7 @@ exports.pushLocalData = async (req, res) => {
                             }
                         });
                     }
-                }, { isolationLevel: 'Serializable' });
+                }, { isolationLevel: 'RepeatableRead' });
                 savedShifts++;
                 syncedShiftIds.push(shift.id);
             } catch(shiftErr) {

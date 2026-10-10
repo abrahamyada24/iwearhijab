@@ -62,7 +62,7 @@ exports.openShift = async (req, res) => {
                     status: 'OPEN'
                 }
             });
-        }, { isolationLevel: 'Serializable' });
+        }, { isolationLevel: 'RepeatableRead' });
 
         res.status(201).json({ success: true, message: "Shift berhasil dibuka", data: shift });
     } catch (error) {
@@ -179,7 +179,7 @@ exports.closeShift = async (req, res) => {
             });
 
             return { updated, summary };
-        }, { isolationLevel: 'Serializable' });
+        }, { isolationLevel: 'RepeatableRead' });
 
         res.json({
             success: true,

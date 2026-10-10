@@ -221,10 +221,19 @@ exports.createTransaction = async (req, res) => {
                 for (const { product, qty } of stockDeductions.values()) {
                     // Skip stock deduction for unlimited stock products
                     if (!product.isUnlimitedStock) {
-                        await tx.product.update({
-                            where: { id: product.id },
-                            data: { stock: product.stock - qty }
+                        // Pengurangan atomik tetap mencegah overselling ketika dua
+                        // kasir checkout bersamaan pada isolation level TiDB.
+                        const stockUpdate = await tx.product.updateMany({
+                            where: {
+                                id: product.id,
+                                isUnlimitedStock: false,
+                                stock: { gte: qty }
+                            },
+                            data: { stock: { decrement: qty } }
                         });
+                        if (stockUpdate.count !== 1) {
+                            throw new Error(`Stok ${product.name} tidak mencukupi.`);
+                        }
                     }
 
                     await tx.stockMovement.create({
@@ -316,7 +325,9 @@ exports.createTransaction = async (req, res) => {
             return { ...newTransaction, midtransToken, midtransUrl };
         }, {
             timeout: 10000,
-            isolationLevel: 'Serializable'
+            // TiDB menggunakan Snapshot Isolation yang diekspos sebagai
+            // REPEATABLE READ dan menolak SERIALIZABLE.
+            isolationLevel: 'RepeatableRead'
         });
 
         res.status(201).json({
@@ -327,10 +338,26 @@ exports.createTransaction = async (req, res) => {
 
     } catch (error) {
         console.error('[ERROR] Transaction Error:', error.message);
-        res.status(error.code === 'SHIFT_REQUIRED' ? 409 : 400).json({
+        const isTransactionConflict = error.code === 'P2034';
+        const isDatabaseError = String(error.code || '').startsWith('P')
+            || /error in connector|error querying the database|can't reach database server/i.test(String(error.message || ''));
+        const status = error.code === 'SHIFT_REQUIRED'
+            ? 409
+            : isTransactionConflict
+                ? 409
+                : isDatabaseError
+                    ? 503
+                    : 400;
+        const publicMessage = isTransactionConflict
+            ? 'Transaksi berbenturan dengan perubahan lain. Periksa stok lalu coba kembali.'
+            : isDatabaseError
+                ? 'Database sedang tidak siap memproses transaksi. Coba kembali beberapa saat lagi.'
+                : error.message;
+
+        res.status(status).json({
             success: false,
-            code: error.code || 'TRANSACTION_FAILED',
-            message: error.message
+            code: isTransactionConflict ? 'TRANSACTION_CONFLICT' : (isDatabaseError ? 'DATABASE_UNAVAILABLE' : (error.code || 'TRANSACTION_FAILED')),
+            message: publicMessage
         });
     }
 };

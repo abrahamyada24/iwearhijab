@@ -39,7 +39,12 @@ export default function AuthGuard({ children }) {
   useEffect(() => {
     let cancelled = false;
     const verify = async () => {
-      const result = await hydrateSession();
+      // Kedua endpoint sama-sama memvalidasi cookie sesi. Menjalankannya paralel
+      // menghindari dua round-trip berurutan ke backend serverless.
+      const [result, licenseResult] = await Promise.all([
+        hydrateSession(),
+        fetchLicenseStatus(),
+      ]);
       if (cancelled) return;
       if (!result.success) {
         sessionStorage.setItem('auth_notice', result.code === 'SESSION_IDLE_TIMEOUT'
@@ -50,8 +55,6 @@ export default function AuthGuard({ children }) {
       }
       if (!enforceRoleAccess(result.user)) return;
 
-      const licenseResult = await fetchLicenseStatus();
-      if (cancelled) return;
       if (!licenseResult.success || !licenseResult.data?.isActive) {
         if (pathname !== '/license') {
           router.replace('/license');
