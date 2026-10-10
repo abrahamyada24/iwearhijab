@@ -146,18 +146,25 @@ app.get('/', (req, res) => {
   res.json({ message: "LitePOS Backend Service is Running!", timestamp: new Date() });
 });
 
-const server = app.listen(PORT, HOST, () => {
-  console.log(`\n[OK] Server berjalan di: http://${HOST}:${PORT}`);
-  console.log(`[DOCS] Dokumentasi API: http://localhost:${PORT}/api-docs\n`);
-});
-
-const shutdown = async (signal) => {
-  console.log(`[SHUTDOWN] Menerima ${signal}, menutup server...`);
-  server.close(async () => {
-    await prisma.$disconnect();
-    process.exit(0);
+// Vercel mengimpor dan menjalankan instance Express sebagai satu Function.
+// Listener hanya dibuat ketika file ini dijalankan langsung untuk development,
+// launcher lokal, atau VPS sehingga lifecycle serverless tidak terganggu.
+if (require.main === module) {
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`\n[OK] Server berjalan di: http://${HOST}:${PORT}`);
+    console.log(`[DOCS] Dokumentasi API: http://localhost:${PORT}/api-docs\n`);
   });
-};
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+  const shutdown = async (signal) => {
+    console.log(`[SHUTDOWN] Menerima ${signal}, menutup server...`);
+    server.close(async () => {
+      await prisma.$disconnect();
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+module.exports = app;

@@ -27,10 +27,10 @@ const prisma = globalThis.__liteposScopedPrisma || basePrisma.$extends({
   },
 });
 
-if (process.env.NODE_ENV !== 'production') {
-  globalThis.__liteposBasePrisma = basePrisma;
-  globalThis.__liteposScopedPrisma = prisma;
-}
+// Gunakan kembali client pada instance serverless yang masih hangat agar setiap
+// request tidak membuat connection pool baru ke TiDB.
+globalThis.__liteposBasePrisma = basePrisma;
+globalThis.__liteposScopedPrisma = prisma;
 
 module.exports = {
   basePrisma,
