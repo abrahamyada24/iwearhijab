@@ -1,11 +1,6 @@
 pos-android/
-pos-be/
 pos-desktop/
+pos-fe/
 litepos-site/
 .git/
 .vercel/
-pos-fe/node_modules/
-pos-fe/.next/
-pos-fe/.env
-pos-fe/.env.*
-!pos-fe/.env.example
