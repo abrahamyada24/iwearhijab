@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/prisma');
+const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
 const DISPLAY_TYPES = new Set(['normal', 'tall', 'wide', 'large']);
 const optionalText = (value) => String(value || '').trim() || null;
@@ -91,7 +91,7 @@ exports.createCustomer = async (req, res) => {
      * LOGIKA PENYIMPANAN LOKAL:
      * Menggunakan req.file.filename untuk menyimpan path relatif folder uploads.
      */
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const imageUrl = getUploadedFileUrl(req.file);
     const memberId = await generateMemberId();
 
     const validPhone = phone && String(phone).trim() !== "" ? String(phone).trim() : null;
@@ -178,7 +178,7 @@ exports.updateCustomer = async (req, res) => {
 
     // Update foto menggunakan jalur lokal jika ada file baru yang diunggah
     if (req.file) {
-      updateData.imageUrl = `/uploads/${req.file.filename}`;
+      updateData.imageUrl = getUploadedFileUrl(req.file);
     }
 
     const customer = await prisma.customer.update({

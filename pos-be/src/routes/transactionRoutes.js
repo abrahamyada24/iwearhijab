@@ -80,10 +80,11 @@ router.post('/', verifyToken, transactionController.createTransaction);
 router.get('/', verifyToken, transactionController.getAllTransactions);
 
 router.get('/pre-orders', verifyToken, transactionController.getPreOrders);
-router.get('/:id', verifyToken, transactionController.getTransactionById);
-router.post('/notification', transactionController.handleMidtransNotification);
+// Webhook publik dipasang langsung di app sebelum middleware autentikasi.
 router.post('/:id/return', verifyToken, isOwner, transactionController.returnTransaction);
 router.post('/:id/confirm-preorder', verifyToken, transactionController.confirmPreOrder);
+router.patch('/:id/work-status', verifyToken, transactionController.updateWorkStatus);
 router.get('/status/:invoiceNumber', verifyToken, transactionController.checkTransactionStatus);
+router.get('/:id', verifyToken, transactionController.getTransactionById);
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const { prisma, runWithStore } = require('../config/prisma');
+const { resolveActiveMembership } = require('../services/storeAccessService');
 const {
   JWT_AUDIENCE,
   JWT_ISSUER,
@@ -9,7 +10,6 @@ const {
   SESSION_TOUCH_INTERVAL_MS,
 } = require('../config/auth');
 
-const prisma = new PrismaClient();
 
 const getBearerToken = (authorization) => {
   if (!authorization || !authorization.startsWith('Bearer ')) return null;
@@ -26,6 +26,8 @@ const isPasswordChangeRoute = (req) => [
 ].some((path) => req.originalUrl.startsWith(path));
 
 exports.verifyToken = async (req, res, next) => {
+  if (req.authSession && req.storeId && req.user) return next();
+
   const token = getBearerToken(req.headers.authorization) || req.cookies?.[SESSION_COOKIE_NAME];
 
   if (!token) {
@@ -122,15 +124,27 @@ exports.verifyToken = async (req, res, next) => {
       });
     }
 
+    const membership = await resolveActiveMembership(prisma, session);
+    if (!membership) {
+      return res.status(403).json({
+        success: false,
+        code: 'STORE_ACCESS_REQUIRED',
+        message: 'Pengguna tidak memiliki akses ke usaha yang aktif.',
+      });
+    }
+
     req.user = {
       id: session.user.id,
       name: session.user.name,
       email: session.user.email,
-      role: session.user.role,
+      role: membership.role,
       mustChangePassword: session.user.mustChangePassword,
     };
     req.authSession = { id: session.id, clientType: session.clientType };
-    return next();
+    req.storeId = membership.storeId;
+    req.store = membership.store;
+    req.storeMembership = membership;
+    return runWithStore(membership.storeId, () => next());
   } catch (error) {
     return res.status(401).json({
       success: false,

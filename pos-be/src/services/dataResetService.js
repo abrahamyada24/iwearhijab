@@ -1,4 +1,5 @@
 const { withExclusiveDataReset } = require('./dataResetCoordinator');
+const { getActiveStoreId } = require('../config/storeContext');
 
 const OPERATIONAL_DELETE_STEPS = [
   ['payments', 'payment'],
@@ -53,11 +54,18 @@ const getDataResetState = async (prisma) => {
   };
 };
 
-const resetOperationalData = async ({ prisma, resetBy }) => withExclusiveDataReset(async () => {
+const resetOperationalData = async ({ prisma, resetBy, storeId = getActiveStoreId() }) => withExclusiveDataReset(async () => {
+  if (!Number.isInteger(Number(storeId)) || Number(storeId) <= 0) {
+    const error = new Error('Konteks store wajib tersedia untuk reset data.');
+    error.code = 'STORE_CONTEXT_REQUIRED';
+    error.status = 400;
+    throw error;
+  }
+  const scopedStoreId = Number(storeId);
   const now = new Date();
   const marker = await prisma.$transaction(async (tx) => {
     const pendingPayments = await tx.payment.count({
-      where: { paymentStatus: 'PENDING' },
+      where: { paymentStatus: 'PENDING', transaction: { storeId: scopedStoreId } },
     });
     if (pendingPayments > 0) throw pendingPaymentError();
 
@@ -118,7 +126,13 @@ const resetOperationalData = async ({ prisma, resetBy }) => withExclusiveDataRes
     return await prisma.$transaction(async (tx) => {
       const deleted = {};
       for (const [resultKey, modelName] of OPERATIONAL_DELETE_STEPS) {
-        const result = await tx[modelName].deleteMany();
+        const childWhere = {
+          payment: { transaction: { storeId: scopedStoreId } },
+          transactionItem: { transaction: { storeId: scopedStoreId } },
+          stockReceiptItem: { receipt: { storeId: scopedStoreId } },
+          packageItem: { package: { storeId: scopedStoreId } },
+        }[modelName];
+        const result = await tx[modelName].deleteMany(childWhere ? { where: childWhere } : undefined);
         deleted[resultKey] = result.count;
       }
 

@@ -1,8 +1,11 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/prisma');
 const { serializeProductPrice } = require('../utils/productDiscount');
-const prisma = new PrismaClient();
+const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
 const optionalDate = (value) => value ? new Date(value) : null;
+const normalizeUnitLabel = (value) => ['item', 'pcs', 'kg'].includes(String(value || '').toLowerCase())
+  ? String(value).toLowerCase()
+  : 'item';
 const parseDiscountData = (body) => ({
   discountActive: body.discountActive === 'true' || body.discountActive === true || body.discountActive === 1,
   discountType: ['PERCENT', 'NOMINAL'].includes(String(body.discountType || '').toUpperCase())
@@ -46,7 +49,13 @@ exports.getAllProducts = async (req, res) => {
 
 exports.createProduct = async (req, res) => {
   try {
-    let { sku, name, price, costPrice, stock, minStock, categoryId, isActive, displayType, barcode, isUnlimitedStock, enableCostPrice, addons } = req.body;
+    let { sku, name, price, costPrice, stock, minStock, categoryId, isActive, displayType, barcode, isUnlimitedStock, enableCostPrice, addons, unitLabel } = req.body;
+    const parsedCategoryId = Number(categoryId);
+    if (!Number.isInteger(parsedCategoryId)) {
+      return res.status(400).json({ success: false, message: 'Kategori wajib dipilih.' });
+    }
+    const category = await prisma.category.findUnique({ where: { id: parsedCategoryId } });
+    if (!category) return res.status(400).json({ success: false, message: 'Kategori tidak tersedia pada usaha aktif.' });
 
     // Handle SKU Otomatis jika kosong
     if (!sku || sku.trim() === "" || sku === "undefined") {
@@ -61,7 +70,7 @@ exports.createProduct = async (req, res) => {
      * req.file.filename berisi nama file unik (contoh: image-1712345.jpg)
      * Kita simpan dengan prefix '/uploads/' agar sinkron dengan express.static di app.js
      */
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const imageUrl = getUploadedFileUrl(req.file);
 
     const product = await prisma.product.create({
       data: {
@@ -70,7 +79,7 @@ exports.createProduct = async (req, res) => {
         price: parseFloat(price) || 0,
         costPrice: parseFloat(costPrice) || 0,
         stock: parseInt(stock) || 0,
-        categoryId: categoryId && categoryId !== "undefined" ? parseInt(categoryId) : null,
+        categoryId: parsedCategoryId,
         isActive: isActive === 'true' || isActive === true,
         displayType: displayType || 'normal',
         imageUrl: imageUrl,
@@ -78,6 +87,7 @@ exports.createProduct = async (req, res) => {
         isUnlimitedStock: isUnlimitedStock === 'true' || isUnlimitedStock === true,
         enableCostPrice: enableCostPrice === 'true' || enableCostPrice === true,
         minStock: parseInt(minStock) || 0,
+        unitLabel: normalizeUnitLabel(unitLabel),
         ...parseDiscountData(req.body)
       }
     });
@@ -106,7 +116,7 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, sku, price, costPrice, stock, minStock, categoryId, isActive, displayType, barcode, isUnlimitedStock, enableCostPrice, addons } = req.body;
+    const { name, sku, price, costPrice, stock, minStock, categoryId, isActive, displayType, barcode, isUnlimitedStock, enableCostPrice, addons, unitLabel } = req.body;
 
     const updateData = {};
     if (name) updateData.name = name;
@@ -121,18 +131,24 @@ exports.updateProduct = async (req, res) => {
     if (price !== undefined && price !== '') updateData.price = parseFloat(price) || 0;
     if (costPrice !== undefined && costPrice !== '') updateData.costPrice = parseFloat(costPrice) || 0;
     if (stock !== undefined && stock !== '') updateData.stock = parseInt(stock) || 0;
-    if (categoryId && categoryId !== '' && categoryId !== 'undefined') updateData.categoryId = parseInt(categoryId);
+    if (categoryId && categoryId !== '' && categoryId !== 'undefined') {
+      const parsedCategoryId = Number(categoryId);
+      const category = await prisma.category.findUnique({ where: { id: parsedCategoryId } });
+      if (!category) return res.status(400).json({ success: false, message: 'Kategori tidak tersedia pada usaha aktif.' });
+      updateData.categoryId = parsedCategoryId;
+    }
     if (displayType) updateData.displayType = displayType;
     if (isActive !== undefined) updateData.isActive = isActive === 'true' || isActive === true;
     if (barcode !== undefined) updateData.barcode = barcode || null;
     if (isUnlimitedStock !== undefined) updateData.isUnlimitedStock = isUnlimitedStock === 'true' || isUnlimitedStock === true;
     if (enableCostPrice !== undefined) updateData.enableCostPrice = enableCostPrice === 'true' || enableCostPrice === true;
     if (minStock !== undefined) updateData.minStock = parseInt(minStock) || 0;
+    if (unitLabel !== undefined) updateData.unitLabel = normalizeUnitLabel(unitLabel);
     if (req.body.discountActive !== undefined) Object.assign(updateData, parseDiscountData(req.body));
 
     // Handle upload gambar jika ada
     if (req.file) {
-      updateData.imageUrl = `/uploads/${req.file.filename}`;
+      updateData.imageUrl = getUploadedFileUrl(req.file);
     }
 
     const product = await prisma.product.update({

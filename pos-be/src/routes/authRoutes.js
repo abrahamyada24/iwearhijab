@@ -90,6 +90,8 @@ router.post('/register', verifyToken, isAdmin, upload.single('image'), authContr
 router.put('/change-password', verifyToken, authController.changePassword);
 
 router.get('/me', verifyToken, authController.me);
+router.get('/stores', verifyToken, authController.getStores);
+router.post('/active-store', verifyToken, authController.switchStore);
 router.post('/logout', verifyToken, authController.logout);
 router.post('/logout-all', verifyToken, authController.logoutAll);
 router.get('/sessions', verifyToken, authController.getSessions);

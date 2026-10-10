@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/prisma');
 const { getLicenseStatus } = require('../services/licenseService');
 
-const prisma = new PrismaClient();
 
 exports.requireActiveLicense = async (req, res, next) => {
   if (req.path === '/health') return next();

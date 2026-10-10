@@ -1,8 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const { validatePassword } = require('../config/auth');
 const { normalizeUsername, validateUsername } = require('../services/usernameService');
+const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
 const publicUserSelect = {
   id: true,
@@ -22,10 +22,12 @@ const publicUserSelect = {
  */
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      select: publicUserSelect,
+    const memberships = await prisma.storeMembership.findMany({
+      where: { storeId: req.storeId },
+      include: { user: { select: publicUserSelect } },
       orderBy: { createdAt: 'desc' }
     });
+    const users = memberships.map(({ user, role, isActive }) => ({ ...user, role, isActive }));
     res.json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -46,13 +48,26 @@ exports.updateUser = async (req, res) => {
       return res.status(400).json({ success: false, message: 'ID pengguna tidak valid.' });
     }
 
-    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
-    if (!targetUser) return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
-    if (targetUser.role === 'OWNER' && req.user.role !== 'OWNER') {
+    const targetMembership = await prisma.storeMembership.findUnique({
+      where: { userId_storeId: { userId, storeId: req.storeId } },
+      include: { user: true },
+    });
+    if (!targetMembership) return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan pada usaha aktif.' });
+    const targetUser = targetMembership.user;
+    if (targetMembership.role === 'OWNER' && req.user.role !== 'OWNER') {
       return res.status(403).json({ success: false, message: 'Hanya Owner yang dapat mengubah akun Owner.' });
     }
 
     const dataToUpdate = {};
+    let nextRole = targetMembership.role;
+    const membershipCount = await prisma.storeMembership.count({ where: { userId } });
+    const changesGlobalIdentity = Boolean(name || email || username !== undefined || password || req.file);
+    if (membershipCount > 1 && changesGlobalIdentity && req.user.id !== userId) {
+      return res.status(409).json({
+        success: false,
+        message: 'Akun ini dipakai di beberapa usaha. Profil dan password hanya dapat diubah oleh pemilik akun.',
+      });
+    }
 
     if (name) dataToUpdate.name = String(name).trim();
     if (email) dataToUpdate.email = String(email).trim().toLowerCase();
@@ -63,7 +78,7 @@ exports.updateUser = async (req, res) => {
       dataToUpdate.username = normalizedUsername;
     }
 
-    const ownerIdentityChanged = targetUser.role === 'OWNER' && (
+    const ownerIdentityChanged = targetMembership.role === 'OWNER' && (
       (dataToUpdate.email && dataToUpdate.email !== targetUser.email) ||
       (dataToUpdate.username && dataToUpdate.username !== targetUser.username)
     );
@@ -88,13 +103,13 @@ exports.updateUser = async (req, res) => {
       if (normalizedRole === 'OWNER' && req.user.role !== 'OWNER') {
         return res.status(403).json({ success: false, message: 'Hanya Owner yang dapat memberikan role Owner.' });
       }
-      dataToUpdate.role = normalizedRole;
+      // Role adalah hak akses per usaha, bukan atribut global akun.
+      nextRole = normalizedRole;
     }
 
-    // Konversi string 'true'/'false' dari FormData menjadi Boolean
-    if (isActive !== undefined) {
-      dataToUpdate.isActive = isActive === 'true' || isActive === true;
-    }
+    const nextMembershipActive = isActive !== undefined
+      ? isActive === 'true' || isActive === true
+      : targetMembership.isActive;
 
     // Jika admin mengisi password baru, lakukan hashing
     if (password && password.trim() !== "") {
@@ -110,20 +125,32 @@ exports.updateUser = async (req, res) => {
      * Menggunakan req.file.filename untuk menyimpan path relatif folder uploads.
      */
     if (req.file) {
-      dataToUpdate.imageUrl = `/uploads/${req.file.filename}`;
+      dataToUpdate.imageUrl = getUploadedFileUrl(req.file);
     }
 
-    const [, user] = await prisma.$transaction([
-      prisma.authSession.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date(), revokeReason: password ? 'ADMIN_PASSWORD_RESET' : 'USER_UPDATED' },
-      }),
-      prisma.user.update({
-        where: { id: userId },
-        data: dataToUpdate,
-        select: publicUserSelect,
-      }),
-    ]);
+    const user = await prisma.$transaction(async (tx) => {
+      const updatedUser = Object.keys(dataToUpdate).length > 0
+        ? await tx.user.update({ where: { id: userId }, data: dataToUpdate, select: publicUserSelect })
+        : await tx.user.findUnique({ where: { id: userId }, select: publicUserSelect });
+      const updatedMembership = await tx.storeMembership.update({
+        where: { userId_storeId: { userId, storeId: req.storeId } },
+        data: {
+          role: nextRole,
+          isActive: nextMembershipActive,
+        },
+      });
+      if (password || !nextMembershipActive) {
+        await tx.authSession.updateMany({
+          where: {
+            userId,
+            revokedAt: null,
+            ...(password ? {} : { activeStoreId: req.storeId }),
+          },
+          data: { revokedAt: new Date(), revokeReason: password ? 'ADMIN_PASSWORD_RESET' : 'STORE_ACCESS_REVOKED' },
+        });
+      }
+      return { ...updatedUser, role: updatedMembership.role, isActive: updatedMembership.isActive };
+    });
 
     res.json({ success: true, message: "Data pengguna diperbarui", data: user });
   } catch (error) {
@@ -152,14 +179,22 @@ exports.deleteUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Akses ditolak! Anda tidak bisa menghapus akun Anda sendiri." });
     }
 
-    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
-    if (!targetUser) return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan.' });
-    if (targetUser.role === 'OWNER') {
+    const targetMembership = await prisma.storeMembership.findUnique({
+      where: { userId_storeId: { userId, storeId: req.storeId } },
+    });
+    if (!targetMembership) return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan pada usaha aktif.' });
+    if (targetMembership.role === 'OWNER') {
       return res.status(403).json({ success: false, message: 'Akun Owner tidak dapat dihapus.' });
     }
 
-    await prisma.user.delete({ where: { id: userId } });
-    res.json({ success: true, message: "Pengguna berhasil dihapus" });
+    await prisma.$transaction([
+      prisma.authSession.updateMany({
+        where: { userId, activeStoreId: req.storeId, revokedAt: null },
+        data: { revokedAt: new Date(), revokeReason: 'STORE_ACCESS_REVOKED' },
+      }),
+      prisma.storeMembership.delete({ where: { userId_storeId: { userId, storeId: req.storeId } } }),
+    ]);
+    res.json({ success: true, message: "Akses pengguna dari usaha ini berhasil dihapus" });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -1,11 +1,10 @@
 const crypto = require('crypto');
 const { verifyManualLicenseCode } = require('./manualLicenseCode');
+const { getActiveStoreId } = require('../config/storeContext');
 
-const STORE_LICENSE_ID = 1;
 const TRIAL_DURATION_DAYS = 14;
 const LICENSE_CACHE_MS = 30 * 1000;
-let cachedLicense = null;
-let cacheExpiresAt = 0;
+const licenseCache = new Map();
 
 const addDays = (date, days) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 const generateLicenseNumber = () => `LP-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
@@ -28,19 +27,19 @@ const hashActivationCode = (code) => crypto
   .digest('hex');
 
 const invalidateLicenseCache = () => {
-  cachedLicense = null;
-  cacheExpiresAt = 0;
+  const storeId = getActiveStoreId();
+  if (storeId) licenseCache.delete(storeId);
+  else licenseCache.clear();
 };
 
 const ensureStoreLicense = async (prisma) => {
-  const existing = await prisma.storeLicense.findUnique({ where: { id: STORE_LICENSE_ID } });
+  const existing = await prisma.storeLicense.findFirst();
   if (existing) return existing;
 
   const now = new Date();
   try {
     return await prisma.storeLicense.create({
       data: {
-        id: STORE_LICENSE_ID,
         licenseNumber: generateLicenseNumber(),
         plan: 'TRIAL',
         state: 'ACTIVE',
@@ -51,7 +50,7 @@ const ensureStoreLicense = async (prisma) => {
     });
   } catch (error) {
     if (error.code === 'P2002') {
-      return prisma.storeLicense.findUnique({ where: { id: STORE_LICENSE_ID } });
+      return prisma.storeLicense.findFirst();
     }
     throw error;
   }
@@ -81,11 +80,12 @@ const serializeLicense = (license, now = new Date()) => {
 
 const getLicenseStatus = async (prisma, { useCache = true } = {}) => {
   const now = Date.now();
-  if (useCache && cachedLicense && cacheExpiresAt > now) return cachedLicense;
+  const cacheKey = getActiveStoreId() || 'unscoped-test';
+  const cached = licenseCache.get(cacheKey);
+  if (useCache && cached?.expiresAt > now) return cached.payload;
   const license = await ensureStoreLicense(prisma);
   const payload = serializeLicense(license, new Date(now));
-  cachedLicense = payload;
-  cacheExpiresAt = now + LICENSE_CACHE_MS;
+  licenseCache.set(cacheKey, { payload, expiresAt: now + LICENSE_CACHE_MS });
   return payload;
 };
 
@@ -120,7 +120,7 @@ const activateLicense = async ({ prisma, code, userEmail }) => {
       const baseDate = current.expiresAt && current.expiresAt > now ? current.expiresAt : now;
       const expiresAt = addDays(baseDate, durationDays);
       const license = await tx.storeLicense.update({
-        where: { id: STORE_LICENSE_ID },
+        where: { id: current.id },
         data: {
           plan,
           state: 'ACTIVE',

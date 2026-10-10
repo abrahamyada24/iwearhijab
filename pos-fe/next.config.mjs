@@ -8,6 +8,7 @@ const backendOrigin = (() => {
     return '';
   }
 })();
+const staticExport = process.env.STATIC_EXPORT === 'true';
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -16,7 +17,7 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob:${backendOrigin ? ` ${backendOrigin}` : ''}`,
+  `img-src 'self' data: blob: https://res.cloudinary.com${backendOrigin ? ` ${backendOrigin}` : ''}`,
   "font-src 'self' data:",
   `connect-src 'self'${backendOrigin ? ` ${backendOrigin}` : ''}`,
 ].join('; ');
@@ -36,7 +37,7 @@ const backendImagePattern = (() => {
 })();
 
 const nextConfig = {
-  async headers() {
+  ...(staticExport ? {} : { async headers() {
     return [
       {
         source: '/(.*)',
@@ -49,8 +50,8 @@ const nextConfig = {
         ],
       },
     ];
-  },
-  async rewrites() {
+  } }),
+  ...(staticExport ? {} : { async rewrites() {
     return [
       {
         source: '/api/:path*',
@@ -61,10 +62,13 @@ const nextConfig = {
         destination: `${backendUrl}/uploads/:path*`
       }
     ]
-  },
+  } }),
+  ...(staticExport ? { output: 'export', trailingSlash: true } : {}),
   images: {
+    unoptimized: staticExport,
     remotePatterns: [
       ...(backendImagePattern ? [backendImagePattern] : []),
+      { protocol: 'https', hostname: 'res.cloudinary.com', pathname: '/**' },
     ],
   },
 };

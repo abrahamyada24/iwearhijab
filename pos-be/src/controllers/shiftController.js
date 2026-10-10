@@ -1,10 +1,9 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/prisma');
 const { calculateShiftSummary } = require('../services/shiftSummaryService');
 const {
     calculateExpectedCloseAt,
     normalizeShiftReminderSettings,
 } = require('../services/shiftReminderService');
-const prisma = new PrismaClient();
 
 // 1. OPEN SHIFT
 exports.openShift = async (req, res) => {

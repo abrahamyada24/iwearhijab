@@ -1,9 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const { activateLicense, getLicenseStatus } = require('../services/licenseService');
 const { getDataResetState, resetOperationalData } = require('../services/dataResetService');
 
-const prisma = new PrismaClient();
 
 exports.getStatus = async (req, res) => {
   try {

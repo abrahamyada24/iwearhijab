@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const {
   LOGIN_LOCK_DURATION_MS,
@@ -17,8 +17,9 @@ const {
   normalizeUsername,
   validateUsername,
 } = require('../services/usernameService');
+const { listActiveMemberships, serializeStore } = require('../services/storeAccessService');
+const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
-const prisma = new PrismaClient();
 const PASSWORD_HASH_ROUNDS = 12;
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('litepos-invalid-password-placeholder', PASSWORD_HASH_ROUNDS);
 
@@ -29,14 +30,16 @@ const clearSessionCookie = (res) => res.clearCookie(SESSION_COOKIE_NAME, {
   path: '/',
 });
 
-const publicUser = (user) => ({
+const publicUser = (user, memberships = [], activeStoreId = null) => ({
   id: user.id,
   name: user.name,
   email: user.email,
   username: user.username,
-  role: user.role,
+  role: memberships.find((membership) => membership.storeId === activeStoreId)?.role || user.role,
   imageUrl: user.imageUrl,
   mustChangePassword: Boolean(user.mustChangePassword),
+  activeStoreId,
+  stores: memberships.map(serializeStore),
 });
 
 const genericLoginFailure = (res) => res.status(401).json({
@@ -75,25 +78,36 @@ exports.register = async (req, res) => {
       },
     });
     if (existingUser) {
-      return res.status(400).json({ success: false, message: 'Data pengguna tidak dapat dibuat.' });
+      return res.status(409).json({
+        success: false,
+        message: 'Email atau username sudah digunakan. Hubungi Owner untuk menambahkan akun lama ke usaha ini.',
+      });
     }
 
-    const user = await prisma.user.create({
-      data: {
-        name: normalizedName,
-        email: normalizedEmail,
-        username: requestedUsername || await generateUniqueUsername(prisma, normalizedEmail || normalizedName),
-        password: await bcrypt.hash(String(password), PASSWORD_HASH_ROUNDS),
-        role: normalizedRole,
-        imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
-        mustChangePassword: true,
-      },
+    const user = await prisma.$transaction(async (tx) => {
+      const targetUser = await tx.user.create({
+        data: {
+          name: normalizedName,
+          email: normalizedEmail,
+          username: requestedUsername || await generateUniqueUsername(tx, normalizedEmail || normalizedName),
+          password: await bcrypt.hash(String(password), PASSWORD_HASH_ROUNDS),
+          role: normalizedRole,
+          imageUrl: getUploadedFileUrl(req.file),
+          mustChangePassword: true,
+        },
+      });
+      await tx.storeMembership.create({
+        data: { userId: targetUser.id, storeId: req.storeId, role: normalizedRole },
+      });
+      return targetUser;
     });
+
+    const memberships = await listActiveMemberships(prisma, user.id);
 
     return res.status(201).json({
       success: true,
       message: 'User berhasil dibuat dan wajib mengganti password saat login pertama.',
-      data: publicUser(user),
+      data: publicUser(user, memberships, req.storeId),
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Gagal membuat pengguna.' });
@@ -149,9 +163,20 @@ exports.login = async (req, res) => {
       data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: now },
     });
 
+    const memberships = await listActiveMemberships(prisma, user.id);
+    if (memberships.length === 0) {
+      return res.status(403).json({
+        success: false,
+        code: 'STORE_ACCESS_REQUIRED',
+        message: 'Akun ini belum memiliki akses ke usaha mana pun.',
+      });
+    }
+    const activeStoreId = memberships[0].storeId;
+
     const { session, token } = await createAuthSession({
       prisma,
       user,
+      activeStoreId,
       clientType: normalizedClientType,
       deviceName,
       ipAddress: req.ip,
@@ -164,7 +189,7 @@ exports.login = async (req, res) => {
       message: 'Login berhasil.',
       token,
       sessionExpiresAt: session.expiresAt,
-      user: publicUser(user),
+      user: publicUser(user, memberships, activeStoreId),
     });
   } catch (error) {
     console.error(`[LOGIN ERROR]: ${error.message}`);
@@ -272,8 +297,43 @@ exports.me = async (req, res) => {
     if (!user || !user.isActive) {
       return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan atau tidak aktif.' });
     }
-    return res.json({ success: true, user: publicUser(user) });
+    const memberships = await listActiveMemberships(prisma, user.id);
+    return res.json({ success: true, user: publicUser(user, memberships, req.storeId) });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Data pengguna belum dapat dimuat.' });
   }
+};
+
+exports.getStores = async (req, res) => {
+  const memberships = await listActiveMemberships(prisma, req.user.id);
+  return res.json({
+    success: true,
+    data: memberships.map(serializeStore),
+    activeStoreId: req.storeId,
+  });
+};
+
+exports.switchStore = async (req, res) => {
+  const storeId = Number(req.body?.storeId);
+  if (!Number.isInteger(storeId) || storeId <= 0) {
+    return res.status(400).json({ success: false, message: 'Usaha yang dipilih tidak valid.' });
+  }
+
+  const membership = await prisma.storeMembership.findUnique({
+    where: { userId_storeId: { userId: req.user.id, storeId } },
+    include: { store: true },
+  });
+  if (!membership?.isActive || !membership.store?.isActive) {
+    return res.status(403).json({
+      success: false,
+      code: 'STORE_ACCESS_DENIED',
+      message: 'Anda tidak memiliki akses ke usaha tersebut.',
+    });
+  }
+
+  await prisma.authSession.update({
+    where: { id: req.authSession.id },
+    data: { activeStoreId: storeId },
+  });
+  return res.json({ success: true, data: serializeStore(membership) });
 };

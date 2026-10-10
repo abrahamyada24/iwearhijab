@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/prisma');
+const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
 exports.getAllCategories = async (req, res) => {
   try {
@@ -86,7 +86,7 @@ exports.createCategory = async (req, res) => {
      * LOGIKA PENYIMPANAN LOKAL:
      * Menggunakan req.file.filename untuk menyimpan path relatif.
      */
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const imageUrl = getUploadedFileUrl(req.file);
 
     const category = await prisma.category.create({
       data: {
@@ -112,7 +112,7 @@ exports.updateCategory = async (req, res) => {
 
     // Update foto hanya jika ada file baru yang diunggah
     if (req.file) {
-      dataToUpdate.imageUrl = `/uploads/${req.file.filename}`;
+      dataToUpdate.imageUrl = getUploadedFileUrl(req.file);
     }
 
     const category = await prisma.category.update({

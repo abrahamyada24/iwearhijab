@@ -1,6 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/prisma');
 const { normalizeShiftReminderSettings } = require('../services/shiftReminderService');
-const prisma = new PrismaClient();
+const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
 /**
  * 1. GET SETTINGS
@@ -120,7 +120,7 @@ exports.updateSettings = async (req, res) => {
      * Menggunakan req.file.filename untuk mendapatkan nama file unik di folder uploads.
      */
     if (req.file) {
-      dataToUpdate.logoUrl = `/uploads/${req.file.filename}`;
+      dataToUpdate.logoUrl = getUploadedFileUrl(req.file);
     }
 
     // Upsert: Update jika ID ada, Create jika ID tidak ada (0)

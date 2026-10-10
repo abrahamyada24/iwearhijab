@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/prisma');
+const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
 const parseBoolean = (value, fallback) => {
     if (value === undefined || value === null || value === '') return fallback;
@@ -11,6 +11,13 @@ const parseItems = (value, fallback) => {
     const items = typeof value === 'string' ? JSON.parse(value) : value;
     if (!Array.isArray(items)) throw new Error('Daftar isi paket tidak valid.');
     return items;
+};
+
+const validateProducts = async (client, items) => {
+    const productIds = [...new Set(items.map(item => Number(item.productId)))];
+    if (productIds.some(id => !Number.isInteger(id))) throw new Error('Produk paket tidak valid.');
+    const products = await client.product.findMany({ where: { id: { in: productIds } }, select: { id: true } });
+    if (products.length !== productIds.length) throw new Error('Salah satu produk paket bukan milik usaha aktif.');
 };
 
 exports.getAllPackages = async (req, res) => {
@@ -49,7 +56,8 @@ exports.createPackage = async (req, res) => {
     try {
         const { name, description, price, isActive } = req.body;
         const items = parseItems(req.body.items, []);
-        const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+        await validateProducts(prisma, items);
+        const imageUrl = getUploadedFileUrl(req.file);
         
         const newPackage = await prisma.package.create({
             data: {
@@ -80,6 +88,9 @@ exports.updatePackage = async (req, res) => {
         const packageId = Number(req.params.id);
 
         const updatedPackage = await prisma.$transaction(async (tx) => {
+            const existingPackage = await tx.package.findUnique({ where: { id: packageId } });
+            if (!existingPackage) throw new Error('Package not found');
+            if (items !== undefined) await validateProducts(tx, items);
             // Delete old items
             if (items !== undefined) {
                 await tx.packageItem.deleteMany({ where: { packageId } });
@@ -93,7 +104,7 @@ exports.updatePackage = async (req, res) => {
                     description: description !== undefined ? description : undefined,
                     price: price !== undefined && price !== '' ? parseFloat(price) : undefined,
                     isActive: isActive !== undefined ? parseBoolean(isActive, true) : undefined,
-                    imageUrl: req.file ? `/uploads/${req.file.filename}` : undefined,
+                    imageUrl: req.file ? getUploadedFileUrl(req.file) : undefined,
                     ...(items !== undefined && {
                         items: {
                             create: items.map(item => ({
@@ -116,6 +127,8 @@ exports.updatePackage = async (req, res) => {
 exports.deletePackage = async (req, res) => {
     try {
         const packageId = Number(req.params.id);
+        const existingPackage = await prisma.package.findUnique({ where: { id: packageId } });
+        if (!existingPackage) return res.status(404).json({ success: false, message: 'Package not found' });
         
         await prisma.$transaction([
             prisma.packageItem.deleteMany({ where: { packageId } }),

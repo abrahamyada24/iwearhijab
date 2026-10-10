@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/prisma');
 
 // 1. GET ADDONS BY PRODUCT
 exports.getAddonsByProduct = async (req, res) => {
@@ -24,6 +23,10 @@ exports.createAddon = async (req, res) => {
 
         if (!productId || !name) {
             return res.status(400).json({ success: false, message: "Product ID dan nama addon wajib diisi" });
+        }
+        const product = await prisma.product.findUnique({ where: { id: parseInt(productId) } });
+        if (!product) {
+            return res.status(400).json({ success: false, message: 'Produk tidak tersedia pada usaha aktif.' });
         }
 
         const addon = await prisma.productAddon.create({

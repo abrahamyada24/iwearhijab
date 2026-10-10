@@ -6,7 +6,7 @@ const {
   SESSION_ABSOLUTE_TIMEOUT_MS,
 } = require('../config/auth');
 
-const createAuthSession = async ({ prisma, user, clientType, deviceName, ipAddress, userAgent }) => {
+const createAuthSession = async ({ prisma, user, activeStoreId, clientType, deviceName, ipAddress, userAgent }) => {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_ABSOLUTE_TIMEOUT_MS);
   const sessionId = crypto.randomUUID();
@@ -20,6 +20,7 @@ const createAuthSession = async ({ prisma, user, clientType, deviceName, ipAddre
       id: sessionId,
       jwtId,
       userId: user.id,
+      activeStoreId,
       clientType,
       deviceName: deviceName ? String(deviceName).trim().slice(0, 150) : null,
       ipHash,

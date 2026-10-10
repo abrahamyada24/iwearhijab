@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  binaryTargets = ["native"]
 }
 
 datasource db {
@@ -67,6 +67,65 @@ enum OrderType {
   PRE_ORDER
 }
 
+enum StoreType {
+  RETAIL
+  LAUNDRY
+}
+
+enum WorkStatus {
+  RECEIVED
+  PROCESSING
+  READY
+  PICKED_UP
+}
+
+model Store {
+  id           Int       @id @default(autoincrement())
+  slug         String    @unique @db.VarChar(80)
+  name         String    @db.VarChar(255)
+  type         StoreType @default(RETAIL)
+  isActive     Boolean   @default(true) @map("is_active")
+  isPublicDemo Boolean   @default(false) @map("is_public_demo")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  memberships       StoreMembership[]
+  activeSessions    AuthSession[]      @relation("ActiveStoreSessions")
+  licenses          StoreLicense[]
+  categories        Category[]
+  products          Product[]
+  customers         Customer[]
+  transactions      Transaction[]
+  stockMovements    StockMovement[]
+  settings          StoreSetting?
+  loyaltyConfig     LoyaltyConfig?
+  expenses          Expense[]
+  shifts            Shift[]
+  savedTransactions SavedTransaction[]
+  stockReceipts     StockReceipt[]
+  productAddons     ProductAddon[]
+  dineTables        DineTable[]
+  packages          Package[]
+  suppliers         Supplier[]
+
+  @@map("stores")
+}
+
+model StoreMembership {
+  userId    Int      @map("user_id")
+  storeId   Int      @map("store_id")
+  role      Role     @default(CASHIER)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, storeId])
+  @@index([storeId, isActive])
+  @@map("store_memberships")
+}
+
 model User {
   id                  Int       @id @default(autoincrement())
   name                String    @db.VarChar(255)
@@ -91,32 +150,37 @@ model User {
   transactions      Transaction[]
   savedTransactions SavedTransaction[]
   authSessions      AuthSession[]
+  storeMemberships  StoreMembership[]
 
   @@map("users")
 }
 
 model AuthSession {
-  id           String         @id @default(uuid())
-  jwtId        String         @unique @map("jwt_id") @db.VarChar(64)
-  userId       Int            @map("user_id")
-  clientType   AuthClientType @default(WEB) @map("client_type")
-  deviceName   String?        @map("device_name") @db.VarChar(150)
-  ipHash       String?        @map("ip_hash") @db.VarChar(64)
-  userAgent    String?        @map("user_agent") @db.VarChar(255)
-  createdAt    DateTime       @default(now()) @map("created_at")
-  lastSeenAt   DateTime       @default(now()) @map("last_seen_at")
-  expiresAt    DateTime       @map("expires_at")
-  revokedAt    DateTime?      @map("revoked_at")
-  revokeReason String?        @map("revoke_reason") @db.VarChar(100)
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String         @id @default(uuid())
+  jwtId         String         @unique @map("jwt_id") @db.VarChar(64)
+  userId        Int            @map("user_id")
+  activeStoreId Int?           @map("active_store_id")
+  clientType    AuthClientType @default(WEB) @map("client_type")
+  deviceName    String?        @map("device_name") @db.VarChar(150)
+  ipHash        String?        @map("ip_hash") @db.VarChar(64)
+  userAgent     String?        @map("user_agent") @db.VarChar(255)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  lastSeenAt    DateTime       @default(now()) @map("last_seen_at")
+  expiresAt     DateTime       @map("expires_at")
+  revokedAt     DateTime?      @map("revoked_at")
+  revokeReason  String?        @map("revoke_reason") @db.VarChar(100)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeStore   Store?         @relation("ActiveStoreSessions", fields: [activeStoreId], references: [id], onDelete: SetNull)
 
   @@index([userId, revokedAt])
+  @@index([activeStoreId])
   @@index([lastSeenAt])
   @@map("auth_sessions")
 }
 
 model StoreLicense {
-  id                    Int                 @id @default(1)
+  id                    Int                 @id @default(autoincrement())
+  storeId               Int                 @unique @map("store_id")
   licenseNumber         String              @unique @map("license_number") @db.VarChar(40)
   plan                  LicensePlan         @default(TRIAL)
   state                 LicenseState        @default(ACTIVE)
@@ -129,6 +193,7 @@ model StoreLicense {
   createdAt             DateTime            @default(now()) @map("created_at")
   updatedAt             DateTime            @updatedAt @map("updated_at")
   activationRedemptions LicenseActivation[]
+  store                 Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@map("store_licenses")
 }
@@ -152,6 +217,7 @@ model LicenseActivation {
 
 model Category {
   id          Int       @id @default(autoincrement())
+  storeId     Int       @map("store_id")
   androidId   Int?      @unique @map("android_id")
   name        String    @db.VarChar(100)
   imageUrl    String?   @map("image_url") @db.Text
@@ -159,12 +225,15 @@ model Category {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   products    Product[]
+  store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId])
   @@map("categories")
 }
 
 model Product {
   id                Int       @id @default(autoincrement())
+  storeId           Int       @map("store_id")
   androidId         Int?      @unique @map("android_id")
   categoryId        Int       @map("category_id")
   sku               String    @unique @db.VarChar(50)
@@ -188,22 +257,26 @@ model Product {
   discountEndTime   String?   @map("discount_end_time") @db.VarChar(5)
   discountDays      String?   @map("discount_days") @db.VarChar(30)
   discountLabel     String?   @map("discount_label") @db.VarChar(100)
+  unitLabel         String    @default("item") @map("unit_label") @db.VarChar(30)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   category          Category           @relation(fields: [categoryId], references: [id])
+  store             Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
   transactionItems  TransactionItem[]
   stockMovements    StockMovement[]
   stockReceiptItems StockReceiptItem[]
   addons            ProductAddon[]
   packageItems      PackageItem[]
 
+  @@index([storeId])
   @@map("products")
 }
 
 model Customer {
   id              Int           @id @default(autoincrement())
+  storeId         Int           @map("store_id")
   androidId       Int?          @unique @map("android_id")
   memberId        String        @unique @map("member_id") @db.VarChar(50)
   name            String        @db.VarChar(255)
@@ -217,12 +290,15 @@ model Customer {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   transactions    Transaction[]
+  store           Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId])
   @@map("customers")
 }
 
 model Transaction {
   id                Int               @id @default(autoincrement())
+  storeId           Int               @map("store_id")
   androidId         String?           @unique @map("android_id") @db.VarChar(100)
   shiftId           String?           @map("shift_id")
   userId            Int               @map("user_id")
@@ -236,6 +312,7 @@ model Transaction {
   cashAmount        Decimal?          @map("cash_amount") @db.Decimal(15, 2)
   changeAmount      Decimal?          @map("change_amount") @db.Decimal(15, 2)
   status            TransactionStatus @default(PENDING)
+  workStatus        WorkStatus?       @map("work_status")
   orderType         OrderType         @default(TAKE_AWAY) @map("order_type")
   tableNumber       String?           @map("table_number") @db.VarChar(20)
   note              String?           @db.Text
@@ -244,11 +321,13 @@ model Transaction {
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   user              User              @relation(fields: [userId], references: [id])
+  store             Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
   customer          Customer?         @relation(fields: [customerId], references: [id])
   shift             Shift?            @relation(fields: [shiftId], references: [id])
   items             TransactionItem[]
   payments          Payment[]
 
+  @@index([storeId, createdAt])
   @@index([shiftId, status])
   @@map("transactions")
 }
@@ -285,6 +364,7 @@ model Payment {
 
 model StockMovement {
   id          Int                 @id @default(autoincrement())
+  storeId     Int                 @map("store_id")
   productId   Int                 @map("product_id")
   type        StockMovementType
   qty         Int
@@ -292,53 +372,59 @@ model StockMovement {
   description String?             @db.Text
   createdAt   DateTime            @default(now()) @map("created_at")
   product     Product             @relation(fields: [productId], references: [id])
+  store       Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId, createdAt])
   @@map("stock_movements")
 }
 
 model StoreSetting {
-  id                 Int      @id @default(autoincrement())
-  storeName          String   @default("My POS Store") @map("store_name")
-  logoUrl            String?  @map("logo_url") @db.Text
-  address            String?  @db.Text
-  phone              String?  @db.VarChar(20)
-  email              String?  @db.VarChar(255)
-  website            String?  @db.VarChar(255)
-  enableCash         Boolean  @default(true) @map("enable_cash")
-  enableQris         Boolean  @default(false) @map("enable_qris")
-  enableDebit        Boolean  @default(false) @map("enable_debit")
-  taxRate            Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
-  serviceCharge      Decimal  @default(0) @map("service_charge") @db.Decimal(5, 2)
-  autoPrintReceipt   Boolean  @default(true) @map("auto_print_receipt")
-  receiptFooter      String?  @map("receipt_footer") @db.Text
-  enablePreOrder     Boolean  @default(false) @map("enable_pre_order")
-  enableShift        Boolean  @default(true) @map("enable_shift")
-  enableShiftReminder Boolean @default(true) @map("enable_shift_reminder")
-  shiftDurationMinutes Int    @default(480) @map("shift_duration_minutes")
-  shiftReminderMinutes Int    @default(15) @map("shift_reminder_minutes")
-  shiftDayCutoff     String   @default("23:50") @map("shift_day_cutoff") @db.VarChar(5)
-  enableDineTable    Boolean  @default(false) @map("enable_dine_table")
-  takeawayOptions    String?  @map("takeaway_options") @db.Text
-  allowNegativeStock Boolean  @default(false) @map("allow_negative_stock")
-  showImages         Boolean  @default(true) @map("show_images")
-  theme              String   @default("light") @db.VarChar(20)
-  dataResetVersion   Int      @default(0) @map("data_reset_version")
-  dataResetInProgress Boolean @default(false) @map("data_reset_in_progress")
-  dataResetAt        DateTime? @map("data_reset_at")
-  dataResetBy        String?  @map("data_reset_by") @db.VarChar(255)
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                   Int       @id @default(autoincrement())
+  storeId              Int       @unique @map("store_id")
+  storeName            String    @default("My POS Store") @map("store_name")
+  logoUrl              String?   @map("logo_url") @db.Text
+  address              String?   @db.Text
+  phone                String?   @db.VarChar(20)
+  email                String?   @db.VarChar(255)
+  website              String?   @db.VarChar(255)
+  enableCash           Boolean   @default(true) @map("enable_cash")
+  enableQris           Boolean   @default(false) @map("enable_qris")
+  enableDebit          Boolean   @default(false) @map("enable_debit")
+  taxRate              Decimal   @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  serviceCharge        Decimal   @default(0) @map("service_charge") @db.Decimal(5, 2)
+  autoPrintReceipt     Boolean   @default(true) @map("auto_print_receipt")
+  receiptFooter        String?   @map("receipt_footer") @db.Text
+  enablePreOrder       Boolean   @default(false) @map("enable_pre_order")
+  enableShift          Boolean   @default(true) @map("enable_shift")
+  enableShiftReminder  Boolean   @default(true) @map("enable_shift_reminder")
+  shiftDurationMinutes Int       @default(480) @map("shift_duration_minutes")
+  shiftReminderMinutes Int       @default(15) @map("shift_reminder_minutes")
+  shiftDayCutoff       String    @default("23:50") @map("shift_day_cutoff") @db.VarChar(5)
+  enableDineTable      Boolean   @default(false) @map("enable_dine_table")
+  takeawayOptions      String?   @map("takeaway_options") @db.Text
+  allowNegativeStock   Boolean   @default(false) @map("allow_negative_stock")
+  showImages           Boolean   @default(true) @map("show_images")
+  theme                String    @default("light") @db.VarChar(20)
+  dataResetVersion     Int       @default(0) @map("data_reset_version")
+  dataResetInProgress  Boolean   @default(false) @map("data_reset_in_progress")
+  dataResetAt          DateTime? @map("data_reset_at")
+  dataResetBy          String?   @map("data_reset_by") @db.VarChar(255)
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  store                Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@map("store_settings")
 }
 
 model LoyaltyConfig {
   id                  Int      @id @default(autoincrement())
+  storeId             Int      @unique @map("store_id")
   pointMultiplier     Decimal  @default(1) @map("point_multiplier") @db.Decimal(15, 2)
   multiplierAmount    Decimal  @default(10000) @map("multiplier_amount") @db.Decimal(15, 2)
   pointValue          Decimal  @default(100) @map("point_value") @db.Decimal(15, 2)
   minRedemptionPoints Int      @default(10) @map("min_redemption_points")
   isActive            Boolean  @default(true) @map("is_active")
   updatedAt           DateTime @updatedAt @map("updated_at")
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@map("loyalty_config")
 }
@@ -347,6 +433,7 @@ model LoyaltyConfig {
 
 model Expense {
   id          Int      @id @default(autoincrement())
+  storeId     Int      @map("store_id")
   shiftId     String?  @map("shift_id")
   description String   @db.Text
   amount      Decimal  @db.Decimal(15, 2)
@@ -354,45 +441,56 @@ model Expense {
   type        String   @default("EXPENSE") @db.VarChar(20)
   createdAt   DateTime @default(now()) @map("created_at")
   shift       Shift?   @relation(fields: [shiftId], references: [id])
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId, createdAt])
   @@index([shiftId, createdAt])
   @@map("expenses")
 }
 
 model Shift {
-  id           String        @id @default(uuid())
-  userId       Int           @map("user_id")
-  userName     String        @map("user_name") @db.VarChar(255)
-  openedAt     DateTime      @map("opened_at")
-  expectedCloseAt DateTime?  @map("expected_close_at")
-  closedAt     DateTime?     @map("closed_at")
-  openingCash  Decimal       @default(0) @map("opening_cash") @db.Decimal(15, 2)
-  closingCash  Decimal?      @map("closing_cash") @db.Decimal(15, 2)
-  status       ShiftStatus   @default(OPEN)
-  transactions Transaction[]
-  expenses     Expense[]
+  id              String        @id @default(uuid())
+  storeId         Int           @map("store_id")
+  userId          Int           @map("user_id")
+  userName        String        @map("user_name") @db.VarChar(255)
+  openedAt        DateTime      @map("opened_at")
+  expectedCloseAt DateTime?     @map("expected_close_at")
+  closedAt        DateTime?     @map("closed_at")
+  openingCash     Decimal       @default(0) @map("opening_cash") @db.Decimal(15, 2)
+  closingCash     Decimal?      @map("closing_cash") @db.Decimal(15, 2)
+  status          ShiftStatus   @default(OPEN)
+  transactions    Transaction[]
+  expenses        Expense[]
+  store           Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId, status])
   @@map("shifts")
 }
 
 model SavedTransaction {
   id        String   @id @default(uuid())
+  storeId   Int      @map("store_id")
   name      String   @db.VarChar(255)
   cartData  String   @map("cart_data") @db.LongText
   userId    Int      @map("user_id")
   createdAt DateTime @default(now()) @map("created_at")
   user      User     @relation(fields: [userId], references: [id])
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId, createdAt])
   @@map("saved_transactions")
 }
 
 model StockReceipt {
   id         String             @id @default(uuid())
+  storeId    Int                @map("store_id")
   receivedAt DateTime           @map("received_at")
   notes      String?            @db.Text
   createdBy  String?            @map("created_by") @db.VarChar(255)
   items      StockReceiptItem[]
+  store      Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId, receivedAt])
   @@map("stock_receipts")
 }
 
@@ -412,17 +510,21 @@ model StockReceiptItem {
 
 model ProductAddon {
   id        Int     @id @default(autoincrement())
+  storeId   Int     @map("store_id")
   androidId Int?    @unique @map("android_id")
   productId Int     @map("product_id")
   name      String  @db.VarChar(255)
   price     Decimal @default(0) @db.Decimal(15, 2)
   product   Product @relation(fields: [productId], references: [id])
+  store     Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId, productId])
   @@map("product_addons")
 }
 
 model DineTable {
   id              Int       @id @default(autoincrement())
+  storeId         Int       @map("store_id")
   androidId       Int?      @unique @map("android_id")
   number          String    @unique @db.VarChar(20)
   name            String?   @db.VarChar(100)
@@ -432,12 +534,15 @@ model DineTable {
   statusUpdatedAt DateTime  @default(now()) @map("status_updated_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId])
   @@map("dine_tables")
 }
 
 model Package {
   id          Int           @id @default(autoincrement())
+  storeId     Int           @map("store_id")
   androidId   Int?          @unique @map("android_id")
   name        String        @db.VarChar(255)
   description String?       @db.Text
@@ -447,7 +552,9 @@ model Package {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   items       PackageItem[]
+  store       Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId])
   @@map("packages")
 }
 
@@ -465,6 +572,7 @@ model PackageItem {
 
 model Supplier {
   id        Int      @id @default(autoincrement())
+  storeId   Int      @map("store_id")
   androidId Int?     @unique @map("android_id")
   name      String   @db.VarChar(255)
   phone     String?  @db.VarChar(20)
@@ -472,6 +580,8 @@ model Supplier {
   notes     String?  @db.Text
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId])
   @@map("suppliers")
 }

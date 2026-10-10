@@ -8,9 +8,11 @@ import {
   Percent, CalendarClock
 } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
+import { useStore } from '@/store/useStore';
 
 export default function ProductModal({ isOpen, onClose, onSave, initialData, categories }) {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const activeStore = useStore((state) => state.activeStore);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -22,6 +24,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
     stock: '',
     minStock: '',
     isUnlimitedStock: false,
+    unitLabel: 'item',
     status: 'active',
     displayType: 'normal',
     imageFile: null,
@@ -78,6 +81,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
           stock: initialData.stock || '',
           minStock: initialData.minStock || '',
           isUnlimitedStock: initialData.isUnlimitedStock || false,
+          unitLabel: initialData.unitLabel || 'item',
           status: initialData.isActive ? 'active' : 'inactive',
           displayType: initialData.displayType || 'normal',
           imageFile: null,
@@ -107,6 +111,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
           stock: '',
           minStock: '',
           isUnlimitedStock: false,
+          unitLabel: activeStore?.type === 'LAUNDRY' ? 'kg' : 'pcs',
           status: 'active',
           displayType: 'normal',
           imageFile: null,
@@ -127,7 +132,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
         setAddons([]);
       }
     }
-  }, [isOpen, initialData, categories]);
+  }, [isOpen, initialData, categories, activeStore?.type]);
 
   const handleAddAddon = async () => {
       if(!newAddon.name || !newAddon.price || !initialData) return;
@@ -365,6 +370,19 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Satuan Penjualan</label>
+                  <select
+                    value={formData.unitLabel}
+                    onChange={(event) => setFormData({ ...formData, unitLabel: event.target.value })}
+                    className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-700 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="item">Item</option>
+                    <option value="pcs">Pcs</option>
+                    <option value="kg">Kilogram (kg)</option>
+                  </select>
                 </div>
 
                 <section className="p-5 border border-red-100 bg-red-50/40 rounded-xl space-y-4">

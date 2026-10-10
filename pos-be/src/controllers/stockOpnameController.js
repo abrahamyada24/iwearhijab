@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/prisma');
 
 // 1. GET STOCK FOR OPNAME — Returns all products with system stock
 exports.getStockForOpname = async (req, res) => {

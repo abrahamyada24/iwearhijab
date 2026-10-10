@@ -11,6 +11,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function TransactionsPage() {
     const user = useStore((state) => state.user);
+    const activeStore = useStore((state) => state.activeStore);
     const [transactions, setTransactions] = useState([]);
     const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
     const [isLoading, setIsLoading] = useState(true);
@@ -46,7 +47,7 @@ export default function TransactionsPage() {
                 params.append('preOrder', 'true');
             }
 
-            const res = await fetch(`${API_URL}/api/transactions?${params.toString()}`, { headers });
+            const res = await fetch(`${API_URL}/api/transactions?${params.toString()}`, { headers, credentials: 'include' });
             const json = await res.json();
 
             if (json.success) {
@@ -77,7 +78,8 @@ export default function TransactionsPage() {
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(`${API_URL}/api/transactions/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` },
+                credentials: 'include'
             });
             const json = await res.json();
             if (json.success) {
@@ -87,6 +89,24 @@ export default function TransactionsPage() {
         } catch (error) {
             console.error(error);
             showAlert.error('Gagal memuat transaksi', 'Detail transaksi belum dapat ditampilkan.');
+        }
+    };
+
+    const handleWorkStatusChange = async (transactionId, workStatus) => {
+        try {
+            const response = await fetch(`${API_URL}/api/transactions/${transactionId}/work-status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ workStatus }),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.message || 'Gagal memperbarui status.');
+            setTransactions((current) => current.map((item) =>
+                item.id === transactionId ? { ...item, workStatus } : item
+            ));
+        } catch (error) {
+            showAlert.error('Status belum diperbarui', error.message);
         }
     };
 
@@ -224,13 +244,14 @@ export default function TransactionsPage() {
                                 <th className="px-6 py-4 font-semibold">Metode</th>
                                 <th className="px-6 py-4 font-semibold">Pre-Order</th>
                                 <th className="px-6 py-4 font-semibold">Status</th>
+                                {activeStore?.type === 'LAUNDRY' && <th className="px-6 py-4 font-semibold">Pengerjaan</th>}
                                 <th className="px-6 py-4 font-semibold text-center">Aksi</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 bg-white">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan="9" className="px-6 py-12 text-center text-gray-400">
+                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 11 : 10} className="px-6 py-12 text-center text-gray-400">
                                         <div className="flex justify-center items-center gap-2">
                                             <Loader2 className="animate-spin" size={20} /> Memuat data...
                                         </div>
@@ -238,7 +259,7 @@ export default function TransactionsPage() {
                                 </tr>
                             ) : transactions.length === 0 ? (
                                 <tr>
-                                    <td colSpan="9" className="px-6 py-12 text-center text-gray-400">Tidak ada transaksi ditemukan.</td>
+                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 11 : 10} className="px-6 py-12 text-center text-gray-400">Tidak ada transaksi ditemukan.</td>
                                 </tr>
                             ) : (
                                 transactions.map((trx, index) => (
@@ -285,6 +306,21 @@ export default function TransactionsPage() {
                                                 {trx.status}
                                             </span>
                                         </td>
+                                        {activeStore?.type === 'LAUNDRY' && (
+                                            <td className="px-6 py-4">
+                                                <select
+                                                    value={trx.workStatus || 'RECEIVED'}
+                                                    onChange={(event) => handleWorkStatusChange(trx.id, event.target.value)}
+                                                    className="px-2 py-1.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-[10px] font-bold"
+                                                    aria-label={`Status pengerjaan ${trx.invoiceNumber}`}
+                                                >
+                                                    <option value="RECEIVED">Diterima</option>
+                                                    <option value="PROCESSING">Diproses</option>
+                                                    <option value="READY">Siap Diambil</option>
+                                                    <option value="PICKED_UP">Sudah Diambil</option>
+                                                </select>
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4 text-center">
                                             <button
                                                 onClick={() => handleOpenDetail(trx.id)}

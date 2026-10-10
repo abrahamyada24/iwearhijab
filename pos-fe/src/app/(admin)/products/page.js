@@ -126,6 +126,7 @@ export default function ProductsPage() {
         data.append('categoryId', formData.categoryId);
         data.append('isActive', formData.status === 'active');
         data.append('isUnlimitedStock', formData.isUnlimitedStock === true);
+        data.append('unitLabel', formData.unitLabel || 'item');
         data.append('displayType', formData.displayType);
         data.append('discountActive', formData.discountActive === true);
         data.append('discountType', formData.discountType || 'PERCENT');

@@ -1,6 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/prisma');
 const { enterDataSync } = require('../services/dataResetCoordinator');
-const prisma = new PrismaClient();
 
 const normalizeAndroidPayment = (transaction) => {
   const grandTotal = Math.max(0, Number(transaction.grandTotal) || 0);
@@ -68,12 +67,17 @@ exports.getMasterData = async (req, res) => {
       prisma.category.findMany(),
       prisma.product.findMany(),
       prisma.productAddon.findMany(),
-      prisma.user.findMany({ select: { id: true, name: true, email: true, username: true, role: true } }),
+      prisma.storeMembership.findMany({
+        where: { storeId: req.storeId, isActive: true },
+        include: { user: { select: { id: true, name: true, email: true, username: true } } }
+      }),
       prisma.customer.findMany(),
       prisma.supplier.findMany(),
       prisma.package.findMany(),
-      prisma.packageItem.findMany()
+      prisma.packageItem.findMany({ where: { package: { storeId: req.storeId } } })
     ]);
+
+    const storeUsers = users.map(({ user, role }) => ({ ...user, role }));
 
     // Format settings to Key-Value array as expected by Android SQLite
     const formattedSettings = settings ? [
@@ -110,7 +114,7 @@ exports.getMasterData = async (req, res) => {
       );
     }
 
-    console.log(`[SYNC] getMasterData → settings: ${formattedSettings.length}, categories: ${categories.length}, products: ${products.length}, users: ${users.length}, customers: ${customers.length}, suppliers: ${suppliers.length}, packages: ${packages.length}, addons: ${addons.length}`);
+    console.log(`[SYNC] getMasterData → store=${req.storeId}, settings: ${formattedSettings.length}, categories: ${categories.length}, products: ${products.length}, users: ${storeUsers.length}, customers: ${customers.length}, suppliers: ${suppliers.length}, packages: ${packages.length}, addons: ${addons.length}`);
 
     res.json({
       success: true,
@@ -119,7 +123,8 @@ exports.getMasterData = async (req, res) => {
         categories,
         products,
         addons,
-        users,
+        users: storeUsers,
+        activeStore: { id: req.store.id, slug: req.store.slug, name: req.store.name, type: req.store.type },
         customers,
         suppliers,
         packages,

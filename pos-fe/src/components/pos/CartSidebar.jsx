@@ -182,7 +182,9 @@ export default function CartSidebar({
                                 {/* Qty Control */}
                                 <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-2 py-1 border border-gray-100">
                                     <button onClick={() => updateQty(item.id, -1)} className="text-gray-500 hover:text-blue-600 transition-colors"><Minus size={14} /></button>
-                                    <span className="text-sm font-bold w-4 text-center text-gray-800">{item.qty}</span>
+                                    <span className="text-sm font-bold min-w-8 text-center text-gray-800">
+                                        {item.qty}{item.unitLabel && item.unitLabel !== 'item' ? ` ${item.unitLabel}` : ''}
+                                    </span>
                                     <button onClick={() => updateQty(item.id, 1)} className="text-gray-500 hover:text-blue-600 transition-colors"><Plus size={14} /></button>
                                 </div>
                             </div>

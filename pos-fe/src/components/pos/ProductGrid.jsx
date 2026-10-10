@@ -72,6 +72,9 @@ const ProductCard = ({ product, cart, addToCart, updateQty, getImageUrl }) => {
                         )}
                         <p className={`${product.isDiscountActive ? 'text-red-600' : 'text-blue-600'} font-bold text-sm lg:text-base`}>
                             Rp {Number(product.price).toLocaleString('id-ID')}
+                            {product.unitLabel && product.unitLabel !== 'item' && (
+                                <span className="text-[9px] font-semibold text-gray-400"> / {product.unitLabel}</span>
+                            )}
                         </p>
                     </div>
                     {selectedQty > 0 ? (
@@ -107,7 +110,9 @@ const ProductCard = ({ product, cart, addToCart, updateQty, getImageUrl }) => {
                         </div>
                     ) : (
                         <span className={`text-[10px] font-medium ${product.stock < 5 && !product.isUnlimitedStock ? 'text-red-500' : 'text-gray-400'}`}>
-                            Stok: {product.isUnlimitedStock ? '∞' : product.stock}
+                            {product.isUnlimitedStock
+                                ? `Layanan${product.unitLabel && product.unitLabel !== 'item' ? ` / ${product.unitLabel}` : ''}`
+                                : `Stok: ${product.stock}`}
                         </span>
                     )}
                 </div>

@@ -6,8 +6,8 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const fs = require('fs');
-const { PrismaClient } = require('@prisma/client');
-const { uploadDir } = require('./config/storage');
+const { prisma } = require('./config/prisma');
+const { isCloudinaryConfigured, uploadDir } = require('./config/storage');
 
 const isProduction = process.env.NODE_ENV === 'production';
 if (!isProduction && !process.env.JWT_SECRET) {
@@ -28,9 +28,11 @@ const swaggerSpecs = require('./config/swagger');
 const authRoutes = require('./routes/authRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
 const { requireActiveLicense } = require('./middlewares/licenseMiddleware');
+const { verifyToken } = require('./middlewares/authMiddleware');
 const productRoutes = require('./routes/productRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
+const transactionController = require('./controllers/transactionController');
 const reportRoutes = require('./routes/reportRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -49,7 +51,6 @@ const syncRoutes = require('./routes/syncRoutes');
 const catalogRoutes = require('./routes/catalogRoutes'); // Rute Katalog Publik
 
 const app = express();
-const prisma = new PrismaClient();
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = process.env.PORT || 5000;
 
@@ -88,7 +89,7 @@ if (isProduction && allowedOrigins.length === 0) {
   throw new Error('CORS_ORIGINS wajib diisi pada environment production.');
 }
 
-fs.mkdirSync(uploadDir, { recursive: true });
+if (!isCloudinaryConfigured) fs.mkdirSync(uploadDir, { recursive: true });
 
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -108,7 +109,20 @@ if (!isProduction || process.env.ENABLE_API_DOCS === 'true') {
 // Existing API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/license', licenseRoutes);
-app.use('/api', requireActiveLicense);
+app.use('/api/catalog', catalogRoutes);
+app.post('/api/transactions/notification', transactionController.handleMidtransNotification);
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ database: "CONNECTED", server: "ONLINE" });
+  } catch (error) {
+    console.error('[HEALTH] Database tidak terhubung:', error.message);
+    res.status(500).json({ database: "DISCONNECTED", server: "ONLINE" });
+  }
+});
+
+app.use('/api', verifyToken, requireActiveLicense);
 app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/transactions', transactionRoutes);
@@ -127,20 +141,9 @@ app.use('/api/addons', addonRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/sync', syncRoutes);
-app.use('/api/catalog', catalogRoutes); // Akses publik tanpa token
 
 app.get('/', (req, res) => {
   res.json({ message: "LitePOS Backend Service is Running!", timestamp: new Date() });
-});
-
-app.get('/api/health', async (req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ database: "CONNECTED", server: "ONLINE" });
-  } catch (error) {
-    console.error('[HEALTH] Database tidak terhubung:', error.message);
-    res.status(500).json({ database: "DISCONNECTED", server: "ONLINE" });
-  }
 });
 
 const server = app.listen(PORT, HOST, () => {

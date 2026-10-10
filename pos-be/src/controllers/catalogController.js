@@ -1,11 +1,25 @@
-const { PrismaClient } = require('@prisma/client');
+const { basePrisma, prisma, runWithStore } = require('../config/prisma');
 const { serializeProductPrice } = require('../utils/productDiscount');
 
-const prisma = new PrismaClient();
 
 exports.getPublicCatalog = async (req, res) => {
     try {
-        const products = await prisma.product.findMany({
+        const requestedSlug = String(req.query.store || req.query.storeSlug || '').trim().toLowerCase();
+        const store = await basePrisma.store.findFirst({
+            where: requestedSlug
+                ? { slug: requestedSlug, isActive: true, isPublicDemo: true }
+                : { isActive: true, isPublicDemo: true },
+            orderBy: { id: 'asc' }
+        });
+        if (!store) {
+            return res.status(404).json({
+                success: false,
+                message: requestedSlug ? 'Katalog usaha tidak ditemukan.' : 'Belum ada katalog demo publik.'
+            });
+        }
+
+        const data = await runWithStore(store.id, async () => {
+          const products = await prisma.product.findMany({
             where: {
                 isActive: true,
                 OR: [
@@ -33,9 +47,7 @@ exports.getPublicCatalog = async (req, res) => {
             item.product.isActive && (item.product.isUnlimitedStock || item.product.stock >= item.qty)
         ));
 
-        res.status(200).json({
-            success: true,
-            data: {
+          return {
                 products: products.map(product => serializeProductPrice(product)),
                 packages: availablePackages.map(pkg => ({
                     ...pkg,
@@ -47,9 +59,11 @@ exports.getPublicCatalog = async (req, res) => {
                     isUnlimitedStock: true
                 })),
                 categories,
-                settings
-            }
+                settings,
+                store: { id: store.id, slug: store.slug, name: store.name, type: store.type }
+            };
         });
+        res.status(200).json({ success: true, data });
     } catch (error) {
         console.error('Error in getPublicCatalog:', error);
         res.status(500).json({

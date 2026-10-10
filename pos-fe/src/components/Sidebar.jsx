@@ -5,6 +5,7 @@ import {
   LayoutDashboard, ShoppingCart, Users, Settings,
   ChevronDown, Box, ClipboardList, UserCircle, LogOut,
   Wallet, Clock, Truck, BadgeCheck
+  , Building2, Loader2
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -61,10 +62,15 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
   const user = useStore((state) => state.user);
   const logout = useStore((state) => state.logout);
   const settings = useStore((state) => state.settings);
+  const stores = useStore((state) => state.stores);
+  const activeStore = useStore((state) => state.activeStore);
+  const switchStore = useStore((state) => state.switchStore);
+  const cart = useStore((state) => state.cart);
 
   const [mounted, setMounted] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState({ inventory: true });
   const [pendingSalesCount, setPendingSalesCount] = useState(0);
+  const [isSwitchingStore, setIsSwitchingStore] = useState(false);
 
   // Pastikan komponen sudah terpasang (mounted) untuk menghindari error hydration
   useEffect(() => {
@@ -106,6 +112,26 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
     }
   };
 
+  const handleStoreChange = async (event) => {
+    const storeId = Number(event.target.value);
+    if (!storeId || storeId === activeStore?.id || isSwitchingStore) return;
+    if (cart.length > 0) {
+      const confirmed = await showAlert.confirm(
+        'Ganti usaha?',
+        'Keranjang saat ini akan dikosongkan agar data antar-usaha tidak tercampur.',
+        'Ya, Ganti Usaha'
+      );
+      if (!confirmed) return;
+    }
+    setIsSwitchingStore(true);
+    const result = await switchStore(storeId);
+    if (!result.success) {
+      setIsSwitchingStore(false);
+      return showAlert.error('Gagal mengganti usaha', result.message);
+    }
+    window.location.reload();
+  };
+
   const getImageUrl = (path) => {
     if (!path) return null;
     return path.startsWith('http') ? path : `${API_URL}${path}`;
@@ -131,6 +157,25 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
               <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">Retail Suite</p>
             </div>
           </Link>
+
+          {mounted && stores.length > 1 && (
+            <div className="px-4 pt-3">
+              <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-100 bg-blue-50 text-blue-700">
+                {isSwitchingStore ? <Loader2 size={16} className="animate-spin" /> : <Building2 size={16} />}
+                <select
+                  value={activeStore?.id || ''}
+                  onChange={handleStoreChange}
+                  disabled={isSwitchingStore}
+                  className="min-w-0 flex-1 bg-transparent text-xs font-bold outline-none disabled:opacity-60"
+                  aria-label="Usaha aktif"
+                >
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>{store.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
 
           {/* POS Quick Action Button */}
           <div className="px-4 pt-4 pb-2">

@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/prisma');
 
 // 1. GET ALL EXPENSES (with date filtering)
 exports.getAllExpenses = async (req, res) => {

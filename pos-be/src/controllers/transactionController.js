@@ -1,9 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
+const { basePrisma, prisma, runWithStore } = require('../config/prisma');
 const midtransClient = require('midtrans-client');
 const { getProductPrice } = require('../utils/productDiscount');
 const { normalizePaymentType, resolvePaymentMethod } = require('../services/paymentMethodService');
 const { resolveSelectedAddons, buildAddonItemNotes, calculateAddonAwareLinePricing } = require('../services/productAddonService');
-const prisma = new PrismaClient();
 
 // Inisialisasi Midtrans Snap
 const snap = new midtransClient.Snap({
@@ -62,6 +61,10 @@ exports.createTransaction = async (req, res) => {
         }
 
         const result = await prisma.$transaction(async (tx) => {
+            if (customerId) {
+                const customer = await tx.customer.findUnique({ where: { id: parseInt(customerId) } });
+                if (!customer) throw new Error('Pelanggan tidak tersedia pada usaha aktif.');
+            }
             const setting = await tx.storeSetting.findFirst();
             const { paymentType, isGatewayPayment, isInstantPayment } = resolvePaymentMethod(
                 requestedPaymentType,
@@ -251,6 +254,7 @@ exports.createTransaction = async (req, res) => {
                     cashAmount: payment.cashAmount != null ? parseFloat(payment.cashAmount) : null,
                     changeAmount: payment.changeAmount != null ? parseFloat(payment.changeAmount) : null,
                     status: initialStatus,
+                    workStatus: req.store?.type === 'LAUNDRY' ? 'RECEIVED' : null,
                     orderType: orderType === 'PRE_ORDER' || preOrderDate ? 'PRE_ORDER' : 'TAKE_AWAY',
                     tableNumber: null,
                     note: note || null,
@@ -416,6 +420,28 @@ exports.getTransactionById = async (req, res) => {
     }
 };
 
+exports.updateWorkStatus = async (req, res) => {
+    try {
+        if (req.store?.type !== 'LAUNDRY') {
+            return res.status(400).json({ success: false, message: 'Status pengerjaan hanya tersedia untuk usaha laundry.' });
+        }
+        const workStatus = String(req.body?.workStatus || '').toUpperCase();
+        const allowed = ['RECEIVED', 'PROCESSING', 'READY', 'PICKED_UP'];
+        if (!allowed.includes(workStatus)) {
+            return res.status(400).json({ success: false, message: 'Status pengerjaan tidak valid.' });
+        }
+        const existing = await prisma.transaction.findUnique({ where: { id: Number(req.params.id) } });
+        if (!existing) return res.status(404).json({ success: false, message: 'Transaksi tidak ditemukan.' });
+        const transaction = await prisma.transaction.update({
+            where: { id: existing.id },
+            data: { workStatus }
+        });
+        return res.json({ success: true, message: 'Status pengerjaan diperbarui.', data: transaction });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 /**
  * 4. WEBHOOK HANDLER - PENTING: Ini yang sinkronkan status payment
  */
@@ -432,11 +458,19 @@ exports.handleMidtransNotification = async (req, res) => {
 
         console.log(`[WEBHOOK] Order: ${orderId} | Status: ${transactionStatus} | Fraud: ${fraudStatus}`);
 
-        // Cari transaksi
-        const transaction = await prisma.transaction.findUnique({
+        // Invoice bersifat unik global; lookup awal hanya dipakai untuk menemukan konteks store.
+        const locator = await basePrisma.transaction.findUnique({
+            where: { invoiceNumber: orderId },
+            select: { storeId: true }
+        });
+        if (!locator) {
+            console.error('[ERROR] Transaction not found:', orderId);
+            return res.status(404).json({ success: false, message: 'Transaction not found' });
+        }
+        const transaction = await runWithStore(locator.storeId, () => prisma.transaction.findUnique({
             where: { invoiceNumber: orderId },
             include: { items: true, payments: true }
-        });
+        }));
 
         if (!transaction) {
             console.error('[ERROR] Transaction not found:', orderId);
@@ -472,7 +506,7 @@ exports.handleMidtransNotification = async (req, res) => {
         }
 
         // Update database dalam satu transaksi
-        await prisma.$transaction(async (tx) => {
+        await runWithStore(locator.storeId, () => prisma.$transaction(async (tx) => {
             // Update transaction status
             await tx.transaction.update({
                 where: { invoiceNumber: orderId },
@@ -555,7 +589,7 @@ exports.handleMidtransNotification = async (req, res) => {
                     }
                 }
             }
-        });
+        }));
 
         console.log(`[OK] [WEBHOOK] Invoice ${orderId} updated: ${newStatus}`);
         res.status(200).json({ status: 'OK' });

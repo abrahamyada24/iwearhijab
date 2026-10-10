@@ -57,7 +57,7 @@ const createTransactionMock = ({ pendingPayments = 0 } = {}) => {
 
 test('reset operasional menghapus semua model dan menaikkan versi reset', async () => {
   const { prisma, deletedModels } = createTransactionMock();
-  const result = await resetOperationalData({ prisma, resetBy: 'owner@example.com' });
+  const result = await resetOperationalData({ prisma, resetBy: 'owner@example.com', storeId: 1 });
 
   assert.equal(result.resetState.version, 4);
   assert.equal(result.resetState.resetBy, 'owner@example.com');
@@ -71,7 +71,7 @@ test('reset dibatalkan sebelum penghapusan bila pembayaran masih pending', async
   const { prisma, deletedModels } = createTransactionMock({ pendingPayments: 1 });
 
   await assert.rejects(
-    resetOperationalData({ prisma, resetBy: 'owner@example.com' }),
+    resetOperationalData({ prisma, resetBy: 'owner@example.com', storeId: 1 }),
     (error) => error.code === 'PENDING_PAYMENT_EXISTS' && error.status === 409
   );
   assert.deepEqual(deletedModels, []);

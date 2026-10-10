@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/prisma');
 const { Parser } = require('json2csv');
 const { calculateShiftSummary } = require('../services/shiftSummaryService');
-const prisma = new PrismaClient();
 
 /**
  * GET DASHBOARD STATS — Enhanced with expenses, shifts, category breakdown, bestsellers

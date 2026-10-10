@@ -11,6 +11,8 @@ export const useStore = create(
       token: null,
       isAuthenticated: false,
       license: null,
+      stores: [],
+      activeStore: null,
 
       getHeaders: () => {
         const token = get().token;
@@ -41,6 +43,8 @@ export const useStore = create(
             localStorage.setItem('litepos_last_activity', String(Date.now()));
             set({
               user: data.user,
+              stores: data.user?.stores || [],
+              activeStore: (data.user?.stores || []).find((store) => store.id === data.user?.activeStoreId) || null,
               token: null,
               isAuthenticated: true,
               settings: null
@@ -65,7 +69,7 @@ export const useStore = create(
             });
           } catch (_) { /* sesi lokal tetap dibersihkan */ }
         }
-        set({ user: null, token: null, isAuthenticated: false, license: null, cart: [], settings: null, discount: 0, discountType: 'amount', activeShift: null });
+        set({ user: null, token: null, isAuthenticated: false, license: null, stores: [], activeStore: null, cart: [], settings: null, discount: 0, discountType: 'amount', activeShift: null });
         localStorage.removeItem('pos-storage');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -84,10 +88,52 @@ export const useStore = create(
             await get().logout({ remote: false });
             return { success: false, code: data.code };
           }
-          set({ user: data.user, token: null, isAuthenticated: true });
+          const stores = data.user?.stores || [];
+          set({
+            user: data.user,
+            stores,
+            activeStore: stores.find((store) => store.id === data.user?.activeStoreId) || null,
+            token: null,
+            isAuthenticated: true,
+          });
           return { success: true, user: data.user };
         } catch (error) {
           return { success: false, code: 'NETWORK_ERROR' };
+        }
+      },
+
+      switchStore: async (storeId) => {
+        try {
+          const baseUrl = API_URL.endsWith('/api') ? API_URL.replace(/\/api$/, '') : API_URL;
+          const response = await fetch(`${baseUrl}/api/auth/active-store`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ storeId: Number(storeId) }),
+          });
+          const data = await response.json();
+          if (!response.ok || !data.success) {
+            return { success: false, message: data.message || 'Gagal mengganti usaha.' };
+          }
+          const activeStore = data.data;
+          const stores = get().stores.map((store) => store.id === activeStore.id ? activeStore : store);
+          set((state) => ({
+            activeStore,
+            stores,
+            user: { ...state.user, activeStoreId: activeStore.id, role: activeStore.role, stores },
+            products: [],
+            categories: [],
+            customers: [],
+            settings: null,
+            cart: [],
+            discount: 0,
+            discountType: 'amount',
+            activeShift: null,
+            license: null,
+          }));
+          return { success: true, data: activeStore };
+        } catch (error) {
+          return { success: false, message: 'Tidak dapat terhubung ke server.' };
         }
       },
 
@@ -156,10 +202,10 @@ export const useStore = create(
         try {
           const baseUrl = API_URL.endsWith('/api') ? API_URL.replace(/\/api$/, '') : API_URL;
           const [prodRes, catRes, custRes, setRes] = await Promise.all([
-            fetch(`${baseUrl}/api/products`, { headers }),
-            fetch(`${baseUrl}/api/products/categories`, { headers }),
-            fetch(`${baseUrl}/api/customers`, { headers }),
-            fetch(`${baseUrl}/api/settings`, { headers, cache: 'no-store' })
+            fetch(`${baseUrl}/api/products`, { headers, credentials: 'include' }),
+            fetch(`${baseUrl}/api/products/categories`, { headers, credentials: 'include' }),
+            fetch(`${baseUrl}/api/customers`, { headers, credentials: 'include' }),
+            fetch(`${baseUrl}/api/settings`, { headers, credentials: 'include', cache: 'no-store' })
           ]);
 
           const prodData = await prodRes.json();
@@ -329,7 +375,9 @@ export const useStore = create(
         discount: state.discount,
         discountType: state.discountType,
         activeShift: state.activeShift,
-        license: state.license
+        license: state.license,
+        stores: state.stores,
+        activeStore: state.activeStore,
       }),
       version: 2,
       migrate: (persistedState) => ({
