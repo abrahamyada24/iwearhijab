@@ -49,6 +49,7 @@ releases/
 *.pem
 *.key
 *.p12
+key.txt
 *.sql
 !pos-be/prisma/migrations/**/*.sql
 pos-android/generator.html

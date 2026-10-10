@@ -8,7 +8,10 @@ const backendOrigin = (() => {
     return '';
   }
 })();
-const staticExport = process.env.STATIC_EXPORT === 'true';
+// Cloudflare Pages injects CF_PAGES=1 automatically during Git builds.
+// Keep STATIC_EXPORT for explicit local/CI builds while making Pages builds
+// independent from dashboard build-variable propagation.
+const staticExport = process.env.STATIC_EXPORT === 'true' || process.env.CF_PAGES === '1';
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
