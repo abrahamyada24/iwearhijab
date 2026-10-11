@@ -58,6 +58,40 @@ export const useStore = create(
         }
       },
 
+      registerBusiness: async (registrationData) => {
+        try {
+          const baseUrl = API_URL.endsWith('/api') ? API_URL.replace(/\/api$/, '') : API_URL;
+          const res = await fetch(`${baseUrl}/api/auth/register-business`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(registrationData),
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.success) {
+            return { success: false, message: data.message || 'Pendaftaran usaha gagal.', code: data.code };
+          }
+
+          const stores = data.user?.stores || [];
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.setItem('litepos_last_activity', String(Date.now()));
+          set({
+            user: data.user,
+            stores,
+            activeStore: stores.find((store) => store.id === data.user?.activeStoreId) || data.store || null,
+            token: null,
+            isAuthenticated: true,
+            settings: null,
+            license: null,
+          });
+          return { success: true, user: data.user, store: data.store };
+        } catch (_) {
+          return { success: false, message: 'Gagal terhubung ke server.' };
+        }
+      },
+
       logout: async ({ remote = true } = {}) => {
         if (remote) {
           try {

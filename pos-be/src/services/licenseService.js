@@ -8,6 +8,14 @@ const licenseCache = new Map();
 
 const addDays = (date, days) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 const generateLicenseNumber = () => `LP-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+const createTrialLicenseData = (now = new Date()) => ({
+  licenseNumber: generateLicenseNumber(),
+  plan: 'TRIAL',
+  state: 'ACTIVE',
+  startsAt: now,
+  expiresAt: addDays(now, TRIAL_DURATION_DAYS),
+  activationSource: 'AUTO_TRIAL',
+});
 
 const normalizeActivationCode = (code) => String(code || '')
   .trim()
@@ -39,14 +47,7 @@ const ensureStoreLicense = async (prisma) => {
   const now = new Date();
   try {
     return await prisma.storeLicense.create({
-      data: {
-        licenseNumber: generateLicenseNumber(),
-        plan: 'TRIAL',
-        state: 'ACTIVE',
-        startsAt: now,
-        expiresAt: addDays(now, TRIAL_DURATION_DAYS),
-        activationSource: 'AUTO_TRIAL',
-      },
+      data: createTrialLicenseData(now),
     });
   } catch (error) {
     if (error.code === 'P2002') {
@@ -171,6 +172,7 @@ const activateLicense = async ({ prisma, code, userEmail }) => {
 module.exports = {
   activateLicense,
   addDays,
+  createTrialLicenseData,
   ensureStoreLicense,
   getLicenseStatus,
   hashActivationCode,

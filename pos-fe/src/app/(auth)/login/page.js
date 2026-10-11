@@ -103,7 +103,7 @@ export default function LoginPage() {
 
             <div className="text-center mt-8">
                 <p className="text-sm text-gray-500 font-medium">
-                    Belum punya akun? <Link href="/register" className="text-blue-600 font-bold hover:underline">Hubungi Admin</Link>
+                    Belum punya akun? <Link href="/register" className="text-blue-600 font-bold hover:underline">Daftarkan usaha</Link>
                 </p>
             </div>
         </div>

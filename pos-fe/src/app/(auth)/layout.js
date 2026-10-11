@@ -50,7 +50,7 @@ export default function AuthLayout({ children }) {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-4 lg:p-12 h-full bg-white lg:rounded-l-[40px] shadow-2xl z-20 relative">
+      <div className="flex-1 flex items-start lg:items-center justify-center p-4 lg:p-12 h-full overflow-y-auto bg-white lg:rounded-l-[40px] shadow-2xl z-20 relative">
         <div className="w-full max-w-[440px]">
             {children}
         </div>

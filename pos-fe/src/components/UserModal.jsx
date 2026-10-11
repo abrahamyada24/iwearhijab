@@ -183,7 +183,7 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }) {
                     >
                       <option value="CASHIER">Staff (Kasir)</option>
                       <option value="ADMIN">Admin</option>
-                      <option value="OWNER">Owner</option>
+                      {initialData?.role === 'OWNER' && <option value="OWNER">Owner</option>}
                     </select>
                   </div>
                   <div>
@@ -198,6 +198,8 @@ export default function UserModal({ isOpen, onClose, onSave, initialData }) {
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
                         placeholder={initialData ? "Biarkan kosong" : "Password..."}
+                        minLength={12}
+                        maxLength={72}
                         required={!initialData}
                       />
                     </div>

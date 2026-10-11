@@ -20,13 +20,13 @@ const parseDiscountData = (body) => ({
   discountLabel: body.discountLabel || null
 });
 
-// Helper: Generate SKU Otomatis (Format: PROD-0001)
-const generateAutoSKU = async () => {
+// Prefix tenant mencegah benturan dengan SKU otomatis milik usaha lain.
+const generateAutoSKU = async (storeId) => {
   const lastProduct = await prisma.product.findFirst({
     orderBy: { id: 'desc' }
   });
   const nextId = lastProduct ? lastProduct.id + 1 : 1;
-  return `PROD-${String(nextId).padStart(4, '0')}`;
+  return `S${storeId}-PROD-${String(nextId).padStart(4, '0')}`;
 };
 
 exports.getAllProducts = async (req, res) => {
@@ -59,7 +59,7 @@ exports.createProduct = async (req, res) => {
 
     // Handle SKU Otomatis jika kosong
     if (!sku || sku.trim() === "" || sku === "undefined") {
-      sku = await generateAutoSKU();
+      sku = await generateAutoSKU(req.storeId);
     } else {
       const existing = await prisma.product.findUnique({ where: { sku: sku.toUpperCase() } });
       if (existing) return res.status(400).json({ success: false, message: "SKU sudah digunakan!" });

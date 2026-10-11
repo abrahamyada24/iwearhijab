@@ -16,6 +16,17 @@ const loginLimiter = rateLimit({
     message: 'Terlalu banyak percobaan login. Coba lagi beberapa menit lagi.',
   },
 });
+const businessRegistrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: {
+    success: false,
+    code: 'REGISTRATION_RATE_LIMITED',
+    message: 'Terlalu banyak pendaftaran dari koneksi ini. Coba lagi nanti.',
+  },
+});
 const { verifyToken, isAdmin } = require('../middlewares/authMiddleware');
 
 /**
@@ -55,6 +66,7 @@ const { verifyToken, isAdmin } = require('../middlewares/authMiddleware');
  *         description: Email atau Password salah
  */
 router.post('/login', loginLimiter, authController.login);
+router.post('/register-business', businessRegistrationLimiter, authController.registerBusiness);
 
 /**
  * @swagger

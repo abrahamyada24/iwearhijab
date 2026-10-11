@@ -1,4 +1,4 @@
-const { prisma } = require('../config/prisma');
+const { basePrisma, prisma } = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const {
   LOGIN_LOCK_DURATION_MS,
@@ -18,6 +18,12 @@ const {
   validateUsername,
 } = require('../services/usernameService');
 const { listActiveMemberships, serializeStore } = require('../services/storeAccessService');
+const {
+  generateAvailableStoreSlug,
+  normalizeStoreSlug,
+  validateStoreSlug,
+} = require('../services/businessRegistrationService');
+const { createTrialLicenseData } = require('../services/licenseService');
 const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
 const PASSWORD_HASH_ROUNDS = 12;
@@ -47,6 +53,169 @@ const genericLoginFailure = (res) => res.status(401).json({
   code: 'INVALID_CREDENTIALS',
   message: 'Email/username atau password salah.',
 });
+
+exports.registerBusiness = async (req, res) => {
+  try {
+    const {
+      ownerName,
+      businessName,
+      email,
+      username,
+      password,
+      slug,
+      storeType,
+    } = req.body || {};
+    const normalizedOwnerName = String(ownerName || '').trim();
+    const normalizedBusinessName = String(businessName || '').trim();
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const requestedUsername = normalizeUsername(username);
+    const requestedSlug = normalizeStoreSlug(slug);
+    const normalizedStoreType = String(storeType || 'RETAIL').trim().toUpperCase();
+    const passwordError = validatePassword(password);
+
+    if (!normalizedOwnerName || !normalizedBusinessName || !normalizedEmail || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nama owner, nama usaha, email, dan password wajib diisi.',
+      });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'Format email tidak valid.' });
+    }
+    if (normalizedOwnerName.length > 255 || normalizedBusinessName.length > 255) {
+      return res.status(400).json({ success: false, message: 'Nama maksimal 255 karakter.' });
+    }
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
+    if (!['RETAIL', 'LAUNDRY'].includes(normalizedStoreType)) {
+      return res.status(400).json({ success: false, message: 'Jenis usaha tidak valid.' });
+    }
+    if (requestedUsername) {
+      const usernameError = validateUsername(requestedUsername);
+      if (usernameError) return res.status(400).json({ success: false, message: usernameError });
+    }
+    if (slug !== undefined && slug !== null && String(slug).trim()) {
+      const slugError = validateStoreSlug(slug);
+      if (slugError) return res.status(400).json({ success: false, message: slugError });
+    }
+
+    const existingUser = await basePrisma.user.findFirst({
+      where: {
+        OR: [
+          { email: normalizedEmail },
+          ...(requestedUsername ? [{ username: requestedUsername }] : []),
+        ],
+      },
+      select: { id: true, email: true, username: true },
+    });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        code: 'ACCOUNT_ALREADY_EXISTS',
+        message: 'Email atau username sudah digunakan. Silakan login atau gunakan akun lain.',
+      });
+    }
+
+    let finalSlug;
+    if (requestedSlug) {
+      const existingStore = await basePrisma.store.findUnique({
+        where: { slug: requestedSlug },
+        select: { id: true },
+      });
+      if (existingStore) {
+        return res.status(409).json({
+          success: false,
+          code: 'STORE_SLUG_TAKEN',
+          message: 'Slug usaha sudah digunakan. Pilih slug lain.',
+        });
+      }
+      finalSlug = requestedSlug;
+    } else {
+      finalSlug = await generateAvailableStoreSlug(basePrisma, normalizedBusinessName);
+    }
+
+    const passwordHash = await bcrypt.hash(String(password), PASSWORD_HASH_ROUNDS);
+    const now = new Date();
+    const registration = await basePrisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: normalizedOwnerName,
+          email: normalizedEmail,
+          username: requestedUsername || await generateUniqueUsername(tx, normalizedEmail),
+          password: passwordHash,
+          role: 'OWNER',
+          mustChangePassword: false,
+        },
+      });
+      const store = await tx.store.create({
+        data: {
+          slug: finalSlug,
+          name: normalizedBusinessName,
+          type: normalizedStoreType,
+          isActive: true,
+          isPublicDemo: false,
+        },
+      });
+
+      await tx.storeMembership.create({
+        data: { userId: user.id, storeId: store.id, role: 'OWNER', isActive: true },
+      });
+      await tx.storeSetting.create({
+        data: {
+          storeId: store.id,
+          storeName: store.name,
+          email: user.email,
+          enableCash: true,
+          enableQris: false,
+          enableDebit: false,
+          enableShift: true,
+        },
+      });
+      await tx.loyaltyConfig.create({ data: { storeId: store.id } });
+      await tx.storeLicense.create({
+        data: { storeId: store.id, ...createTrialLicenseData(now) },
+      });
+      await tx.category.create({
+        data: {
+          storeId: store.id,
+          name: normalizedStoreType === 'LAUNDRY' ? 'Layanan Laundry' : 'Produk Umum',
+        },
+      });
+
+      return { user, store };
+    });
+
+    const memberships = await listActiveMemberships(basePrisma, registration.user.id);
+    const { session, token } = await createAuthSession({
+      prisma: basePrisma,
+      user: registration.user,
+      activeStoreId: registration.store.id,
+      clientType: 'WEB',
+      deviceName: 'Web POS',
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    res.cookie(SESSION_COOKIE_NAME, token, getSessionCookieOptions());
+    return res.status(201).json({
+      success: true,
+      message: 'Usaha dan akun Owner berhasil dibuat.',
+      token,
+      sessionExpiresAt: session.expiresAt,
+      user: publicUser(registration.user, memberships, registration.store.id),
+      store: serializeStore(memberships[0]),
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        code: 'REGISTRATION_CONFLICT',
+        message: 'Email, username, atau slug usaha sudah digunakan.',
+      });
+    }
+    console.error(`[REGISTER BUSINESS ERROR]: ${error.message}`);
+    return res.status(500).json({ success: false, message: 'Pendaftaran usaha belum dapat diproses.' });
+  }
+};
 
 exports.register = async (req, res) => {
   try {

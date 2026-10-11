@@ -50,9 +50,13 @@ releases/
 *.key
 *.p12
 key.txt
+key-vercel-tidb.txt
 *.sql
 !pos-be/prisma/migrations/**/*.sql
 pos-android/generator.html
 pos-android/.license-generator-private.jwk
 
 .vercel
+
+# Local state/logs for the one-click Cloudflare Quick Tunnel launcher
+.demo-runtime/

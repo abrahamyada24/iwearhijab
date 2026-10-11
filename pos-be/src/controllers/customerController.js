@@ -12,21 +12,20 @@ const parsePoints = (value) => {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 };
 
-// Helper: Generate ID Member Otomatis (Format: MBR-0001)
-const generateMemberId = async () => {
+// Prefix tenant mencegah benturan dengan ID member milik usaha lain.
+const generateMemberId = async (storeId) => {
+  const prefix = `S${storeId}-MBR-`;
   const lastCustomer = await prisma.customer.findFirst({
-    where: { memberId: { startsWith: 'MBR-' } },
+    where: { memberId: { startsWith: prefix } },
     orderBy: { id: 'desc' }
   });
 
   let sequence = 1;
   if (lastCustomer && lastCustomer.memberId) {
-    const parts = lastCustomer.memberId.split('-');
-    if (parts.length === 2) {
-      sequence = parseInt(parts[1]) + 1;
-    }
+    const lastSequence = Number(lastCustomer.memberId.slice(prefix.length));
+    if (Number.isInteger(lastSequence)) sequence = lastSequence + 1;
   }
-  return `MBR-${String(sequence).padStart(4, '0')}`;
+  return `${prefix}${String(sequence).padStart(4, '0')}`;
 };
 
 exports.getAllCustomers = async (req, res) => {
@@ -92,7 +91,7 @@ exports.createCustomer = async (req, res) => {
      * Menggunakan req.file.filename untuk menyimpan path relatif folder uploads.
      */
     const imageUrl = getUploadedFileUrl(req.file);
-    const memberId = await generateMemberId();
+    const memberId = await generateMemberId(req.storeId);
 
     const validPhone = phone && String(phone).trim() !== "" ? String(phone).trim() : null;
     const validEmail = email && String(email).trim() !== "" ? String(email).trim() : null;
