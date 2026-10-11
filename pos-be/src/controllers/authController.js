@@ -63,6 +63,7 @@ exports.registerBusiness = async (req, res) => {
       username,
       password,
       slug,
+      businessType,
       storeType,
     } = req.body || {};
     const normalizedOwnerName = String(ownerName || '').trim();
@@ -70,7 +71,10 @@ exports.registerBusiness = async (req, res) => {
     const normalizedEmail = String(email || '').trim().toLowerCase();
     const requestedUsername = normalizeUsername(username);
     const requestedSlug = normalizeStoreSlug(slug);
-    const normalizedStoreType = String(storeType || 'RETAIL').trim().toUpperCase();
+    const normalizedBusinessType = String(businessType || storeType || 'RETAIL').trim().toUpperCase();
+    // Store.type saat ini membedakan alur laundry dan POS umum. Preset F&B
+    // memakai POS umum tanpa migrasi schema, dengan kategori dan pre-order yang sesuai.
+    const persistedStoreType = normalizedBusinessType === 'LAUNDRY' ? 'LAUNDRY' : 'RETAIL';
     const passwordError = validatePassword(password);
 
     if (!normalizedOwnerName || !normalizedBusinessName || !normalizedEmail || !password) {
@@ -86,7 +90,7 @@ exports.registerBusiness = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Nama maksimal 255 karakter.' });
     }
     if (passwordError) return res.status(400).json({ success: false, message: passwordError });
-    if (!['RETAIL', 'LAUNDRY'].includes(normalizedStoreType)) {
+    if (!['RETAIL', 'FNB', 'LAUNDRY'].includes(normalizedBusinessType)) {
       return res.status(400).json({ success: false, message: 'Jenis usaha tidak valid.' });
     }
     if (requestedUsername) {
@@ -150,7 +154,7 @@ exports.registerBusiness = async (req, res) => {
         data: {
           slug: finalSlug,
           name: normalizedBusinessName,
-          type: normalizedStoreType,
+          type: persistedStoreType,
           isActive: true,
           isPublicDemo: false,
         },
@@ -168,6 +172,7 @@ exports.registerBusiness = async (req, res) => {
           enableQris: false,
           enableDebit: false,
           enableShift: true,
+          enablePreOrder: normalizedBusinessType === 'FNB',
         },
       });
       await tx.loyaltyConfig.create({ data: { storeId: store.id } });
@@ -177,7 +182,9 @@ exports.registerBusiness = async (req, res) => {
       await tx.category.create({
         data: {
           storeId: store.id,
-          name: normalizedStoreType === 'LAUNDRY' ? 'Layanan Laundry' : 'Produk Umum',
+          name: normalizedBusinessType === 'LAUNDRY'
+            ? 'Layanan Laundry'
+            : normalizedBusinessType === 'FNB' ? 'Menu' : 'Produk Umum',
         },
       });
 

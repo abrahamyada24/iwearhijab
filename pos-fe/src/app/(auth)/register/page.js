@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -12,20 +12,12 @@ import {
   Loader2,
   Lock,
   Mail,
-  Shirt,
-  Sparkles,
+  ShoppingBag,
+  UtensilsCrossed,
   UserRound,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { showAlert } from '@/utils/swal';
-
-const slugify = (value) => String(value || '')
-  .normalize('NFKD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .replace(/[^a-z0-9]+/g, '-')
-  .replace(/^-+|-+$/g, '')
-  .slice(0, 80);
 
 const Field = ({ icon: Icon, className = '', ...props }) => (
   <div className={`flex items-center gap-3 rounded-2xl border-2 border-gray-100 bg-white px-4 py-3 transition focus-within:border-blue-500 ${className}`}>
@@ -41,16 +33,14 @@ export default function RegisterBusinessPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     businessName: '',
-    storeType: 'LAUNDRY',
+    businessType: 'RETAIL',
     ownerName: '',
     email: '',
     username: '',
-    slug: '',
     password: '',
     confirmPassword: '',
   });
 
-  const suggestedSlug = useMemo(() => slugify(form.slug || form.businessName), [form.slug, form.businessName]);
   const update = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
   const handleSubmit = async (event) => {
@@ -63,11 +53,10 @@ export default function RegisterBusinessPage() {
     setIsLoading(true);
     const result = await registerBusiness({
       businessName: form.businessName,
-      storeType: form.storeType,
+      businessType: form.businessType,
       ownerName: form.ownerName,
       email: form.email,
       username: form.username || undefined,
-      slug: form.slug || undefined,
       password: form.password,
     });
     setIsLoading(false);
@@ -98,30 +87,24 @@ export default function RegisterBusinessPage() {
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => setForm((current) => ({ ...current, storeType: 'LAUNDRY' }))}
-            className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-3 py-3 text-sm font-bold transition ${form.storeType === 'LAUNDRY' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-100 text-gray-500'}`}
+            onClick={() => setForm((current) => ({ ...current, businessType: 'RETAIL' }))}
+            className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-3 py-3 text-sm font-bold transition ${form.businessType === 'RETAIL' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-100 text-gray-500'}`}
           >
-            <Sparkles size={18} /> Laundry
+            <ShoppingBag size={18} /> Retail
           </button>
           <button
             type="button"
-            onClick={() => setForm((current) => ({ ...current, storeType: 'RETAIL' }))}
-            className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-3 py-3 text-sm font-bold transition ${form.storeType === 'RETAIL' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-100 text-gray-500'}`}
+            onClick={() => setForm((current) => ({ ...current, businessType: 'FNB' }))}
+            className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-3 py-3 text-sm font-bold transition ${form.businessType === 'FNB' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-100 text-gray-500'}`}
           >
-            <Shirt size={18} /> Toko Pakaian
+            <UtensilsCrossed size={18} /> F&amp;B
           </button>
         </div>
 
         <Field icon={UserRound} value={form.ownerName} onChange={update('ownerName')} placeholder="Nama Owner" maxLength={255} autoComplete="name" required />
         <Field icon={Mail} type="email" value={form.email} onChange={update('email')} placeholder="Email Owner" maxLength={255} autoComplete="email" required />
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field icon={UserRound} value={form.username} onChange={update('username')} placeholder="Username (opsional)" maxLength={50} autoCapitalize="none" />
-          <Field icon={BriefcaseBusiness} value={form.slug} onChange={update('slug')} placeholder="Slug (opsional)" maxLength={80} autoCapitalize="none" />
-        </div>
-        {suggestedSlug && (
-          <p className="-mt-2 px-1 text-xs text-gray-400">Identitas URL: <span className="font-semibold text-gray-600">{suggestedSlug}</span></p>
-        )}
+        <Field icon={UserRound} value={form.username} onChange={update('username')} placeholder="Nama pengguna (opsional, dapat dibuat otomatis)" maxLength={50} autoCapitalize="none" />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex items-center gap-3 rounded-2xl border-2 border-gray-100 bg-white px-4 py-3 transition focus-within:border-blue-500">
