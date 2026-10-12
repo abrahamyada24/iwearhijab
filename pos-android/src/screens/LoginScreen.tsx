@@ -3,10 +3,9 @@ import { View, Text, TextInput, TouchableOpacity, Alert, Image, ActivityIndicato
 import tw, { useAppColorScheme } from 'twrnc';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useStore } from '../store/useStore';
-import { getDBConnection } from '../database/db';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearAuthSession, getAuthToken, migrateLegacyAuthStorage, setAuthToken } from '../services/secureAuthStorage';
 
 export default function LoginScreen({ navigation }: any) {
     useAppColorScheme(tw);
@@ -14,39 +13,29 @@ export default function LoginScreen({ navigation }: any) {
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isAutoLogging, setIsAutoLogging] = useState(true);
-    const [rememberMe, setRememberMe] = useState(true);
     const setUser = useStore((state) => state.setUser);
 
     // ── Auto-login: cek session tersimpan di AsyncStorage ──────────────────
     useEffect(() => {
         const tryAutoLogin = async () => {
             try {
-                const savedToken = await AsyncStorage.getItem('@auth_token');
-                const savedUserJson = await AsyncStorage.getItem('@auth_user');
+                await migrateLegacyAuthStorage();
+                const savedToken = await getAuthToken();
 
-                if (!savedToken || !savedUserJson) {
+                if (!savedToken) {
                     // Belum pernah login → tampilkan halaman login
                     setIsAutoLogging(false);
                     return;
                 }
 
-                const savedUser = JSON.parse(savedUserJson);
-
-                if (savedToken === 'offline-mode-token') {
-                    // Jika token offline, langsung gunakan data dari local cache tanpa cek API
-                    setUser(savedUser);
-                    navigation.replace('Main');
-                    return;
-                }
-
-                // Coba validasi token ke server (opsional, kalau offline skip)
+                // Mode SaaS wajib memvalidasi sesi ke backend. User cache tidak
+                // pernah dipakai sebagai pengganti otorisasi server.
                 try {
                     const res = await api.get('/auth/me');
                     if (res.data?.success && res.data?.user) {
                         // Token masih valid — pakai data terbaru dari server
                         const freshUser = res.data.user;
                         setUser(freshUser);
-                        await AsyncStorage.setItem('@auth_user', JSON.stringify(freshUser));
                         navigation.replace('Main');
                         return;
                     }
@@ -55,18 +44,13 @@ export default function LoginScreen({ navigation }: any) {
                     if (status === 401 || status === 403) {
                         // Token sudah expired/invalid — hapus session, tampilkan login
                         console.log('Auto-login: token expired, harus login ulang');
-                        await AsyncStorage.removeItem('@auth_token');
-                        await AsyncStorage.removeItem('@auth_user');
+                        await clearAuthSession();
                         setIsAutoLogging(false);
                         return;
                     }
-                    // Server unreachable (network error) — fallback ke cached user
-                    console.log('Auto-login: server unreachable, menggunakan data cached');
+                    await clearAuthSession();
                 }
-
-                // Fallback: pakai data user yang di-cache di AsyncStorage
-                setUser(savedUser);
-                navigation.replace('Main');
+                setIsAutoLogging(false);
             } catch (e) {
                 console.error('Auto-login error:', e);
                 setIsAutoLogging(false);
@@ -93,23 +77,10 @@ export default function LoginScreen({ navigation }: any) {
             });
             if (response.data.success) {
                 const { token, user } = response.data;
-                if (rememberMe) {
-                    await AsyncStorage.setItem('@auth_token', token);
-                    await AsyncStorage.setItem('@auth_user', JSON.stringify(user));
-                } else {
-                    await AsyncStorage.removeItem('@auth_token');
-                    await AsyncStorage.removeItem('@auth_user');
-                }
+                // Token tetap diperlukan oleh setiap request API selama aplikasi
+                // dipakai. Tombol logout akan menghapusnya dari perangkat.
+                await setAuthToken(token);
                 setUser(user); // user.role dari backend
-                
-                // Simpan/Update data user lokal untuk login offline (menggunakan password yang barusan diketik sbg PIN)
-                try {
-                    const db = await getDBConnection();
-                    await db.executeSql(
-                        `INSERT OR REPLACE INTO users (id, name, email, pin, role) VALUES (?, ?, ?, ?, ?)`, 
-                        [user.id, user.name, user.email || identifier, password, user.role]
-                    );
-                } catch (e) { console.error("Gagal simpan user lokal:", e) }
 
                 navigation.replace('Main');
                 return;
@@ -123,40 +94,7 @@ export default function LoginScreen({ navigation }: any) {
                 return;
             }
 
-            console.log('Login online gagal, mencoba login offline...', error.message);
-            
-            // Fallback Offline: Jika VPS mati/tidak ada sinyal, gunakan tabel lokal `users`
-            // Di tabel lokal, kita asumsikan kolom name/pin dipakai (PIN bisa berupa password jika disinkron)
-            try {
-                const db = await getDBConnection();
-                // Cari berdasarkan email + PIN (password) untuk mencocokkan user yang tepat
-                const [results] = await db.executeSql(`SELECT * FROM users WHERE email = ? AND pin = ? LIMIT 1`, [identifier, password]);
-
-                if (results.rows.length > 0) {
-                    const localUser = results.rows.item(0);
-                    const offlineUser = {
-                        id: localUser.id,
-                        name: localUser.name,
-                        role: localUser.role
-                    };
-                    // Simpan session untuk auto-login berikutnya
-                    if (rememberMe) {
-                        await AsyncStorage.setItem('@auth_user', JSON.stringify(offlineUser));
-                        await AsyncStorage.setItem('@auth_token', 'offline-mode-token');
-                    } else {
-                        await AsyncStorage.removeItem('@auth_user');
-                        await AsyncStorage.removeItem('@auth_token');
-                    }
-                    setUser(offlineUser);
-                    Alert.alert('Offline Mode', 'Login menggunakan data lokal (tanpa internet).');
-                    navigation.replace('Main');
-                } else {
-                    Alert.alert('Login Gagal', 'Email/Password salah, atau Anda belum pernah sinkronisasi ke HP ini.');
-                }
-            } catch (e) {
-                Alert.alert('Error', 'Terjadi kesalahan sistem saat membaca database lokal.');
-            }
-            
+            console.log('Login online gagal:', error.message);
         } finally {
             setIsLoading(false);
         }
@@ -186,8 +124,8 @@ export default function LoginScreen({ navigation }: any) {
                     style={tw`w-28 h-28 mb-4 rounded-3xl`}
                     resizeMode="contain"
                 />
-                <Text style={tw`text-3xl font-black text-center text-gray-900 dark:text-white tracking-tight`}>Warna Warni</Text>
-                <Text style={tw`text-sm font-bold text-center text-orange-600 dark:text-orange-400 mt-1`}>LitePOS Toko Boneka</Text>
+                <Text style={tw`text-3xl font-black text-center text-gray-900 dark:text-white tracking-tight`}>LitePOS</Text>
+                <Text style={tw`text-sm font-bold text-center text-orange-600 dark:text-orange-400 mt-1`}>Kasir Retail &amp; F&amp;B</Text>
             </View>
 
             <View style={tw`bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-md w-full max-w-sm border border-gray-100 dark:border-gray-800`}>
@@ -215,20 +153,6 @@ export default function LoginScreen({ navigation }: any) {
                     placeholderTextColor="#9ca3af"
                 />
 
-                <TouchableOpacity 
-                    style={tw`flex-row items-center mb-6 self-start pl-2`} 
-                    onPress={() => setRememberMe(!rememberMe)}
-                >
-                    {rememberMe ? (
-                        <Icon name="checkbox-marked" size={20} color={tw.color('blue-600')} />
-                    ) : (
-                        <Icon name="checkbox-blank-outline" size={20} color={tw.color('gray-400')} />
-                    )}
-                    <Text style={tw`ml-2 text-sm text-gray-600 dark:text-gray-300 font-bold`}>
-                        Ingat Saya
-                    </Text>
-                </TouchableOpacity>
-
                 <TouchableOpacity
                     style={tw`bg-blue-600 rounded-xl py-3 items-center ${isLoading ? 'opacity-70' : ''}`}
                     onPress={handleLogin}
@@ -236,6 +160,9 @@ export default function LoginScreen({ navigation }: any) {
                 >
                     <Text style={tw`text-white font-bold text-lg`}>{isLoading ? 'Loading...' : 'Masuk'}</Text>
                 </TouchableOpacity>
+                <Text style={tw`text-center text-xs text-gray-400 mt-4`}>
+                    Pendaftaran usaha baru tersedia melalui website LitePOS.
+                </Text>
             </View>
 
         </SafeAreaView>

@@ -18,6 +18,7 @@ import { getDBConnection, getStoreSummary } from '../database/db';
 import tw, { useAppColorScheme } from 'twrnc';
 import { getPaidAmount, getPaymentStatusLabel, getPaymentStatusMessage, getRemainingAmount } from '../utils/preOrderPayment';
 import { closeCashierShift, openCashierShift } from '../services/shiftService';
+import { clearAuthSession } from '../services/secureAuthStorage';
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 const getColors = (isDark: boolean) => ({
@@ -306,9 +307,7 @@ export default function DashboardScreen({ navigation }: any) {
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-                        await AsyncStorage.removeItem('@auth_token');
-                        await AsyncStorage.removeItem('@auth_user');
+                        await clearAuthSession();
                     } catch (e) {
                         console.error('Gagal hapus session:', e);
                     }

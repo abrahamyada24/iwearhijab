@@ -18,6 +18,7 @@ import { RECEIPT_LOGO_BASE64 } from '../assets/receiptLogoBase64';
 import ViewShot from 'react-native-view-shot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { DEFAULT_API_URL, getApiBaseUrl, setApiBaseUrl as persistApiBaseUrl } from '../services/api';
+import { clearAuthSession, getAuthToken, OFFLINE_SESSION_TOKEN } from '../services/secureAuthStorage';
 import { connectConfiguredPrinter } from '../utils/printerConnection';
 import {
     getReceiptLogoPrintOptions,
@@ -246,7 +247,7 @@ export default function SettingsScreen({ navigation }: any) {
     };
 
     const redirectToServerLogin = async () => {
-        await AsyncStorage.multiRemove(['@auth_token', '@auth_user']);
+        await clearAuthSession();
         useStore.getState().setUser(null);
         const rootNavigation = navigation.getParent?.();
         if (rootNavigation) rootNavigation.replace('Login');
@@ -268,8 +269,8 @@ export default function SettingsScreen({ navigation }: any) {
         try {
             const normalized = await persistBackendUrl();
             const res = await api.get('/health', { timeout: 5000 });
-            const token = await AsyncStorage.getItem('@auth_token');
-            const sessionNote = !token || token === 'offline-mode-token'
+            const token = await getAuthToken();
+            const sessionNote = !token || token === OFFLINE_SESSION_TOKEN
                 ? '\nSesi server: login ulang diperlukan sebelum sinkronisasi.'
                 : '\nSesi server: siap digunakan.';
             Alert.alert(
@@ -986,8 +987,8 @@ export default function SettingsScreen({ navigation }: any) {
                             style={tw`bg-blue-600 py-3.5 rounded-xl flex-row justify-center items-center mb-2`}
                             onPress={async () => {
                                 const normalizedApiBaseUrl = await persistBackendUrl();
-                                const serverToken = await AsyncStorage.getItem('@auth_token');
-                                if (!serverToken || serverToken === 'offline-mode-token') {
+                                const serverToken = await getAuthToken();
+                                if (!serverToken || serverToken === OFFLINE_SESSION_TOKEN) {
                                     showServerLoginRequired(normalizedApiBaseUrl);
                                     return;
                                 }

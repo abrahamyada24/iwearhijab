@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, BackHandler, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import tw from 'twrnc';
@@ -11,6 +10,7 @@ import {
     resolveLicenseStatus,
     type LicenseStatus,
 } from '../services/licenseService';
+import { clearAuthSession } from '../services/secureAuthStorage';
 
 const formatDate = (value?: string | null) => value
     ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(new Date(value))
@@ -65,7 +65,7 @@ export default function LockScreen() {
     };
 
     const switchAccount = async () => {
-        await AsyncStorage.multiRemove(['@auth_token', '@auth_user']);
+        await clearAuthSession();
         setUser(null);
     };
 
