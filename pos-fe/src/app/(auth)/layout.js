@@ -1,27 +1,57 @@
 export const metadata = {
-  title: 'Akses POS System',
-  description: 'Masuk ke dashboard aplikasi kasir',
+  title: 'Masuk ke LitePOS',
+  description: 'Masuk atau daftarkan usaha retail dan F&B di LitePOS',
 };
 
 export default function AuthLayout({ children }) {
   const scrollImages1 = [
-    { src: '/login-visuals/plush-05.jpg', alt: 'Koleksi boneka karakter warna-warni' },
-    { src: '/login-visuals/plush-01.jpg', alt: 'Boneka beruang lembut' },
-    { src: '/login-visuals/plush-03.jpg', alt: 'Koleksi boneka hewan anak' },
+    {
+      src: '/login-visuals/retail-boutique.webp',
+      alt: 'Butik pakaian dengan rak dan meja kasir',
+      category: 'Retail',
+      caption: 'Kelola stok dan penjualan dengan rapi',
+    },
+    {
+      src: '/login-visuals/fnb-cafe.webp',
+      alt: 'Kafe dengan meja kasir dan etalase makanan',
+      category: 'F&B',
+      caption: 'Catat pesanan dan transaksi lebih praktis',
+    },
+    {
+      src: '/login-visuals/retail-shop.webp',
+      alt: 'Toko retail dengan rak produk dan meja kasir',
+      category: 'Retail',
+      caption: 'Pantau produk dan usaha dari satu tempat',
+    },
   ];
 
   const scrollImages2 = [
-    { src: '/login-visuals/plush-03.jpg', alt: 'Boneka dinosaurus dan beruang' },
-    { src: '/login-visuals/plush-05.jpg', alt: 'Koleksi boneka lucu' },
-    { src: '/login-visuals/plush-01.jpg', alt: 'Boneka teddy bear' },
+    {
+      src: '/login-visuals/retail-shop.webp',
+      alt: 'Toko retail dengan rak produk dan meja kasir',
+      category: 'Retail',
+      caption: 'Pantau produk dan usaha dari satu tempat',
+    },
+    {
+      src: '/login-visuals/retail-boutique.webp',
+      alt: 'Butik pakaian dengan rak dan meja kasir',
+      category: 'Retail',
+      caption: 'Kelola stok dan penjualan dengan rapi',
+    },
+    {
+      src: '/login-visuals/fnb-cafe.webp',
+      alt: 'Kafe dengan meja kasir dan etalase makanan',
+      category: 'F&B',
+      caption: 'Catat pesanan dan transaksi lebih praktis',
+    },
   ];
 
   const VisualCard = ({ image }) => (
     <div className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-lg bg-gray-200">
       <img src={image.src} alt={image.alt} className="h-full w-full object-cover" />
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-gray-950/70 to-transparent px-5 pb-5 pt-16">
-        <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-white/90">Warna Warni</p>
-        <p className="mt-1 text-lg font-black text-white">Temukan teman peluk favoritmu</p>
+        <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-white/90">{image.category}</p>
+        <p className="mt-1 text-lg font-black text-white">{image.caption}</p>
       </div>
     </div>
   );
