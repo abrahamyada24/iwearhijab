@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Clock, Play, Square, Loader2, DollarSign, ShoppingCart, Power } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
+import CurrencyInput from '@/components/CurrencyInput';
 import {
     DEFAULT_SHIFT_REMINDER_SETTINGS,
     formatShiftDateTime,
@@ -181,7 +182,7 @@ export default function ShiftsPage() {
                 <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setShowOpenModal(false); setShowCloseModal(false); }}>
                     <form onClick={e => e.stopPropagation()} onSubmit={showOpenModal ? handleOpenShift : handleCloseShift} className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
                         <h2 className="text-lg font-bold text-gray-800">{showOpenModal ? 'Buka Shift Baru' : 'Tutup Shift'}</h2>
-                        <input required type="number" placeholder={showOpenModal ? "Kas Awal (Rp)" : "Kas Akhir (Rp)"} value={showOpenModal ? openingCash : closingCash} onChange={e => showOpenModal ? setOpeningCash(e.target.value) : setClosingCash(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:border-blue-500 outline-none" />
+                        <CurrencyInput required placeholder={showOpenModal ? "Kas Awal (Rp)" : "Kas Akhir (Rp)"} value={showOpenModal ? openingCash : closingCash} onChange={value => showOpenModal ? setOpeningCash(value) : setClosingCash(value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:border-blue-500 outline-none" />
                         <div className="flex gap-3">
                             <button type="button" onClick={() => { setShowOpenModal(false); setShowCloseModal(false); }} className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50">Batal</button>
                             <button type="submit" className={`flex-1 py-3 rounded-xl text-white text-sm font-bold ${showOpenModal ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>{showOpenModal ? 'Buka Shift' : 'Tutup Shift'}</button>

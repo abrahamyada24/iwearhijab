@@ -196,25 +196,23 @@ export default function UsersPage() {
                                 <span className={`absolute bottom-1 right-1 w-4 h-4 border-2 border-white rounded-full ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`} />
                             </div>
 
-                            <h3 className="font-bold text-gray-800 text-lg mb-1">{user.name}</h3>
+                            <h3 className="max-w-full truncate font-bold text-gray-800 text-lg mb-1">{user.name}</h3>
 
                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-3 ${user.role === 'OWNER' ? 'bg-green-100 text-green-700' : user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                                 {user.role === 'CASHIER' ? 'STAFF' : user.role}
                             </span>
 
-                            <div className="flex items-center gap-1 text-gray-400 text-xs">
-                                <Mail size={12} /> {user.email}
+                            <div className="flex max-w-full min-w-0 items-center gap-1 text-gray-400 text-xs">
+                                <Mail size={12} className="shrink-0" /> <span className="truncate">{user.email}</span>
                             </div>
-                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                                <AtSign size={12} /> {user.username || 'belum diatur'}
+                            <div className="flex max-w-full min-w-0 items-center gap-1 text-gray-400 text-xs mt-1">
+                                <AtSign size={12} className="shrink-0" /> <span className="truncate">{user.username || 'belum diatur'}</span>
                             </div>
                         </div>
 
                         {user.role === 'ADMIN' && (
-                            <div className="absolute top-4 left-4">
-                                <span className="p-1.5 bg-purple-500 text-white rounded-lg shadow-sm">
-                                    <ShieldCheck size={14} />
-                                </span>
+                            <div className="absolute top-4 left-4 flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500 text-white shadow-sm">
+                                <ShieldCheck size={14} />
                             </div>
                         )}
                     </div>

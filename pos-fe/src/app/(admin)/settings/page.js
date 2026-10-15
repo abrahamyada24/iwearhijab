@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { showAlert } from '../../../utils/swal';
+import CurrencyInput from '../../../components/CurrencyInput';
+import { formatNumberId } from '../../../utils/currency';
 import {
   DEFAULT_DEVICE_PREFERENCES,
   getDevicePreferences,
@@ -643,10 +645,9 @@ export default function SettingsPage() {
                             <label className="block text-sm font-bold text-gray-700">Setiap Belanja Kelipatan</label>
                             <div className="flex items-center gap-2">
                                 <span className="text-gray-400 font-bold">Rp</span>
-                                <input 
-                                    type="number" 
+                                <CurrencyInput
                                     value={loyaltyForm.multiplierAmount} 
-                                    onChange={(e) => setLoyaltyForm({...loyaltyForm, multiplierAmount: e.target.value})}
+                                    onChange={(value) => setLoyaltyForm({...loyaltyForm, multiplierAmount: value})}
                                     className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-bold"
                                 />
                             </div>
@@ -670,10 +671,9 @@ export default function SettingsPage() {
                             <label className="block text-sm font-bold text-gray-700">Nilai 1 Poin (Penukaran)</label>
                             <div className="flex items-center gap-2">
                                 <span className="text-gray-400 font-bold">Rp</span>
-                                <input 
-                                    type="number" 
+                                <CurrencyInput
                                     value={loyaltyForm.pointValue} 
-                                    onChange={(e) => setLoyaltyForm({...loyaltyForm, pointValue: e.target.value})}
+                                    onChange={(value) => setLoyaltyForm({...loyaltyForm, pointValue: value})}
                                     className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-bold"
                                 />
                             </div>
@@ -699,7 +699,7 @@ export default function SettingsPage() {
                                 {Math.floor(50000 / (loyaltyForm.multiplierAmount || 10000)) * (loyaltyForm.pointMultiplier || 1)} Poin
                             </span>. 
                             10 Poin dapat ditukar dengan potongan belanja senilai 
-                            <span className="font-bold underline ml-1">Rp {10 * (loyaltyForm.pointValue || 100)}</span>.
+                            <span className="font-bold underline ml-1">Rp {formatNumberId(10 * (loyaltyForm.pointValue || 100))}</span>.
                         </p>
                     </div>
                 </div>

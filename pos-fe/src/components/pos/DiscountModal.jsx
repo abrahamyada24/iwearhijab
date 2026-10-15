@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Percent, DollarSign, CheckCircle2 } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
+import CurrencyInput from '@/components/CurrencyInput';
 
 export default function DiscountModal({ isOpen, onClose, onApply, subTotal, initialDiscount = 0, initialType = 'amount' }) {
     const [discountType, setDiscountType] = useState(initialType);
@@ -107,15 +108,25 @@ export default function DiscountModal({ isOpen, onClose, onApply, subTotal, init
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">
                                 {discountType === 'percent' ? '%' : 'Rp'}
                             </span>
-                            <input 
-                                type="number" 
-                                value={discountValue}
-                                onChange={(e) => setDiscountValue(e.target.value)}
-                                className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-xl font-bold text-xl text-gray-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
-                                placeholder="0"
-                                min="0"
-                                max={discountType === 'percent' ? "100" : subTotal.toString()}
-                            />
+                            {discountType === 'percent' ? (
+                                <input
+                                    type="number"
+                                    value={discountValue}
+                                    onChange={(e) => setDiscountValue(e.target.value)}
+                                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-xl font-bold text-xl text-gray-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                                    placeholder="0"
+                                    min="0"
+                                    max="100"
+                                />
+                            ) : (
+                                <CurrencyInput
+                                    value={discountValue}
+                                    onChange={setDiscountValue}
+                                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-xl font-bold text-xl text-gray-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                                    placeholder="0"
+                                    max={subTotal}
+                                />
+                            )}
                         </div>
                     </div>
 

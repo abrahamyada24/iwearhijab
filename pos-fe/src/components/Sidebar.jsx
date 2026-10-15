@@ -15,7 +15,7 @@ import { getPosPendingTransactions } from '../utils/savedTransactions';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, badge }) => {
+const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, badge, onNavigate }) => {
   const pathname = usePathname();
   const isActive = href ? pathname === href : false;
 
@@ -38,7 +38,7 @@ const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, bad
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link href={href} className={className} onClick={onNavigate}>
         {content}
       </Link>
     );
@@ -76,6 +76,10 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname, setIsMobileOpen]);
 
   // Fetch pending saved transactions count
   useEffect(() => {
@@ -181,6 +185,7 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
           <div className="px-4 pt-4 pb-2">
             <Link
               href="/pos"
+              onClick={() => setIsMobileOpen(false)}
               className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl font-bold text-sm hover:from-blue-700 hover:to-blue-600 transition-all shadow-lg shadow-blue-200 active:scale-[0.98]"
             >
               <ShoppingCart size={18} />
@@ -195,7 +200,7 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
 
           {/* Navigation Links */}
           <div className="flex-1 overflow-y-auto py-4 px-4 space-y-1 no-scrollbar">
-            <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/" />
+            <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/" onNavigate={() => setIsMobileOpen(false)} />
 
             {/* MANAGEMENT MENU: ADMIN AND OWNER ONLY */}
             {isAdminOrOwner && (
@@ -210,43 +215,43 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
                 />
                 {expandedMenu.inventory && (
                   <div className="ml-4 pl-4 border-l border-gray-100 space-y-1 mt-1 mb-2">
-                    <Link href="/products" className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/products' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Daftar Produk</Link>
-                    <Link href="/packages" className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/packages' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Paket Produk</Link>
-                    <Link href="/categories" className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/categories' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Kategori</Link>
-                    <Link href="/stock" className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Riwayat Stok</Link>
-                    <Link href="/stock-receiving" className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock-receiving' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Penerimaan Barang</Link>
-                    <Link href="/stock-opname" className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock-opname' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Stock Opname</Link>
+                    <Link href="/products" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/products' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Daftar Produk</Link>
+                    <Link href="/packages" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/packages' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Paket Produk</Link>
+                    <Link href="/categories" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/categories' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Kategori</Link>
+                    <Link href="/stock" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Riwayat Stok</Link>
+                    <Link href="/stock-receiving" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock-receiving' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Penerimaan Barang</Link>
+                    <Link href="/stock-opname" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock-opname' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Stock Opname</Link>
                   </div>
                 )}
               </div>
             )}
 
             {/* TRANSACTIONS & REPORTS */}
-            <SidebarItem icon={ShoppingCart} label="Transaksi" href="/transactions" />
+            <SidebarItem icon={ShoppingCart} label="Transaksi" href="/transactions" onNavigate={() => setIsMobileOpen(false)} />
 
             {isAdminOrOwner && (
-              <SidebarItem icon={ClipboardList} label="Laporan" href="/reports" />
+              <SidebarItem icon={ClipboardList} label="Laporan" href="/reports" onNavigate={() => setIsMobileOpen(false)} />
             )}
 
             <div className="pt-4 pb-2">
               <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 italic">Operasional</p>
-              {enableShift && <SidebarItem icon={Clock} label="Shift" href="/shifts" />}
+              {enableShift && <SidebarItem icon={Clock} label="Shift" href="/shifts" onNavigate={() => setIsMobileOpen(false)} />}
               {isAdminOrOwner && (
-                <SidebarItem icon={Wallet} label="Pengeluaran" href="/expenses" />
+                <SidebarItem icon={Wallet} label="Pengeluaran" href="/expenses" onNavigate={() => setIsMobileOpen(false)} />
               )}
             </div>
 
             {isAdminOrOwner && (
               <div className="pt-4 pb-2">
                 <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 italic">People</p>
-                <SidebarItem icon={Users} label="Pegawai" href="/users" />
-                <SidebarItem icon={UserCircle} label="Pelanggan" href="/customers" />
-                <SidebarItem icon={Truck} label="Supplier" href="/suppliers" />
+                <SidebarItem icon={Users} label="Pegawai" href="/users" onNavigate={() => setIsMobileOpen(false)} />
+                <SidebarItem icon={UserCircle} label="Pelanggan" href="/customers" onNavigate={() => setIsMobileOpen(false)} />
+                <SidebarItem icon={Truck} label="Supplier" href="/suppliers" onNavigate={() => setIsMobileOpen(false)} />
               </div>
             )}
 
-            <SidebarItem icon={Settings} label="Pengaturan" href="/settings" />
-            <SidebarItem icon={BadgeCheck} label="Lisensi Outlet" href="/license" />
+            <SidebarItem icon={Settings} label="Pengaturan" href="/settings" onNavigate={() => setIsMobileOpen(false)} />
+            <SidebarItem icon={BadgeCheck} label="Lisensi Outlet" href="/license" onNavigate={() => setIsMobileOpen(false)} />
           </div>
 
           {/* User Profile Area - Persis seperti Header (Clean & Mewah) */}

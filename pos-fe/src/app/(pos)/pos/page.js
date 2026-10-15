@@ -253,14 +253,28 @@ export default function POSPage() {
 
   // --- LOGIC FILTER ---
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
-      if (p.isActive === false) return false;
-      const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
-      const categoryName = p.category ? p.category.name : 'Uncategorized';
-      const matchCategory = selectedCategory === 'Semua' || categoryName === selectedCategory;
-      return matchSearch && matchCategory;
-    });
-  }, [search, selectedCategory, products]);
+    return products
+      .filter(p => {
+        if (p.isActive === false) return false;
+        const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+        const categoryName = p.category ? p.category.name : 'Uncategorized';
+        const matchCategory = selectedCategory === 'Semua' || categoryName === selectedCategory;
+        return matchSearch && matchCategory;
+      })
+      .map((product, originalIndex) => ({
+        product,
+        originalIndex,
+        cartIndex: cart.findIndex(item => String(item.id) === String(product.id)),
+      }))
+      .sort((a, b) => {
+        const aSelected = a.cartIndex >= 0;
+        const bSelected = b.cartIndex >= 0;
+        if (aSelected !== bSelected) return aSelected ? -1 : 1;
+        if (aSelected && bSelected && a.cartIndex !== b.cartIndex) return a.cartIndex - b.cartIndex;
+        return a.originalIndex - b.originalIndex;
+      })
+      .map(entry => entry.product);
+  }, [search, selectedCategory, products, cart]);
 
   const filteredMembers = useMemo(() => {
       if(!memberSearch) return members;

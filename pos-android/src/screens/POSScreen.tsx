@@ -49,7 +49,7 @@ export default function POSScreen({ navigation, route }: any) {
     const [mobileCartExpanded, setMobileCartExpanded] = useState(false);
     const { height: screenHeight } = useWindowDimensions();
     const expandedHeight = Math.round(screenHeight * 0.42);
-    const collapsedHeight = 72;
+    const collapsedHeight = 84;
     const cartPanelAnim = React.useRef(new Animated.Value(0)).current; // 0 = collapsed, 1 = expanded
     const [refreshing, setRefreshing] = useState(false);
     const [isPrintingKitchen, setIsPrintingKitchen] = useState(false);
@@ -831,7 +831,7 @@ export default function POSScreen({ navigation, route }: any) {
                 numColumns={!settings.showImages ? 1 : (isTablet ? 3 : 2)}
                 key={(!settings.showImages ? 'list' : 'grid') + (isTablet ? '-tablet' : '-mobile')}
                 keyExtractor={(item) => String(item.id)}
-                contentContainerStyle={tw`p-2 pb-32`}
+                contentContainerStyle={tw`p-2 pb-36`}
                 renderItem={renderProduct}
             />
         </View>
@@ -898,12 +898,12 @@ export default function POSScreen({ navigation, route }: any) {
     const renderMobileCartPanel = () => {
         if (isTablet) return null;
 
-        const emptyBarHeight = 56;
+        const emptyBarHeight = 64;
 
         // Empty cart state — show persistent bottom bar
         if (cartItemCount === 0) {
             return (
-                <View style={[tw`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 absolute bottom-0 left-0 right-0 z-50`, { height: emptyBarHeight }]}>
+                <View style={[tw`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 absolute bottom-2.5 left-2.5 right-2.5 z-50 rounded-2xl shadow-lg`, { height: emptyBarHeight }]}>
                     <View style={tw`flex-1 flex-row items-center justify-center px-4`}>
                         <Icon name="cart-outline" size={20} color={tw.color('gray-300')} style={tw`mr-2.5`} />
                         <Text style={tw`text-gray-400 dark:text-gray-500 font-bold text-sm`}>Belum ada barang di keranjang</Text>
@@ -929,9 +929,9 @@ export default function POSScreen({ navigation, route }: any) {
         });
 
         return (
-            <Animated.View style={[tw`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg absolute bottom-0 left-0 right-0 z-50`, { height: panelHeight }]}>
+            <Animated.View style={[tw`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg absolute bottom-2.5 left-2.5 right-2.5 z-50 rounded-2xl overflow-hidden`, { height: panelHeight }]}>
                 {/* Header area — KERANJANG label + chevron (left), pending (right) */}
-                <TouchableOpacity onPress={toggleExpand} activeOpacity={0.7} style={tw`flex-row items-center justify-between px-4 pt-2.5 pb-1`}>
+                <TouchableOpacity onPress={toggleExpand} activeOpacity={0.7} style={tw`flex-row items-center justify-between px-4 pt-3 pb-1.5`}>
                     <View style={tw`flex-row items-center`}>
                         <Icon name="cart" size={16} color={tw.color('blue-600')} style={tw`mr-2`} />
                         <Text style={tw`text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wide`}>Keranjang</Text>
@@ -1019,7 +1019,7 @@ export default function POSScreen({ navigation, route }: any) {
     // Pending icon when no item in cart (mobile)
     const renderPendingFAB = () => {
         if (pendingSales.length === 0 || cartItemCount > 0 || isTablet) return null;
-        // Position above the empty cart bar (56px)
+        // Position above the floating empty-cart bar.
         return (
             <TouchableOpacity
                 style={tw`absolute bottom-20 right-4 bg-amber-500 p-4 rounded-full shadow-lg z-50 flex-row items-center`}

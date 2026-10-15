@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { PackageCheck, Plus, Minus, Trash2, Save, Loader2, Search } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
+import CurrencyInput from '@/components/CurrencyInput';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -118,7 +119,7 @@ export default function StockReceivingPage() {
                                             <input type="number" value={c.quantityAdded} onChange={e => updateQty(c.productId, parseInt(e.target.value) || 1)} className="w-16 text-center text-sm font-bold border rounded-lg py-1" />
                                             <button onClick={() => updateQty(c.productId, c.quantityAdded + 1)} className="p-1 rounded bg-gray-200 hover:bg-gray-300"><Plus size={14} /></button>
                                         </div>
-                                        <input type="number" value={c.costPrice} onChange={e => updateCost(c.productId, e.target.value)} placeholder="HPP" className="w-24 text-sm border rounded-lg px-2 py-1 text-right" />
+                                        <CurrencyInput value={c.costPrice} onChange={value => updateCost(c.productId, value)} placeholder="HPP" className="w-28 text-sm border rounded-lg px-2 py-1 text-right" />
                                         <button onClick={() => removeFromCart(c.productId)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={16} /></button>
                                     </div>
                                 ))}

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
 import { useStore } from '@/store/useStore';
+import CurrencyInput from '@/components/CurrencyInput';
 
 export default function ProductModal({ isOpen, onClose, onSave, initialData, categories }) {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -221,20 +222,20 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-[3rem] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col transform transition-all animate-in zoom-in-95 duration-300 max-h-[95vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl sm:rounded-[3rem] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col transform transition-all animate-in zoom-in-95 duration-300 max-h-[98vh] sm:max-h-[95vh]">
 
         {/* Futuristic Dark Header */}
-        <div className="px-10 py-8 flex justify-between items-center bg-gray-950 text-white relative flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-500 rounded-2xl shadow-lg shadow-blue-500/20">
+        <div className="px-4 py-4 sm:px-10 sm:py-8 flex justify-between items-center bg-gray-950 text-white relative flex-shrink-0">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="hidden sm:block p-3 bg-blue-500 rounded-2xl shadow-lg shadow-blue-500/20">
               <Boxes size={28} className="text-white" />
             </div>
-            <div>
-              <h3 className="font-black text-2xl tracking-tight leading-none uppercase">
+            <div className="min-w-0">
+              <h3 className="font-black text-lg sm:text-2xl tracking-tight leading-tight sm:leading-none uppercase">
                 {initialData ? 'Edit Inventory Item' : 'New Product Record'}
               </h3>
-              <p className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.4em] mt-2">LitePOS Enterprise System v1.0</p>
+              <p className="hidden sm:block text-gray-500 text-[10px] uppercase font-bold tracking-[0.4em] mt-2">LitePOS Enterprise System v1.0</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-500 hover:text-white">
@@ -243,8 +244,8 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="p-10 space-y-10 overflow-y-auto no-scrollbar">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          <div className="p-4 sm:p-10 space-y-6 sm:space-y-10 overflow-y-auto no-scrollbar">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12">
 
               {/* LEFT SIDE: Visuals & Bento Layout */}
               <div className="lg:col-span-4 space-y-8">
@@ -312,7 +313,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">SKU</label>
                     <div className="relative">
@@ -342,16 +343,15 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                 </div>
 
                 {/* Pricing Section */}
-                <div className="grid grid-cols-2 gap-6 p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 shadow-inner">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-8 bg-gray-50 rounded-2xl sm:rounded-[2.5rem] border border-gray-100 shadow-inner">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest block ml-1">Customer Price (Sell)</label>
                     <div className="relative">
                       <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500" size={20} />
-                      <input
+                      <CurrencyInput
                         required
-                        type="number"
                         value={formData.price}
-                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        onChange={(value) => setFormData({ ...formData, price: value })}
                         className="w-full pl-14 pr-6 py-5 bg-white border-2 border-blue-100 rounded-2xl font-black text-xl text-gray-900 focus:outline-none focus:border-blue-500 transition-all"
                         placeholder="0"
                       />
@@ -361,10 +361,9 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Base Cost (HPP)</label>
                     <div className="relative opacity-60 hover:opacity-100 transition-opacity">
                       <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                      <input
-                        type="number"
+                      <CurrencyInput
                         value={formData.costPrice}
-                        onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                        onChange={(value) => setFormData({ ...formData, costPrice: value })}
                         className="w-full pl-14 pr-6 py-5 bg-white border-2 border-gray-100 rounded-2xl font-bold text-xl text-gray-700 focus:outline-none focus:border-gray-400 transition-all"
                         placeholder="0"
                       />
@@ -429,16 +428,26 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400">
                             {formData.discountType === 'PERCENT' ? '%' : 'Rp'}
                           </span>
-                          <input
-                            required
-                            type="number"
-                            min="0"
-                            max={formData.discountType === 'PERCENT' ? 100 : undefined}
-                            value={formData.discountValue}
-                            onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
-                            className="w-full h-12 pl-12 pr-4 bg-white border border-red-100 rounded-lg font-black outline-none focus:border-red-400"
-                            placeholder="0"
-                          />
+                          {formData.discountType === 'PERCENT' ? (
+                            <input
+                              required
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={formData.discountValue}
+                              onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
+                              className="w-full h-12 pl-12 pr-4 bg-white border border-red-100 rounded-lg font-black outline-none focus:border-red-400"
+                              placeholder="0"
+                            />
+                          ) : (
+                            <CurrencyInput
+                              required
+                              value={formData.discountValue}
+                              onChange={(value) => setFormData({ ...formData, discountValue: value })}
+                              className="w-full h-12 pl-12 pr-4 bg-white border border-red-100 rounded-lg font-black outline-none focus:border-red-400"
+                              placeholder="0"
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -454,7 +463,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                           <input type="checkbox" checked={formData.discountDateEnabled} onChange={(e) => setFormData({ ...formData, discountDateEnabled: e.target.checked })} className="h-4 w-4 rounded border-red-200 accent-red-600" />
                           Periode tanggal aktif
                         </label>
-                        <div className={`grid grid-cols-2 gap-3 ${formData.discountDateEnabled ? '' : 'opacity-45'}`}>
+                        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${formData.discountDateEnabled ? '' : 'opacity-45'}`}>
                           <label className="text-[10px] font-black text-gray-500 uppercase">
                             Mulai tanggal
                             <input disabled={!formData.discountDateEnabled} type="date" value={formData.discountStartAt} onChange={(e) => setFormData({ ...formData, discountStartAt: e.target.value })} className="mt-1 w-full h-11 px-3 bg-white border border-red-100 rounded-lg text-sm text-gray-800 disabled:cursor-not-allowed disabled:bg-gray-100" />
@@ -471,7 +480,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                           <input type="checkbox" checked={formData.discountTimeEnabled} onChange={(e) => setFormData({ ...formData, discountTimeEnabled: e.target.checked })} className="h-4 w-4 rounded border-red-200 accent-red-600" />
                           Jam berlaku aktif
                         </label>
-                        <div className={`grid grid-cols-2 gap-3 ${formData.discountTimeEnabled ? '' : 'opacity-45'}`}>
+                        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${formData.discountTimeEnabled ? '' : 'opacity-45'}`}>
                           <label className="text-[10px] font-black text-gray-500 uppercase">
                             Jam mulai
                             <input disabled={!formData.discountTimeEnabled} type="time" value={formData.discountStartTime} onChange={(e) => setFormData({ ...formData, discountStartTime: e.target.value })} className="mt-1 w-full h-11 px-3 bg-white border border-red-100 rounded-lg text-sm text-gray-800 disabled:cursor-not-allowed disabled:bg-gray-100" />
@@ -506,7 +515,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                   )}
                 </section>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2">
                     <div className="flex justify-between items-center mb-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Stok Awal</label>
@@ -564,7 +573,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                 </div>
                 
                 {initialData && (
-                  <div className="p-6 bg-blue-50/50 rounded-[2rem] border border-blue-100 space-y-4">
+                  <div className="p-4 sm:p-6 bg-blue-50/50 rounded-2xl sm:rounded-[2rem] border border-blue-100 space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                         <Plus size={18} className="text-blue-500" />
                         <h4 className="font-black text-sm text-blue-900 uppercase tracking-widest">Pilihan Tambahan Produk</h4>
@@ -580,10 +589,10 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                             </div>
                         ))}
                     </div>
-                    <div className="flex gap-2 pt-2 border-t border-blue-100/50 mt-4">
-                        <input type="text" value={newAddon.name} onChange={(e) => setNewAddon({...newAddon, name: e.target.value})} placeholder="Contoh: Bungkus kado" className="flex-1 px-4 py-2 rounded-xl border border-blue-100 text-sm focus:outline-none focus:border-blue-300 bg-white" />
-                        <input type="number" value={newAddon.price} onChange={(e) => setNewAddon({...newAddon, price: e.target.value})} placeholder="Harga" className="w-24 px-4 py-2 rounded-xl border border-blue-100 text-sm focus:outline-none focus:border-blue-300 bg-white" />
-                        <button type="button" onClick={handleAddAddon} className="px-4 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors font-bold text-sm">Tambah</button>
+                    <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-blue-100/50 mt-4">
+                        <input type="text" value={newAddon.name} onChange={(e) => setNewAddon({...newAddon, name: e.target.value})} placeholder="Contoh: Bungkus kado" className="w-full sm:flex-1 px-4 py-2 rounded-xl border border-blue-100 text-sm focus:outline-none focus:border-blue-300 bg-white" />
+                        <CurrencyInput value={newAddon.price} onChange={(value) => setNewAddon({...newAddon, price: value})} placeholder="Harga" className="w-full sm:w-28 px-4 py-2 rounded-xl border border-blue-100 text-sm focus:outline-none focus:border-blue-300 bg-white" />
+                        <button type="button" onClick={handleAddAddon} className="w-full sm:w-auto px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors font-bold text-sm">Tambah</button>
                     </div>
                   </div>
                 )}
@@ -592,17 +601,17 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
           </div>
 
           {/* Footer with Floating Effect */}
-          <div className="px-10 py-8 border-t border-gray-100 flex justify-end items-center gap-6 flex-shrink-0 bg-white">
+          <div className="px-4 py-4 sm:px-10 sm:py-8 border-t border-gray-100 flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 sm:gap-6 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={onClose}
-              className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 hover:text-gray-900 transition-colors"
+              className="py-2 text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-gray-400 hover:text-gray-900 transition-colors"
             >
               Dismiss Changes
             </button>
             <button
               type="submit"
-              className="px-12 py-5 bg-gray-950 text-white rounded-[1.8rem] hover:bg-blue-600 shadow-2xl shadow-gray-200 transition-all active:scale-95 font-black text-sm flex items-center gap-3 uppercase tracking-widest"
+              className="w-full sm:w-auto justify-center px-5 py-4 sm:px-12 sm:py-5 bg-gray-950 text-white rounded-2xl sm:rounded-[1.8rem] hover:bg-blue-600 shadow-2xl shadow-gray-200 transition-all active:scale-95 font-black text-xs sm:text-sm flex items-center gap-2 sm:gap-3 uppercase tracking-wider sm:tracking-widest"
             >
               <Save size={20} />
               Confirm Record

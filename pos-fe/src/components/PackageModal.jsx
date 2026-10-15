@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Search, UploadCloud } from 'lucide-react';
 import { useStore } from '@/store/useStore';
+import CurrencyInput from '@/components/CurrencyInput';
+import { formatNumberId } from '@/utils/currency';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -181,12 +183,10 @@ export default function PackageModal({ isOpen, onClose, onSave, initialData }) {
 
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Harga Jual Paket (Rp) *</label>
-                                <input
-                                    type="number"
+                                <CurrencyInput
                                     required
-                                    min="0"
                                     value={formData.price}
-                                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                                    onChange={(value) => setFormData({ ...formData, price: value })}
                                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all font-mono"
                                     placeholder="0"
                                 />
@@ -242,7 +242,7 @@ export default function PackageModal({ isOpen, onClose, onSave, initialData }) {
                                                             className="w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex justify-between items-center"
                                                         >
                                                             <span className="text-sm font-medium text-gray-700 truncate">{p.name}</span>
-                                                            <span className="text-xs text-gray-400">{p.price}</span>
+                                                            <span className="text-xs text-gray-400">Rp {formatNumberId(p.price)}</span>
                                                         </button>
                                                     ))
                                                 ) : (
@@ -266,7 +266,7 @@ export default function PackageModal({ isOpen, onClose, onSave, initialData }) {
                                         <div key={index} className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-white shadow-sm">
                                             <div className="flex-1 min-w-0 pr-4">
                                                 <p className="text-sm font-bold text-gray-800 truncate">{item.product?.name || 'Produk'}</p>
-                                                <p className="text-xs text-gray-500 mt-0.5">@ Rp {item.product?.price || 0}</p>
+                                                <p className="text-xs text-gray-500 mt-0.5">@ Rp {formatNumberId(item.product?.price || 0)}</p>
                                             </div>
                                             
                                             <div className="flex items-center gap-3">

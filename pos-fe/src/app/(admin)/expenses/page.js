@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Wallet, Plus, Trash2, Loader2, Calendar, Filter, ShoppingBag, Receipt, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
+import CurrencyInput from '@/components/CurrencyInput';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -159,7 +160,7 @@ export default function ExpensesPage() {
                         </div>
 
                         <input required placeholder="Deskripsi" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:border-blue-500 outline-none" />
-                        <input required type="number" placeholder="Jumlah (Rp)" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:border-blue-500 outline-none" />
+                        <CurrencyInput required placeholder="Jumlah (Rp)" value={form.amount} onChange={value => setForm({ ...form, amount: value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:border-blue-500 outline-none" />
                         <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:border-blue-500 outline-none">
                             {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                         </select>

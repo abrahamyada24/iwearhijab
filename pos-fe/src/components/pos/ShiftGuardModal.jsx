@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Clock3, Loader2, PlayCircle, ShieldCheck, Wallet } from 'lucide-react';
+import CurrencyInput from '@/components/CurrencyInput';
 
 export default function ShiftGuardModal({
     visible,
@@ -51,13 +52,10 @@ export default function ShiftGuardModal({
                             <div className="relative">
                                 <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={19} />
                                 <span className="absolute left-12 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-500">Rp</span>
-                                <input
+                                <CurrencyInput
                                     id="pos-opening-cash"
-                                    type="number"
-                                    min="0"
-                                    step="1"
                                     value={openingCash}
-                                    onChange={(event) => setOpeningCash(event.target.value)}
+                                    onChange={setOpeningCash}
                                     placeholder="0"
                                     autoFocus
                                     className="w-full rounded-xl border border-gray-200 py-3.5 pl-[4.5rem] pr-4 text-right text-lg font-black text-gray-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"

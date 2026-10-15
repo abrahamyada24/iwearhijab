@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useStore } from '../../store/useStore';
 import { showAlert } from '../../utils/swal';
 import { getPosPendingTransactions } from '../../utils/savedTransactions';
+import CurrencyInput from '../../components/CurrencyInput';
 
 const SalesChart = lazy(() => import('../../components/SalesChart'));
 
@@ -744,11 +745,10 @@ export default function Dashboard() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Kas Awal (Rp)</label>
-            <input
-              type="number"
+            <CurrencyInput
               value={openingCash}
-              onChange={e => setOpeningCash(e.target.value)}
-              placeholder="Contoh: 500000"
+              onChange={setOpeningCash}
+              placeholder="Contoh: 500.000"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
               autoFocus
             />
@@ -792,10 +792,9 @@ export default function Dashboard() {
           )}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Kas Akhir (Rp)</label>
-            <input
-              type="number"
+            <CurrencyInput
               value={closingCash}
-              onChange={e => setClosingCash(e.target.value)}
+              onChange={setClosingCash}
               placeholder="Hitung uang di kasir"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
               autoFocus
