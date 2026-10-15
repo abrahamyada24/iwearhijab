@@ -1025,6 +1025,7 @@ exports.pushLocalData = async (req, res) => {
 
     res.json({
       success: true,
+      activeStore: { id: req.store.id, slug: req.store.slug, name: req.store.name, type: req.store.type },
       message: `Berhasil sinkronisasi. Transaksi: ${savedTransactions}, Produk: ${savedProducts}, Kategori: ${savedCategories}, Pelanggan: ${savedCustomers}, Supplier: ${savedSuppliers}, Paket: ${savedPackages}`,
       stats: { savedTransactions, savedExpenses, savedShifts, savedCategories, savedProducts, savedCustomers, savedStockReceipts, savedSuppliers, savedPackages, savedAddons },
       warnings: syncWarnings,
@@ -1164,6 +1165,7 @@ exports.getTransactionHistory = async (req, res) => {
     res.json({
       success: true,
       data: {
+        activeStore: { id: req.store.id, slug: req.store.slug, name: req.store.name, type: req.store.type },
         transactions: formattedTransactions,
         expenses: formattedExpenses,
         shifts: formattedShifts

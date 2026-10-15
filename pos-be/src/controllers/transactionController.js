@@ -4,6 +4,36 @@ const { getProductPrice } = require('../utils/productDiscount');
 const { normalizePaymentType, resolvePaymentMethod } = require('../services/paymentMethodService');
 const { resolveSelectedAddons, buildAddonItemNotes, calculateAddonAwareLinePricing } = require('../services/productAddonService');
 
+const normalizeIdempotencyKey = (value) => {
+    if (value === undefined || value === null || value === '') return null;
+    const key = String(value).trim();
+    if (!/^[A-Za-z0-9._:-]{8,64}$/.test(key)) {
+        const error = new Error('Idempotency key tidak valid.');
+        error.code = 'INVALID_IDEMPOTENCY_KEY';
+        throw error;
+    }
+    return key;
+};
+
+const idempotencyTransactionId = (storeId, key) => key ? `api:${storeId}:${key}` : null;
+
+const findIdempotentTransaction = (clientTransactionId) => clientTransactionId
+    ? prisma.transaction.findFirst({
+        where: { androidId: clientTransactionId },
+        include: { items: true, payments: true }
+    })
+    : null;
+
+const sendTransactionResult = (res, transaction, replayed = false) => {
+    res.set('Idempotency-Replayed', replayed ? 'true' : 'false');
+    return res.status(replayed ? 200 : 201).json({
+        success: true,
+        message: replayed ? 'Transaksi sebelumnya ditemukan dan digunakan kembali.' : 'Transaksi berhasil dibuat!',
+        idempotentReplay: replayed,
+        data: transaction
+    });
+};
+
 // Inisialisasi Midtrans Snap
 const snap = new midtransClient.Snap({
     isProduction: process.env.MIDTRANS_IS_PRODUCTION === 'true',
@@ -43,7 +73,16 @@ const generateInvoiceNumber = async (tx) => {
  * 1. CREATE TRANSACTION (CHECKOUT)
  */
 exports.createTransaction = async (req, res) => {
+    let clientTransactionId = null;
     try {
+        const idempotencyKey = normalizeIdempotencyKey(
+            req.get('Idempotency-Key') || req.body?.idempotencyKey
+        );
+        clientTransactionId = idempotencyTransactionId(req.storeId, idempotencyKey);
+
+        const existingTransaction = await findIdempotentTransaction(clientTransactionId);
+        if (existingTransaction) return sendTransactionResult(res, existingTransaction, true);
+
         const {
             userId, customerId, customerName, items, payment,
             orderType, note,
@@ -61,6 +100,14 @@ exports.createTransaction = async (req, res) => {
         }
 
         const result = await prisma.$transaction(async (tx) => {
+            if (clientTransactionId) {
+                const existing = await tx.transaction.findFirst({
+                    where: { androidId: clientTransactionId },
+                    include: { items: true, payments: true }
+                });
+                if (existing) return { transaction: existing, replayed: true };
+            }
+
             if (customerId) {
                 const customer = await tx.customer.findUnique({ where: { id: parseInt(customerId) } });
                 if (!customer) throw new Error('Pelanggan tidak tersedia pada usaha aktif.');
@@ -251,6 +298,7 @@ exports.createTransaction = async (req, res) => {
             // Buat transaksi
             const newTransaction = await tx.transaction.create({
                 data: {
+                    androidId: clientTransactionId,
                     shiftId: activeShift?.id || null,
                     userId: req.user.id,
                     customerId: customerId ? parseInt(customerId) : null,
@@ -322,7 +370,10 @@ exports.createTransaction = async (req, res) => {
                 }
             }
 
-            return { ...newTransaction, midtransToken, midtransUrl };
+            return {
+                transaction: { ...newTransaction, midtransToken, midtransUrl },
+                replayed: false
+            };
         }, {
             timeout: 10000,
             // TiDB menggunakan Snapshot Isolation yang diekspos sebagai
@@ -330,18 +381,23 @@ exports.createTransaction = async (req, res) => {
             isolationLevel: 'RepeatableRead'
         });
 
-        res.status(201).json({
-            success: true,
-            message: "Transaksi berhasil dibuat!",
-            data: result
-        });
+        return sendTransactionResult(res, result.transaction, result.replayed);
 
     } catch (error) {
+        // Dua request dengan key yang sama dapat tiba bersamaan. Constraint
+        // unik androidId membuat hanya satu transaksi yang commit; request lain
+        // mengembalikan hasil yang sudah tersimpan tanpa mengulang efek samping.
+        if (error.code === 'P2002' && clientTransactionId) {
+            const existingTransaction = await findIdempotentTransaction(clientTransactionId);
+            if (existingTransaction) return sendTransactionResult(res, existingTransaction, true);
+        }
         console.error('[ERROR] Transaction Error:', error.message);
         const isTransactionConflict = error.code === 'P2034';
         const isDatabaseError = String(error.code || '').startsWith('P')
             || /error in connector|error querying the database|can't reach database server/i.test(String(error.message || ''));
-        const status = error.code === 'SHIFT_REQUIRED'
+        const status = error.code === 'INVALID_IDEMPOTENCY_KEY'
+            ? 400
+            : error.code === 'SHIFT_REQUIRED'
             ? 409
             : isTransactionConflict
                 ? 409

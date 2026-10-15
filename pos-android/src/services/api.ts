@@ -1,14 +1,15 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
-import { isSaasOnlineMode } from '../config/appMode';
 import { clearAuthSession, getAuthToken, OFFLINE_SESSION_TOKEN } from './secureAuthStorage';
+import { clearLicenseCache } from './secureLicenseStorage';
 
-// Backend SaaS LitePOS. Registrasi usaha tetap dilakukan melalui website.
-// URL dapat diganti dari Pengaturan untuk instalasi dedicated.
 export const DEFAULT_API_URL = 'https://litepos-demo-api.vercel.app';
 export const API_BASE_URL_STORAGE_KEY = '@litepos_api_base_url';
 export const API_URL = DEFAULT_API_URL;
+
+const LEGACY_API_URLS = new Set([
+    'http://103.175.221.2:5000',
+]);
 
 const stripApiSuffix = (url: string) => url.replace(/\/api\/?$/i, '');
 
@@ -17,7 +18,8 @@ export const normalizeApiBaseUrl = (value?: string | null) => {
     if (!trimmed) return DEFAULT_API_URL;
 
     const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
-    return stripApiSuffix(withProtocol).replace(/\/+$/, '');
+    const normalized = stripApiSuffix(withProtocol).replace(/\/+$/, '');
+    return LEGACY_API_URLS.has(normalized) ? DEFAULT_API_URL : normalized;
 };
 
 export const buildApiBaseUrl = (baseUrl: string) => `${normalizeApiBaseUrl(baseUrl)}/api`;
@@ -40,54 +42,47 @@ export const resolveApiAssetUrl = (value?: string | null, baseUrl?: string | nul
 };
 
 export const getApiBaseUrl = async () => {
-    // Edisi SaaS publik tidak boleh diarahkan ke server lain melalui nilai lama
-    // di penyimpanan perangkat. Ini juga mencegah JWT terkirim ke host custom.
-    if (isSaasOnlineMode) return DEFAULT_API_URL;
     const savedUrl = await AsyncStorage.getItem(API_BASE_URL_STORAGE_KEY);
     const normalized = normalizeApiBaseUrl(savedUrl);
+
+    // APK demo publik hanya boleh mengirim JWT dan data tenant ke backend demo
+    // resmi. Dukungan URL custom tetap milik build dedicated di AndroidPos-web.
+    if (normalized !== DEFAULT_API_URL) {
+        await AsyncStorage.setItem(API_BASE_URL_STORAGE_KEY, DEFAULT_API_URL);
+        await clearAuthSession();
+        await clearLicenseCache();
+        return DEFAULT_API_URL;
+    }
+
+    if (savedUrl && LEGACY_API_URLS.has(stripApiSuffix(savedUrl.trim()).replace(/\/+$/, ''))) {
+        await AsyncStorage.setItem(API_BASE_URL_STORAGE_KEY, normalized);
+        await clearAuthSession();
+        await clearLicenseCache();
+    }
 
     return normalized;
 };
 
 const api = axios.create({
     baseURL: buildApiBaseUrl(DEFAULT_API_URL),
-    timeout: 10000, // 10 detik timeout
+    timeout: 30000,
     headers: {
         'Content-Type': 'application/json',
     }
 });
 
-// Satu gangguan koneksi bisa menggagalkan beberapa request bootstrap sekaligus.
-// Batasi dialog agar pengguna tidak menerima tumpukan alert yang sama.
-let lastConnectivityAlertAt = 0;
-const CONNECTIVITY_ALERT_COOLDOWN_MS = 15000;
-
-const isConnectivityError = (error: any) => {
-    if (error?.response) return false;
-    const code = String(error?.code || '').toUpperCase();
-    const message = String(error?.message || '').toLowerCase();
-    return code === 'ERR_NETWORK'
-        || code === 'ECONNABORTED'
-        || message.includes('network error')
-        || message.includes('timeout');
-};
-
 export const showApiError = (title: string, error: any, fallbackMessage: string) => {
-    // Error koneksi sudah ditampilkan secara terpusat oleh interceptor.
-    if (error?.__litePosConnectivityAlert) return;
-    Alert.alert(
-        title,
-        error?.response?.data?.message || error?.response?.data?.error || fallbackMessage,
-    );
+    const message = error?.response?.data?.message
+        || error?.response?.data?.error
+        || (error?.code === 'ECONNABORTED' ? 'Server terlalu lama merespons. Silakan coba lagi.' : null)
+        || (error?.response ? null : 'Tidak dapat terhubung ke server. Periksa koneksi internet.')
+        || fallbackMessage;
+    // Import dinamis mencegah siklus modul pada saat bootstrap Axios.
+    require('react-native').Alert.alert(title, String(message));
 };
 
 export const setApiBaseUrl = async (value: string) => {
-    if (isSaasOnlineMode) {
-        await AsyncStorage.removeItem(API_BASE_URL_STORAGE_KEY);
-        api.defaults.baseURL = buildApiBaseUrl(DEFAULT_API_URL);
-        return DEFAULT_API_URL;
-    }
-    const normalized = normalizeApiBaseUrl(value);
+    const normalized = DEFAULT_API_URL;
     const previous = normalizeApiBaseUrl(await AsyncStorage.getItem(API_BASE_URL_STORAGE_KEY));
 
     // JWT hanya valid untuk backend yang menerbitkannya. Saat server diganti,
@@ -97,6 +92,7 @@ export const setApiBaseUrl = async (value: string) => {
         if (token && token !== OFFLINE_SESSION_TOKEN) {
             await clearAuthSession();
         }
+        await clearLicenseCache();
     }
 
     await AsyncStorage.setItem(API_BASE_URL_STORAGE_KEY, normalized);
@@ -129,24 +125,6 @@ api.interceptors.request.use(
     (error) => {
         return Promise.reject(error);
     }
-);
-
-api.interceptors.response.use(
-    response => response,
-    error => {
-        if (isConnectivityError(error)) {
-            error.__litePosConnectivityAlert = true;
-            const now = Date.now();
-            if (now - lastConnectivityAlertAt >= CONNECTIVITY_ALERT_COOLDOWN_MS) {
-                lastConnectivityAlertAt = now;
-                Alert.alert(
-                    'Tidak Ada Koneksi',
-                    'LitePOS SaaS memerlukan internet. Periksa koneksi perangkat atau coba lagi beberapa saat.',
-                );
-            }
-        }
-        return Promise.reject(error);
-    },
 );
 
 export default api;

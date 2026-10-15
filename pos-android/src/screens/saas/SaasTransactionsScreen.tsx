@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import tw, { useAppColorScheme } from 'twrnc';
-import { fetchTransactions } from '../../services/saasDataService';
+import { fetchDashboard, fetchTransactions } from '../../services/saasDataService';
 import api, { showApiError } from '../../services/api';
 import { useStore } from '../../store/useStore';
 
@@ -12,6 +12,8 @@ export default function SaasTransactionsScreen() {
     useAppColorScheme(tw);
     const user = useStore(state => state.user);
     const [transactions, setTransactions] = useState<any[]>([]);
+    const [dashboard, setDashboard] = useState<any>({});
+    const [period, setPeriod] = useState<'week' | 'month' | 'year'>('month');
     const [loading, setLoading] = useState(true);
     const [updatingId, setUpdatingId] = useState<number | null>(null);
     const activeStore = user?.stores?.find((store: any) => Number(store.id) === Number(user.activeStoreId));
@@ -20,14 +22,15 @@ export default function SaasTransactionsScreen() {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await fetchTransactions(1, 100);
+            const [response, dashboardData] = await Promise.all([fetchTransactions(1, 100), fetchDashboard(period)]);
             setTransactions(response.data || []);
+            setDashboard(dashboardData || {});
         } catch (error: any) {
             showApiError('Gagal Memuat Transaksi', error, 'Riwayat transaksi belum dapat dimuat.');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [period]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -54,8 +57,11 @@ export default function SaasTransactionsScreen() {
     return (
         <View style={tw`flex-1 bg-gray-50 dark:bg-gray-950`}>
             <View style={tw`bg-white dark:bg-gray-900 px-5 py-5 border-b border-gray-200 dark:border-gray-800`}>
-                <Text style={tw`text-2xl font-black text-gray-900 dark:text-white`}>Transaksi</Text>
-                <Text style={tw`text-xs text-gray-400 mt-1`}>Data langsung dari backend usaha aktif</Text>
+                <Text style={tw`text-2xl font-black text-gray-900 dark:text-white`}>Laporan</Text>
+                <Text style={tw`text-xs text-gray-400 mt-1`}>Ringkasan dan histori transaksi usaha</Text>
+                <View style={tw`flex-row bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mt-4`}>
+                    {([['week', '7 Hari'], ['month', 'Bulan Ini'], ['year', 'Tahun Ini']] as const).map(([key, label]) => <TouchableOpacity key={key} onPress={() => setPeriod(key)} style={period === key ? tw`flex-1 bg-white dark:bg-gray-700 rounded-lg py-2 items-center` : tw`flex-1 py-2 items-center`}><Text style={period === key ? tw`text-blue-600 dark:text-blue-300 font-black text-xs` : tw`text-gray-400 font-bold text-xs`}>{label}</Text></TouchableOpacity>)}
+                </View>
             </View>
             {loading && transactions.length === 0 ? (
                 <View style={tw`flex-1 items-center justify-center`}><ActivityIndicator size="large" color={tw.color('blue-600')} /></View>
@@ -65,6 +71,13 @@ export default function SaasTransactionsScreen() {
                     keyExtractor={item => String(item.id)}
                     refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
                     contentContainerStyle={tw`p-4 pb-10`}
+                    ListHeaderComponent={(
+                        <View>
+                            <View style={tw`bg-blue-600 rounded-2xl p-5 mb-3`}><Text style={tw`text-blue-100 text-xs font-bold`}>Total Pendapatan</Text><Text style={tw`text-white text-3xl font-black mt-2`}>{rupiah(dashboard?.summary?.totalRevenue)}</Text><Text style={tw`text-blue-100 text-xs mt-1`}>{dashboard?.summary?.totalTransactions || 0} transaksi</Text></View>
+                            <View style={tw`flex-row mb-5`}><View style={tw`flex-1 bg-white dark:bg-gray-800 rounded-xl p-4 mr-2 border border-gray-100 dark:border-gray-700`}><Text style={tw`text-xs text-gray-400`}>Laba Kotor</Text><Text style={tw`font-black text-emerald-600 mt-2`}>{rupiah(dashboard?.summary?.totalProfit)}</Text></View><View style={tw`flex-1 bg-white dark:bg-gray-800 rounded-xl p-4 ml-2 border border-gray-100 dark:border-gray-700`}><Text style={tw`text-xs text-gray-400`}>Pengeluaran</Text><Text style={tw`font-black text-red-500 mt-2`}>{rupiah(dashboard?.summary?.totalExpenses)}</Text></View></View>
+                            <Text style={tw`font-black text-gray-900 dark:text-white mb-3`}>Histori Transaksi</Text>
+                        </View>
+                    )}
                     ListEmptyComponent={<Text style={tw`text-center text-gray-400 mt-16`}>Belum ada transaksi.</Text>}
                     renderItem={({ item }) => (
                         <View style={tw`bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-4 mb-3`}>

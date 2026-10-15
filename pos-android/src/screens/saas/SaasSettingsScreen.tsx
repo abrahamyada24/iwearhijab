@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import tw, { useAppColorScheme } from 'twrnc';
-import api, { getApiBaseUrl, showApiError } from '../../services/api';
+import api, { showApiError } from '../../services/api';
 import { loadDeviceSettings, normalizeServerSettings, saveDeviceSettings } from '../../services/saasDataService';
 import { useStore } from '../../store/useStore';
 
@@ -12,13 +12,11 @@ export default function SaasSettingsScreen() {
     const settings = useStore(state => state.settings);
     const setSettings = useStore(state => state.setSettings);
     const [form, setForm] = useState<any>(settings);
-    const [apiUrl, setApiUrl] = useState('');
     const [saving, setSaving] = useState(false);
     const isManager = ['OWNER', 'ADMIN'].includes(String(user?.role || '').toUpperCase());
 
     useEffect(() => {
         setForm(settings);
-        void getApiBaseUrl().then(setApiUrl);
     }, [settings]);
 
     const save = async () => {
@@ -65,12 +63,11 @@ export default function SaasSettingsScreen() {
     return (
         <ScrollView style={tw`flex-1 bg-gray-50 dark:bg-gray-950`} contentContainerStyle={tw`p-5 pb-12`}>
             <Text style={tw`text-2xl font-black text-gray-900 dark:text-white`}>Pengaturan</Text>
-            <Text style={tw`text-xs text-gray-400 mt-1 mb-5`}>Mode SaaS Online • tanpa database transaksi lokal</Text>
+            <Text style={tw`text-xs text-gray-400 mt-1 mb-5`}>Kelola profil usaha dan pengaturan perangkat</Text>
 
             <View style={tw`bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-5`}>
                 <View style={tw`flex-row items-center`}><Icon name="cloud-check" size={22} color={tw.color('blue-600')} /><Text style={tw`text-blue-900 font-black ml-2`}>Terhubung ke Backend</Text></View>
-                <Text style={tw`text-blue-700 text-xs mt-2`}>{apiUrl}</Text>
-                <Text style={tw`text-blue-600 text-xs mt-1`}>Semua produk, stok, pelanggan, transaksi, dan pegawai tersimpan di server.</Text>
+                <Text style={tw`text-blue-600 text-xs mt-2`}>Data usaha tersimpan aman dan tersinkron otomatis.</Text>
             </View>
 
             <View style={tw`bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-4`}>

@@ -1,15 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import tw, { useAppColorScheme } from 'twrnc';
 import api, { showApiError } from '../../services/api';
 import { fetchCategories, fetchCustomers, fetchProducts } from '../../services/saasDataService';
+import { useStore } from '../../store/useStore';
 
 type Tab = 'products' | 'categories' | 'customers';
 const rupiah = (value: unknown) => `Rp ${Math.round(Number(value || 0)).toLocaleString('id-ID')}`;
 
 export default function SaasManagementScreen({ navigation }: any) {
     useAppColorScheme(tw);
+    const user = useStore(state => state.user);
+    const activeStore = user?.stores?.find((store: any) => Number(store.id) === Number(user.activeStoreId));
+    const businessType = String(activeStore?.type || 'RETAIL').toUpperCase();
+    const isLaundry = businessType === 'LAUNDRY';
+    const itemLabel = isLaundry ? 'Layanan' : 'Produk';
     const [tab, setTab] = useState<Tab>('products');
     const [products, setProducts] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
@@ -19,6 +25,8 @@ export default function SaasManagementScreen({ navigation }: any) {
     const [name, setName] = useState('');
     const [price, setPrice] = useState('');
     const [stock, setStock] = useState('');
+    const [isUnlimitedStock, setIsUnlimitedStock] = useState(isLaundry);
+    const [unitLabel, setUnitLabel] = useState(isLaundry ? 'kg' : 'pcs');
     const [phone, setPhone] = useState('');
     const [categoryId, setCategoryId] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
@@ -42,6 +50,7 @@ export default function SaasManagementScreen({ navigation }: any) {
 
     const resetForm = () => {
         setName(''); setPrice(''); setStock(''); setPhone('');
+        setIsUnlimitedStock(isLaundry); setUnitLabel(isLaundry ? 'kg' : 'pcs');
         setCategoryId(categories[0] ? Number(categories[0].id) : null);
     };
 
@@ -56,11 +65,11 @@ export default function SaasManagementScreen({ navigation }: any) {
                 form.append('categoryId', String(categoryId));
                 form.append('price', String(Number(price || 0)));
                 form.append('costPrice', '0');
-                form.append('stock', String(Number(stock || 0)));
+                form.append('stock', String(isUnlimitedStock ? 0 : Number(stock || 0)));
                 form.append('minStock', '0');
                 form.append('isActive', 'true');
-                form.append('isUnlimitedStock', 'false');
-                form.append('unitLabel', 'pcs');
+                form.append('isUnlimitedStock', String(isUnlimitedStock));
+                form.append('unitLabel', unitLabel);
                 await api.post('/products', form, { headers: { 'Content-Type': 'multipart/form-data' } });
             } else if (tab === 'categories') {
                 await api.post('/products/categories', form, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -100,13 +109,13 @@ export default function SaasManagementScreen({ navigation }: any) {
             <View style={tw`bg-white dark:bg-gray-900 px-4 py-4 border-b border-gray-200 dark:border-gray-800`}>
                 <View style={tw`flex-row items-center`}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={tw`p-2 mr-2`}><Icon name="arrow-left" size={23} color={tw.color('gray-700')} /></TouchableOpacity>
-                    <View style={tw`flex-1`}><Text style={tw`text-xl font-black text-gray-900 dark:text-white`}>Master Data</Text><Text style={tw`text-xs text-gray-400`}>Tersimpan langsung ke backend</Text></View>
+                    <View style={tw`flex-1`}><Text style={tw`text-xl font-black text-gray-900 dark:text-white`}>Master Data</Text><Text style={tw`text-xs text-gray-400`}>{isLaundry ? 'Kelola layanan laundry' : businessType === 'FNB' ? 'Kelola menu dan bahan jual' : 'Kelola produk dan persediaan'}</Text></View>
                     <TouchableOpacity onPress={() => { resetForm(); setModalOpen(true); }} style={tw`bg-blue-600 p-3 rounded-xl`}><Icon name="plus" size={21} color="white" /></TouchableOpacity>
                 </View>
                 <View style={tw`flex-row mt-4`}>
                     {(['products', 'categories', 'customers'] as Tab[]).map(value => (
                         <TouchableOpacity key={value} onPress={() => setTab(value)} style={tab === value ? tw`flex-1 bg-gray-900 rounded-xl py-2.5 mx-1 items-center` : tw`flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl py-2.5 mx-1 items-center`}>
-                            <Text style={tab === value ? tw`text-white font-black text-xs` : tw`text-gray-500 font-black text-xs`}>{value === 'products' ? 'Produk' : value === 'categories' ? 'Kategori' : 'Pelanggan'}</Text>
+                            <Text style={tab === value ? tw`text-white font-black text-xs` : tw`text-gray-500 font-black text-xs`}>{value === 'products' ? itemLabel : value === 'categories' ? 'Kategori' : 'Pelanggan'}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -135,11 +144,17 @@ export default function SaasManagementScreen({ navigation }: any) {
             <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={() => setModalOpen(false)}>
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
                     <ScrollView style={tw`max-h-[85%] bg-white dark:bg-gray-900 rounded-t-3xl`} contentContainerStyle={tw`p-6 pb-10`} keyboardShouldPersistTaps="handled">
-                        <View style={tw`flex-row items-center mb-5`}><Text style={tw`text-xl font-black text-gray-900 dark:text-white flex-1`}>Tambah {tab === 'products' ? 'Produk' : tab === 'categories' ? 'Kategori' : 'Pelanggan'}</Text><TouchableOpacity onPress={() => setModalOpen(false)}><Icon name="close" size={24} color={tw.color('gray-500')} /></TouchableOpacity></View>
+                        <View style={tw`flex-row items-center mb-5`}><Text style={tw`text-xl font-black text-gray-900 dark:text-white flex-1`}>Tambah {tab === 'products' ? itemLabel : tab === 'categories' ? 'Kategori' : 'Pelanggan'}</Text><TouchableOpacity onPress={() => setModalOpen(false)}><Icon name="close" size={24} color={tw.color('gray-500')} /></TouchableOpacity></View>
                         <TextInput value={name} onChangeText={setName} placeholder="Nama" style={tw`border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-3 text-gray-900 dark:text-white`} placeholderTextColor={tw.color('gray-400')} />
                         {tab === 'products' && <>
                             <TextInput value={price} onChangeText={value => setPrice(value.replace(/[^0-9]/g, ''))} placeholder="Harga jual" keyboardType="numeric" style={tw`border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-3 text-gray-900 dark:text-white`} placeholderTextColor={tw.color('gray-400')} />
-                            <TextInput value={stock} onChangeText={value => setStock(value.replace(/[^0-9]/g, ''))} placeholder="Stok awal" keyboardType="numeric" style={tw`border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-3 text-gray-900 dark:text-white`} placeholderTextColor={tw.color('gray-400')} />
+                            <View style={tw`flex-row items-center border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-3`}>
+                                <View style={tw`flex-1`}><Text style={tw`font-bold text-gray-800 dark:text-white`}>Stok tidak terbatas</Text><Text style={tw`text-xs text-gray-400`}>{isLaundry ? 'Cocok untuk jasa atau layanan' : 'Aktifkan hanya untuk item tanpa stok fisik'}</Text></View>
+                                <Switch value={isUnlimitedStock} onValueChange={setIsUnlimitedStock} />
+                            </View>
+                            {!isUnlimitedStock && <TextInput value={stock} onChangeText={value => setStock(value.replace(/[^0-9]/g, ''))} placeholder="Stok awal" keyboardType="numeric" style={tw`border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-3 text-gray-900 dark:text-white`} placeholderTextColor={tw.color('gray-400')} />}
+                            <Text style={tw`font-bold text-gray-700 dark:text-gray-200 mb-2`}>Satuan</Text>
+                            <View style={tw`flex-row mb-3`}>{(isLaundry ? ['kg', 'item'] : ['pcs', 'item']).map(unit => <TouchableOpacity key={unit} onPress={() => setUnitLabel(unit)} style={unitLabel === unit ? tw`bg-blue-600 rounded-full px-4 py-2 mr-2` : tw`bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2 mr-2`}><Text style={unitLabel === unit ? tw`text-white font-bold text-xs` : tw`text-gray-600 dark:text-gray-300 font-bold text-xs`}>{unit === 'item' ? 'Item' : unit.toUpperCase()}</Text></TouchableOpacity>)}</View>
                             <Text style={tw`font-bold text-gray-700 dark:text-gray-200 mb-2`}>Kategori</Text>
                             <View style={tw`flex-row flex-wrap mb-3`}>{categories.map(category => <TouchableOpacity key={category.id} onPress={() => setCategoryId(Number(category.id))} style={categoryId === Number(category.id) ? tw`bg-blue-600 rounded-full px-3 py-2 mr-2 mb-2` : tw`bg-gray-100 dark:bg-gray-800 rounded-full px-3 py-2 mr-2 mb-2`}><Text style={categoryId === Number(category.id) ? tw`text-white font-bold text-xs` : tw`text-gray-600 dark:text-gray-300 font-bold text-xs`}>{category.name}</Text></TouchableOpacity>)}</View>
                         </>}

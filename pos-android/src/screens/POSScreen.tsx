@@ -7,15 +7,15 @@ import api, { resolveApiAssetUrl } from '../services/api';
 import { getDBConnection } from '../database/db';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Camera, CameraType } from 'react-native-camera-kit';
+import { printKitchenTicket } from '../utils/kitchenPrinter';
 import { applyProductDiscount } from '../utils/productDiscount';
+import { getCartItemLineTotal } from '../utils/cartPricing';
+import { getProductAvailability, isProductAvailable } from '../utils/productAvailability';
 
 export default function POSScreen({ navigation, route }: any) {
     useAppColorScheme(tw);
-    const { width, height: screenHeight } = useWindowDimensions();
-    const isTablet = Math.min(width, screenHeight) >= 600;
-    const isLandscape = width > screenHeight;
-    const productColumns = isTablet ? (isLandscape && width >= 1100 ? 4 : 3) : 2;
-    const cartPaneWidth = isTablet ? Math.min(380, Math.max(320, Math.round(width * 0.3))) : 0;
+    const { width } = useWindowDimensions();
+    const isTablet = width >= 768;
 
     const [categories, setCategories] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
@@ -47,10 +47,12 @@ export default function POSScreen({ navigation, route }: any) {
 
     // Mobile cart panel state
     const [mobileCartExpanded, setMobileCartExpanded] = useState(false);
+    const { height: screenHeight } = useWindowDimensions();
     const expandedHeight = Math.round(screenHeight * 0.42);
     const collapsedHeight = 72;
     const cartPanelAnim = React.useRef(new Animated.Value(0)).current; // 0 = collapsed, 1 = expanded
     const [refreshing, setRefreshing] = useState(false);
+    const [isPrintingKitchen, setIsPrintingKitchen] = useState(false);
 
     const cart = useStore((state) => state.cart);
     const settings = useStore((state) => state.settings);
@@ -60,6 +62,8 @@ export default function POSScreen({ navigation, route }: any) {
     const updateCartItemNotes = useStore((state) => state.updateCartItemNotes);
     const updateCartItem = useStore((state) => state.updateCartItem);
     const clearCart = useStore((state) => state.clearCart);
+    const setPendingOrderContext = useStore((state) => state.setPendingOrderContext);
+    const pendingOrderContext = useStore((state) => state.pendingOrderContext);
     const cartTotal = useStore((state) => state.cartTotal());
     const cartSubtotal = useStore((state) => state.cartSubtotal());
     const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -83,7 +87,18 @@ export default function POSScreen({ navigation, route }: any) {
 
     const getPendingMeta = (pending: any) => parsePendingCartPayload(pending.cartData).meta;
     const getPendingItemCount = (pending: any) => parsePendingCartPayload(pending.cartData).items.length;
-    const getPendingDisplayName = (pending: any) => pending.name || 'Penjualan Tersimpan';
+    const isTablePendingOrder = (pending: any) => {
+        const meta = getPendingMeta(pending);
+        return meta?.source === 'TABLE_QR' || Boolean(meta?.tableNumber);
+    };
+    const getPendingDisplayName = (pending: any) => {
+        const meta = getPendingMeta(pending);
+        if (meta?.tableNumber) {
+            const customer = meta.customerName || 'Pelanggan';
+            return `Meja ${meta.tableNumber} - ${customer}`;
+        }
+        return pending.name || 'Order Pending';
+    };
 
     const resolvePendingCartItems = async (items: any[]) => {
         const db = await getDBConnection();
@@ -186,13 +201,14 @@ export default function POSScreen({ navigation, route }: any) {
                 SELECT p.* FROM products p
                 JOIN categories c ON p.categoryId = c.id
                 WHERE LOWER(c.name) NOT LIKE '%bahan baku%'
+                AND COALESCE(p.isActive, 1) = 1
             `;
             if (selectedCategory) prodQuery += ` AND p.categoryId = ${selectedCategory}`;
             
             const [prodResults] = await db.executeSql(prodQuery);
             const prods: any[] = [];
             for (let i = 0; i < prodResults.rows.length; i++) prods.push(prodResults.rows.item(i));
-            setProducts(prods.map(applyProductDiscount));
+            setProducts(prods.filter(product => isProductAvailable(product)).map(applyProductDiscount));
 
             // Load local pending sales
             const [pendingRes] = await db.executeSql('SELECT * FROM saved_transactions ORDER BY createdAt DESC');
@@ -201,18 +217,18 @@ export default function POSScreen({ navigation, route }: any) {
                 const localPending = pendingRes.rows.item(i);
                 const localMeta = parsePendingCartPayload(localPending.cartData).meta;
                 const isTableOrder = localMeta?.source === 'TABLE_QR' || Boolean(localMeta?.tableNumber);
-                if (isTableOrder) continue;
+                if (isTableOrder && !settings.enableTableOrder) continue;
                 pending.push({ ...localPending, source: 'local' });
             }
 
-            // Load server pending retail sales.
+            // Load server pending orders, including table QR orders submitted from public catalog
             try {
                 const remoteRes = await api.get('/saved-transactions');
                 if (remoteRes.data?.success && Array.isArray(remoteRes.data.data)) {
                     for (const remote of remoteRes.data.data) {
                         const remoteMeta = parsePendingCartPayload(remote.cartData).meta;
                         const isTableOrder = remoteMeta?.source === 'TABLE_QR' || Boolean(remoteMeta?.tableNumber);
-                        if (isTableOrder) continue;
+                        if (isTableOrder && !settings.enableTableOrder) continue;
                         pending.push({
                             id: remote.id,
                             name: remote.name,
@@ -241,10 +257,15 @@ export default function POSScreen({ navigation, route }: any) {
         } catch (error) {
             console.error(error);
         }
-    }, [selectedCategory]);
+    }, [selectedCategory, settings.enableTableOrder]);
 
     useEffect(() => {
         loadData();
+    }, [loadData]);
+
+    useEffect(() => {
+        const interval = setInterval(loadData, 60000);
+        return () => clearInterval(interval);
     }, [loadData]);
 
     useEffect(() => {
@@ -328,9 +349,9 @@ export default function POSScreen({ navigation, route }: any) {
                 return;
             }
         } catch (error) {
-            console.warn('Gagal memuat opsi tambahan produk:', error);
+            console.warn('Gagal memuat add-on produk:', error);
         }
-        // Produk tanpa opsi tetap digabung seperti alur retail biasa.
+        // Produk tanpa add-on tetap digabung seperti alur retail biasa.
         addToCart(item);
     };
 
@@ -370,32 +391,29 @@ export default function POSScreen({ navigation, route }: any) {
         const chosenAddons = productAddons
             .map(a => ({ ...a, quantity: Number(addonQuantities[Number(a.id)] || 0) }))
             .filter(a => a.quantity > 0);
-        const extraPrice = chosenAddons.reduce((sum, a) => sum + (Number(a.price || 0) * a.quantity), 0);
         const addonLabel = chosenAddons.length > 0
-            ? `Opsi: ${chosenAddons.map(a => `${a.name}${a.quantity > 1 ? ` x${a.quantity}` : ''}`).join(', ')}`
+            ? `Add-on: ${chosenAddons.map(a => `${a.name}${a.quantity > 1 ? ` x${a.quantity}` : ''}`).join(', ')}`
             : '';
         const cleanCustomerNotes = addonNotes.trim();
         const noteStr = [addonLabel, cleanCustomerNotes].filter(Boolean).join(' | ');
         const basePrice = Number(targetProduct.basePrice ?? targetProduct.price ?? 0);
         const baseOriginalPrice = Number(targetProduct.baseOriginalPrice ?? targetProduct.originalPrice ?? targetProduct.price ?? 0);
-        const addonData = chosenAddons.map(addon => ({
-            id: Number(addon.id),
-            name: addon.name,
-            price: Number(addon.price || 0),
-            quantity: addon.quantity,
-        }));
+        const addonData = chosenAddons.map(addon => ({ id: Number(addon.id), name: addon.name, price: Number(addon.price || 0), quantity: addon.quantity }));
         const patch = {
             notes: noteStr || undefined,
             customerNotes: cleanCustomerNotes || undefined,
-            price: basePrice + extraPrice,
+            price: basePrice,
             basePrice,
-            originalPrice: baseOriginalPrice + extraPrice,
+            originalPrice: baseOriginalPrice,
             baseOriginalPrice,
             addons: addonData,
             addonIds: addonData.map(addon => addon.id),
         };
-        if (selectedProductForAddon) updateCartItem(selectedProductForAddon.cartItemId, patch);
-        else addToCartNewLine({ ...addonProductItem, ...patch });
+        if (selectedProductForAddon) {
+            updateCartItem(selectedProductForAddon.cartItemId, patch);
+        } else {
+            addToCartNewLine({ ...addonProductItem, ...patch });
+        }
         setAddonModalVisible(false);
         setSelectedProductForAddon(null);
         setAddonProductItem(null);
@@ -479,6 +497,17 @@ export default function POSScreen({ navigation, route }: any) {
             const [res] = await db.executeSql('SELECT * FROM products WHERE barcode = ?', [code.trim()]);
             if (res.rows.length > 0) {
                 const product = res.rows.item(0);
+                const availability = getProductAvailability(product);
+                if (!availability.isAvailable) {
+                    Alert.alert(
+                        'Produk Tidak Tersedia',
+                        availability.reason === 'INACTIVE'
+                            ? `${product.name} sedang dinonaktifkan.`
+                            : `${product.name} berada di luar jadwal hari atau jam aktif.`
+                    );
+                    setBarcodeInput('');
+                    return;
+                }
                 handleProductPress(product); // re-use existing logic
                 Vibration.vibrate(100); // haptic feedback on successful scan
                 setBarcodeInput('');
@@ -534,6 +563,26 @@ export default function POSScreen({ navigation, route }: any) {
         }, 500);
     };
 
+    const handlePrintKitchen = async () => {
+        if (isPrintingKitchen || cart.length === 0) return;
+        setIsPrintingKitchen(true);
+        try {
+            await printKitchenTicket(settings, cart, {
+                tableNumber: pendingOrderContext?.tableNumber,
+                customerName: pendingOrderContext?.customerName,
+                orderName: pendingOrderContext?.source === 'TABLE_QR' ? 'ORDER MEJA' : undefined,
+                queueLabel: pendingOrderContext?.queueLabel,
+            });
+            Alert.alert('Berhasil', 'Tiket dapur berhasil dicetak.');
+        } catch (error: any) {
+            Alert.alert('Gagal Cetak Dapur', error?.message || 'Periksa koneksi printer di Pengaturan.');
+        } finally {
+            setIsPrintingKitchen(false);
+        }
+    };
+
+
+
     const resumePendingSale = async (pending: any) => {
         try {
             const { items, meta } = parsePendingCartPayload(pending.cartData);
@@ -541,6 +590,35 @@ export default function POSScreen({ navigation, route }: any) {
             clearCart();
             for (const item of cartData) {
                 addToCartNewLine(item);
+            }
+
+            if (meta?.source === 'TABLE_QR' || meta?.tableNumber) {
+                setPendingOrderContext({
+                    source: meta.source || pending.source,
+                    orderType: 'DINE_IN',
+                    tableNumber: meta.tableNumber,
+                    customerName: meta.customerName,
+                    customerServerId: meta.customerId,
+                    customerMemberId: meta.customerMemberId,
+                    note: meta.note,
+                    orderCode: meta.orderCode,
+                    queueNumber: meta.queueNumber,
+                    queueLabel: meta.queueLabel,
+                });
+            }
+
+            let kitchenPrintError: any = null;
+            if ((meta?.source === 'TABLE_QR' || meta?.tableNumber) && settings.enableKitchenPrint) {
+                try {
+                    await printKitchenTicket(settings, cartData, {
+                        tableNumber: meta.tableNumber,
+                        customerName: meta.customerName,
+                        orderName: 'ORDER MEJA',
+                        queueLabel: meta.queueLabel,
+                    });
+                } catch (printError) {
+                    kitchenPrintError = printError;
+                }
             }
 
             if (pending.source === 'server') {
@@ -551,6 +629,12 @@ export default function POSScreen({ navigation, route }: any) {
             }
             loadData();
             setShowPendingModal(false);
+            if (kitchenPrintError) {
+                Alert.alert(
+                    'Order Masuk ke Kasir',
+                    `Cetak dapur gagal: ${kitchenPrintError?.message || 'Periksa koneksi printer.'}`,
+                );
+            }
         } catch (e) {
             Alert.alert('Error', 'Gagal melanjutkan penjualan tersimpan.');
         }
@@ -603,7 +687,7 @@ export default function POSScreen({ navigation, route }: any) {
                 </TouchableOpacity>
             );
         }
-        const numCols = productColumns;
+        const numCols = isTablet ? 3 : 2;
         return (
             <View style={{ flex: 1 / numCols, padding: 8 }}>
                 <TouchableOpacity
@@ -680,7 +764,7 @@ export default function POSScreen({ navigation, route }: any) {
                     <Icon name="plus" size={14} color={tw.color('gray-800')} />
                 </TouchableOpacity>
             </View>
-            <Text style={tw`font-black text-gray-800 dark:text-gray-100 text-sm w-20 text-right ml-2`}>{formatRp(item.price * item.quantity)}</Text>
+            <Text style={tw`font-black text-gray-800 dark:text-gray-100 text-sm w-20 text-right ml-2`}>{formatRp(getCartItemLineTotal(item))}</Text>
         </View>
     );
 
@@ -693,7 +777,7 @@ export default function POSScreen({ navigation, route }: any) {
                         <Icon name="magnify" size={15} color={tw.color('gray-400')} style={tw`mr-2`} />
                         <TextInput
                             style={tw`flex-1 py-2.5 text-gray-800 dark:text-gray-100 text-sm`}
-                            placeholder="Cari produk..."
+                            placeholder="Cari menu..."
                             placeholderTextColor={tw.color('gray-400')}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -744,8 +828,8 @@ export default function POSScreen({ navigation, route }: any) {
                 data={filteredProducts}
                 extraData={cart}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3b82f6']} />}
-                numColumns={!settings.showImages ? 1 : productColumns}
-                key={(!settings.showImages ? 'list' : 'grid') + `-${productColumns}-columns`}
+                numColumns={!settings.showImages ? 1 : (isTablet ? 3 : 2)}
+                key={(!settings.showImages ? 'list' : 'grid') + (isTablet ? '-tablet' : '-mobile')}
                 keyExtractor={(item) => String(item.id)}
                 contentContainerStyle={tw`p-2 pb-32`}
                 renderItem={renderProduct}
@@ -754,7 +838,7 @@ export default function POSScreen({ navigation, route }: any) {
     );
 
     const renderCartPane = () => (
-        <View style={[tw`bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex-none`, { width: cartPaneWidth }]}>
+        <View style={tw`w-[350px] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex-none`}>
             <View style={tw`p-4 border-b border-gray-200 dark:border-gray-700 flex-row justify-between items-center`}>
                 <Text style={tw`font-black text-lg text-gray-800 dark:text-gray-100`}>Keranjang</Text>
                 <View style={tw`flex-row gap-2`}>
@@ -789,6 +873,16 @@ export default function POSScreen({ navigation, route }: any) {
                     <Text style={tw`font-bold text-gray-500 dark:text-gray-400 uppercase text-xs`}>Total Tagihan</Text>
                     <Text style={tw`font-black text-2xl text-blue-600`}>{formatRp(cartTotal)}</Text>
                 </View>
+                {settings.enableKitchenPrint && (
+                    <TouchableOpacity
+                        style={tw`mb-3 py-3 rounded-xl items-center flex-row justify-center border border-orange-300 bg-orange-50 ${isPrintingKitchen || cart.length === 0 ? 'opacity-50' : ''}`}
+                        disabled={isPrintingKitchen || cart.length === 0}
+                        onPress={handlePrintKitchen}
+                    >
+                        <Icon name="chef-hat" size={18} color={tw.color('orange-700')} style={tw`mr-2`} />
+                        <Text style={tw`font-black text-orange-700`}>{isPrintingKitchen ? 'Mencetak...' : 'Cetak Dapur'}</Text>
+                    </TouchableOpacity>
+                )}
                 <TouchableOpacity
                     style={tw`py-4 rounded-xl items-center flex-row justify-center shadow-sm ${cart.length === 0 ? 'bg-gray-300' : 'bg-blue-600'}`}
                     disabled={cart.length === 0}
@@ -864,6 +958,16 @@ export default function POSScreen({ navigation, route }: any) {
                             <Text style={tw`text-gray-400 text-[10px] font-bold`}>{cartItemCount} item di keranjang</Text>
                         </View>
                     </View>
+                    {settings.enableKitchenPrint && (
+                        <TouchableOpacity
+                            style={tw`mr-2 px-3 py-2.5 rounded-xl flex-row items-center border border-orange-300 bg-orange-50 ${isPrintingKitchen ? 'opacity-50' : ''}`}
+                            disabled={isPrintingKitchen}
+                            onPress={handlePrintKitchen}
+                        >
+                            <Icon name="chef-hat" size={16} color={tw.color('orange-700')} />
+                            <Text style={tw`text-orange-700 font-black text-xs ml-1`}>{isPrintingKitchen ? '...' : 'Dapur'}</Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                         style={tw`bg-blue-600 px-5 py-2.5 rounded-xl flex-row items-center`}
                         onPress={() => navigation.navigate('Checkout')}
@@ -893,7 +997,7 @@ export default function POSScreen({ navigation, route }: any) {
                                             <Text style={tw`text-[10px] text-gray-400 italic`}>Tap untuk add-on / catatan</Text>
                                         )}
                                     </TouchableOpacity>
-                                    <Text style={tw`text-blue-600 text-[10px] font-bold mt-0.5`}>{formatRp(item.price * item.quantity)}</Text>
+                                    <Text style={tw`text-blue-600 text-[10px] font-bold mt-0.5`}>{formatRp(getCartItemLineTotal(item))}</Text>
                                 </View>
                                 <View style={tw`flex-row items-center bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700`}>
                                     <TouchableOpacity onPress={() => handleUpdateQuantity(item, item.quantity - 1)} style={tw`px-2 py-1.5`}>
@@ -939,13 +1043,13 @@ export default function POSScreen({ navigation, route }: any) {
                 <View style={tw`flex-1 bg-black/50 justify-center px-4`}>
                     <View style={tw`bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl`}>
                         <Text style={tw`font-black text-xl text-gray-800 dark:text-gray-100 mb-1`}>
-                            {selectedProductForAddon ? 'Edit Opsi & Catatan' : 'Opsi Tambahan'}
+                            {selectedProductForAddon ? 'Edit Add-on & Catatan' : 'Add-on / Catatan'}
                         </Text>
                         <Text style={tw`text-sm text-gray-500 dark:text-gray-400 mb-4`}>
                             {selectedProductForAddon?.name || addonProductItem?.name}
                         </Text>
 
-                        {/* Retail option quantity controls */}
+                        {/* Add-on quantity controls */}
                         {productAddons.length > 0 && (
                             <View style={tw`mb-4`}>
                                 {productAddons.map(addon => {
@@ -965,14 +1069,14 @@ export default function POSScreen({ navigation, route }: any) {
                                         >
                                             <Text style={tw`flex-1 font-bold text-gray-800 dark:text-gray-100`}>{addon.name}</Text>
                                             <View style={tw`items-end`}>
-                                                {addon.price > 0 && <Text style={tw`text-orange-600 font-bold text-xs mb-1`}>+Rp {addon.price.toLocaleString('id-ID')}</Text>}
-                                                <View style={tw`flex-row items-center border border-orange-200 dark:border-orange-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900`}>
+                                                {addon.price > 0 && <Text style={tw`text-blue-600 font-bold text-xs mb-1`}>+Rp {addon.price.toLocaleString('id-ID')}</Text>}
+                                                <View style={tw`flex-row items-center border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900`}>
                                                     <TouchableOpacity disabled={quantity === 0} onPress={() => updateAddonQuantity(-1)} style={tw`w-9 h-9 items-center justify-center`}>
                                                         <Icon name="minus" size={15} color={tw.color(quantity === 0 ? 'gray-300' : 'gray-600')} />
                                                     </TouchableOpacity>
                                                     <Text style={tw`w-8 text-center font-black text-gray-800 dark:text-gray-100`}>{quantity}</Text>
                                                     <TouchableOpacity disabled={quantity >= 99} onPress={() => updateAddonQuantity(1)} style={tw`w-9 h-9 items-center justify-center`}>
-                                                        <Icon name="plus" size={15} color={tw.color(quantity >= 99 ? 'gray-300' : 'orange-600')} />
+                                                        <Icon name="plus" size={15} color={tw.color(quantity >= 99 ? 'gray-300' : 'blue-600')} />
                                                     </TouchableOpacity>
                                                 </View>
                                             </View>
@@ -1048,7 +1152,7 @@ export default function POSScreen({ navigation, route }: any) {
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
                     <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl max-h-[70%] p-6`}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
-                            <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Penjualan Tersimpan</Text>
+                            <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Order Meja & Pending</Text>
                             <TouchableOpacity onPress={() => setShowPendingModal(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}>
                                 <Icon name="close" size={18} color={tw.color('gray-600')} />
                             </TouchableOpacity>
@@ -1056,14 +1160,20 @@ export default function POSScreen({ navigation, route }: any) {
                         <FlatList
                             data={pendingSales}
                             keyExtractor={item => item.id}
-                            ListEmptyComponent={() => <Text style={tw`text-center text-gray-400 py-8`}>Belum ada penjualan tersimpan</Text>}
+                            ListEmptyComponent={() => <Text style={tw`text-center text-gray-400 py-8`}>Belum ada order meja atau pending</Text>}
                             renderItem={({ item }) => {
                                 const meta = getPendingMeta(item);
+                                const isTableOrder = isTablePendingOrder(item);
                                 return (
                                     <View style={tw`flex-row items-center bg-gray-50 dark:bg-gray-900 p-4 rounded-xl mb-3 border border-gray-100 dark:border-gray-800`}>
                                         <View style={tw`flex-1`}>
                                             <View style={tw`flex-row items-center flex-wrap`}>
                                                 <Text style={tw`font-bold text-gray-800 dark:text-gray-100 mr-2`}>{getPendingDisplayName(item)}</Text>
+                                                {isTableOrder && (
+                                                    <View style={tw`bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mr-1`}>
+                                                        <Text style={tw`text-[9px] font-black text-emerald-700 uppercase`}>Order Meja</Text>
+                                                    </View>
+                                                )}
                                                 {item.source === 'server' && (
                                                     <View style={tw`bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full`}>
                                                         <Text style={tw`text-[9px] font-black text-blue-600 uppercase`}>Server</Text>

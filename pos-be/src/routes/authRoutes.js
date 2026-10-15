@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { rateLimit } = require('express-rate-limit');
 const authController = require('../controllers/authController');
+const mobileBootstrapController = require('../controllers/mobileBootstrapController');
 const upload = require('../middlewares/uploadMiddleware');
 
 const loginLimiter = rateLimit({
@@ -102,6 +103,9 @@ router.post('/register', verifyToken, isAdmin, upload.single('image'), authContr
 router.put('/change-password', verifyToken, authController.changePassword);
 
 router.get('/me', verifyToken, authController.me);
+// Satu request awal untuk Android agar serverless tidak perlu menangani lima
+// cold request terpisah. Tetap berada di balik verifyToken dan store context.
+router.get('/mobile-bootstrap', verifyToken, mobileBootstrapController.getBootstrap);
 router.get('/stores', verifyToken, authController.getStores);
 router.post('/active-store', verifyToken, authController.switchStore);
 router.post('/logout', verifyToken, authController.logout);

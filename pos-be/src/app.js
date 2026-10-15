@@ -49,6 +49,7 @@ const packageRoutes = require('./routes/packageRoutes');
 const supplierRoutes = require('./routes/supplierRoutes');
 const syncRoutes = require('./routes/syncRoutes');
 const catalogRoutes = require('./routes/catalogRoutes'); // Rute Katalog Publik
+const platformAdminRoutes = require('./routes/platformAdminRoutes');
 
 const app = express();
 const HOST = process.env.HOST || '0.0.0.0';
@@ -110,6 +111,8 @@ if (!isProduction || process.env.ENABLE_API_DOCS === 'true') {
 app.use('/api/auth', authRoutes);
 app.use('/api/license', licenseRoutes);
 app.use('/api/catalog', catalogRoutes);
+// Autentikasi platform terpisah dan harus dipasang sebelum middleware tenant.
+app.use('/api/platform-admin', platformAdminRoutes);
 app.post('/api/transactions/notification', transactionController.handleMidtransNotification);
 
 app.get('/api/health', async (req, res) => {

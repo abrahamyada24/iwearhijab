@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, RefreshControl, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import tw, { useAppColorScheme } from 'twrnc';
 import { fetchCategories, fetchProducts } from '../../services/saasDataService';
-import { showApiError } from '../../services/api';
+import { resolveApiAssetUrl, showApiError } from '../../services/api';
 import { useStore } from '../../store/useStore';
 
 const rupiah = (value: unknown) => `Rp ${Math.round(Number(value || 0)).toLocaleString('id-ID')}`;
@@ -68,7 +68,7 @@ export default function SaasPOSScreen({ navigation }: any) {
     return (
         <View style={tw`flex-1 bg-gray-50 dark:bg-gray-950`}>
             <View style={tw`bg-white dark:bg-gray-900 px-4 pt-4 pb-3 border-b border-gray-200 dark:border-gray-800`}>
-                <Text style={tw`text-xl font-black text-gray-900 dark:text-white mb-3`}>Kasir Online</Text>
+                <View style={tw`flex-row items-center mb-3`}><TouchableOpacity onPress={() => navigation.goBack()} style={tw`w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 items-center justify-center mr-3`}><Icon name="arrow-left" size={21} color="#475569" /></TouchableOpacity><View><Text style={tw`text-xl font-black text-gray-900 dark:text-white`}>Kasir</Text><Text style={tw`text-xs text-gray-400`}>{settings.storeName}</Text></View></View>
                 <View style={tw`flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-xl px-3`}>
                     <Icon name="magnify" size={20} color={tw.color('gray-400')} />
                     <TextInput value={search} onChangeText={setSearch} placeholder="Cari produk, SKU, atau barcode" style={tw`flex-1 px-3 py-3 text-gray-900 dark:text-white`} placeholderTextColor={tw.color('gray-400')} />
@@ -105,9 +105,7 @@ export default function SaasPOSScreen({ navigation }: any) {
                     ListEmptyComponent={<Text style={tw`text-center text-gray-400 mt-16`}>Produk tidak ditemukan.</Text>}
                     renderItem={({ item }) => (
                         <TouchableOpacity onPress={() => add(item)} style={tw`flex-1 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-4 m-1.5 min-h-36`}>
-                            <View style={tw`w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 items-center justify-center mb-3`}>
-                                <Icon name="package-variant-closed" size={22} color={tw.color('blue-600')} />
-                            </View>
+                            {settings.showImages && item.imageUrl ? <Image source={{ uri: resolveApiAssetUrl(item.imageUrl, settings.apiBaseUrl) || undefined }} style={tw`w-full h-24 rounded-xl bg-gray-100 mb-3`} resizeMode="cover" /> : <View style={tw`w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 items-center justify-center mb-3`}><Icon name="package-variant-closed" size={22} color={tw.color('blue-600')} /></View>}
                             <Text numberOfLines={2} style={tw`font-black text-gray-900 dark:text-white flex-1`}>{item.name}</Text>
                             <Text style={tw`font-black text-blue-600 mt-2`}>{rupiah(item.finalPrice ?? item.price)}</Text>
                             <Text style={tw`text-[10px] text-gray-400 mt-1`}>{item.isUnlimitedStock ? 'Stok tak terbatas' : `Stok ${item.stock || 0}`}</Text>

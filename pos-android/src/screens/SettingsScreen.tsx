@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert, PermissionsAndroid, Platform, View, Text, TouchableOpacity,
-    ScrollView, TextInput, Switch, Image, LayoutAnimation, UIManager, Linking, useWindowDimensions
+    ScrollView, TextInput, Switch, Image, LayoutAnimation, UIManager, Linking,
+    Modal, ActivityIndicator
 } from 'react-native';
 import tw, { useAppColorScheme } from 'twrnc';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -17,9 +18,12 @@ import { requestPrinterPermissions } from '../utils/permissions';
 import { RECEIPT_LOGO_BASE64 } from '../assets/receiptLogoBase64';
 import ViewShot from 'react-native-view-shot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Clipboard from '@react-native-clipboard/clipboard';
 import api, { DEFAULT_API_URL, getApiBaseUrl, setApiBaseUrl as persistApiBaseUrl } from '../services/api';
-import { clearAuthSession, getAuthToken, OFFLINE_SESSION_TOKEN } from '../services/secureAuthStorage';
 import { connectConfiguredPrinter } from '../utils/printerConnection';
+import { clearAuthSession, getAuthToken, OFFLINE_SESSION_TOKEN } from '../services/secureAuthStorage';
+import { activateLicense, licenseToSettings } from '../services/licenseService';
+import { clearOperationalLocalData, syncService } from '../services/syncService';
 import {
     getReceiptLogoPrintOptions,
     RECEIPT_LOGO_CAPTURE_HEIGHT,
@@ -32,6 +36,43 @@ import {
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+type ResetType = 'STOCK' | 'TRANSACTIONS' | 'ALL';
+type TransactionResetMode = 'ALL' | 'RANGE';
+
+const RESET_OPTIONS: Array<{
+    type: ResetType;
+    label: string;
+    phrase: string;
+    icon: string;
+    description: string;
+    successMessage: string;
+}> = [
+    {
+        type: 'STOCK',
+        label: 'Reset Stok',
+        phrase: 'RESET STOK',
+        icon: 'package-variant-closed-remove',
+        description: 'Nolkan stok produk dan hapus riwayat stok. Katalog serta transaksi tetap ada.',
+        successMessage: 'Stok seluruh produk menjadi 0. Katalog dan transaksi tetap tersimpan.',
+    },
+    {
+        type: 'TRANSACTIONS',
+        label: 'Reset Transaksi',
+        phrase: 'RESET TRANSAKSI',
+        icon: 'receipt-text-remove-outline',
+        description: 'Hapus transaksi, pembayaran, pesanan tersimpan, dan antrean. Stok serta katalog tetap ada.',
+        successMessage: 'Seluruh transaksi telah dihapus. Stok, katalog, shift, dan pengeluaran tetap tersimpan.',
+    },
+    {
+        type: 'ALL',
+        label: 'Reset Semua',
+        phrase: 'RESET OUTLET',
+        icon: 'delete-sweep-outline',
+        description: 'Hapus seluruh data operasional termasuk transaksi, stok, katalog, pelanggan, shift, dan pengeluaran.',
+        successMessage: 'Seluruh data operasional telah dibersihkan. Akun, lisensi, dan pengaturan tetap tersimpan.',
+    },
+];
 
 // ── Section Menu Item ────────────────────────────────────────────────────────
 function SectionItem({ icon, iconColor, label, sublabel, isOpen, onPress, children }: any) {
@@ -64,10 +105,15 @@ function SectionItem({ icon, iconColor, label, sublabel, isOpen, onPress, childr
 }
 
 export default function SettingsScreen({ navigation }: any) {
-    const { width, height } = useWindowDimensions();
-    const isTablet = Math.min(width, height) >= 600;
-    const { settings, setSettings } = useStore();
-    const [storeName, setStoreName] = useState<string>(settings?.storeName || 'Warna Warni');
+    const { settings, setSettings, user } = useStore();
+    const canManageBusinessSettings = user?.role === 'OWNER' || user?.role === 'ADMIN';
+    const isOwner = user?.role === 'OWNER';
+    const licenseNumber = settings?.license_number || 'Belum tersinkron';
+    const handleCopyLicenseNumber = () => {
+        Clipboard.setString(licenseNumber);
+        Alert.alert('Nomor Lisensi Disalin', `${licenseNumber} sudah disalin.`);
+    };
+    const [storeName, setStoreName] = useState<string>(settings?.storeName || 'LitePOS');
     const [storeAddress, setStoreAddress] = useState<string>(settings?.storeAddress || '');
     const [storePhone, setStorePhone] = useState<string>(settings?.storePhone || '');
     const [showImages, setShowImages] = useState<boolean>(settings?.showImages ?? true);
@@ -75,6 +121,14 @@ export default function SettingsScreen({ navigation }: any) {
     const [storeLogo, setStoreLogo] = useState<string | null>(settings?.storeLogo || null);
     const [enablePreOrder, setEnablePreOrder] = useState<boolean>(settings?.enablePreOrder ?? false);
     const [enableShift, setEnableShift] = useState<boolean>(settings?.enableShift ?? true);
+    const [enableShiftReminder, setEnableShiftReminder] = useState<boolean>(settings?.enableShiftReminder ?? true);
+    const [shiftDurationHours, setShiftDurationHours] = useState<string>(String((Number(settings?.shiftDurationMinutes) || 480) / 60));
+    const [shiftReminderMinutes, setShiftReminderMinutes] = useState<string>(String(settings?.shiftReminderMinutes ?? 15));
+    const [shiftDayCutoff, setShiftDayCutoff] = useState<string>(settings?.shiftDayCutoff || '23:50');
+    const [enableDineTable, setEnableDineTable] = useState<boolean>(settings?.enableDineTable ?? false);
+    const [enableTableOrder, setEnableTableOrder] = useState<boolean>(settings?.enableTableOrder ?? false);
+    const [enableKitchenQueue, setEnableKitchenQueue] = useState<boolean>(settings?.enableKitchenQueue ?? false);
+    const [enableKitchenPrint, setEnableKitchenPrint] = useState<boolean>(settings?.enableKitchenPrint ?? false);
     const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(settings?.allowNegativeStock ?? false);
     const [showLogoOnReceipt, setShowLogoOnReceipt] = useState<boolean>(settings?.showLogoOnReceipt ?? true);
     const [receiptFooter, setReceiptFooter] = useState<string>(settings?.receiptFooter || '');
@@ -83,8 +137,31 @@ export default function SettingsScreen({ navigation }: any) {
     const [loyaltyMultiplierAmount, setLoyaltyMultiplierAmount] = useState<string>(String(settings?.loyalty_multiplier_amount || '1000'));
     const [loyaltyPointValue, setLoyaltyPointValue] = useState<string>(String(settings?.loyalty_point_value || '0'));
     const [loyaltyMinPoints, setLoyaltyMinPoints] = useState<string>(String(settings?.loyalty_min_points || '0'));
+    const [loyaltyEarningMode, setLoyaltyEarningMode] = useState<'SPEND_MULTIPLE' | 'TRANSACTION_THRESHOLD'>(settings?.loyalty_earning_mode || 'TRANSACTION_THRESHOLD');
+    const [loyaltyRedemptionMode, setLoyaltyRedemptionMode] = useState<'CASH_DISCOUNT' | 'FREE_PRODUCT'>(settings?.loyalty_redemption_mode || 'FREE_PRODUCT');
     const [googleSheetUrl, setGoogleSheetUrl] = useState<string>(settings?.google_sheet_url || '');
     const [apiBaseUrl, setApiBaseUrlInput] = useState<string>(settings?.apiBaseUrl || DEFAULT_API_URL);
+    const [licenseCode, setLicenseCode] = useState('');
+    const [isActivatingLicense, setIsActivatingLicense] = useState(false);
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [resetType, setResetType] = useState<ResetType | null>(null);
+    const [transactionResetMode, setTransactionResetMode] = useState<TransactionResetMode>('ALL');
+    const [transactionStartDate, setTransactionStartDate] = useState('');
+    const [transactionEndDate, setTransactionEndDate] = useState('');
+    const [resetPassword, setResetPassword] = useState('');
+    const [resetPhrase, setResetPhrase] = useState('');
+    const [resetCountdown, setResetCountdown] = useState<number | null>(null);
+    const [isResettingData, setIsResettingData] = useState(false);
+    const selectedReset = RESET_OPTIONS.find(option => option.type === resetType) || null;
+    const usesTransactionRange = resetType === 'TRANSACTIONS' && transactionResetMode === 'RANGE';
+    const transactionRangeValid = !usesTransactionRange || (
+        /^\d{4}-\d{2}-\d{2}$/.test(transactionStartDate)
+        && /^\d{4}-\d{2}-\d{2}$/.test(transactionEndDate)
+        && transactionStartDate <= transactionEndDate
+    );
+    const resetImpactDescription = usesTransactionRange
+        ? `Hapus transaksi dari ${transactionStartDate || 'tanggal awal'} sampai ${transactionEndDate || 'tanggal akhir'}, termasuk pembayaran dan antrean terkait. Stok, katalog, shift, serta pengeluaran tetap ada.`
+        : selectedReset?.description || '';
     const [, , setColorScheme] = useAppColorScheme(tw);
     const logoShotRef = useRef<any>(null);
     const isHydratingSettingsRef = useRef(true);
@@ -103,9 +180,141 @@ export default function SettingsScreen({ navigation }: any) {
 
     useEffect(() => { loadSettingsFromDB(); }, []);
 
+    useEffect(() => {
+        if (resetCountdown === null || resetCountdown <= 0) return;
+        const timer = setTimeout(() => setResetCountdown(value => value === null ? null : value - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [resetCountdown]);
+
     const toggleSection = (key: string) => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setOpenSection(openSection === key ? null : key);
+    };
+
+    const handleActivateLicense = async () => {
+        if (!licenseCode.trim()) {
+            Alert.alert('Kode Belum Diisi', 'Masukkan kode aktivasi outlet.');
+            return;
+        }
+        setIsActivatingLicense(true);
+        try {
+            const license = await activateLicense(licenseCode);
+            setSettings({ ...useStore.getState().settings, ...licenseToSettings(license) });
+            setLicenseCode('');
+            Alert.alert('Lisensi Aktif', 'Masa aktif outlet berhasil diperpanjang.');
+        } catch (error: any) {
+            Alert.alert('Aktivasi Gagal', error?.response?.data?.message || error?.message || 'Kode tidak dapat diproses.');
+        } finally {
+            setIsActivatingLicense(false);
+        }
+    };
+
+    const closeResetModal = () => {
+        if (isResettingData) return;
+        setShowResetModal(false);
+        setResetCountdown(null);
+        setResetType(null);
+        setTransactionResetMode('ALL');
+        setTransactionStartDate('');
+        setTransactionEndDate('');
+        setResetPassword('');
+        setResetPhrase('');
+    };
+
+    const performGlobalReset = async () => {
+        setIsResettingData(true);
+        try {
+            const response = await api.post('/license/reset-data', {
+                password: resetPassword,
+                confirmation: resetPhrase.trim(),
+                resetType,
+                transactionMode: resetType === 'TRANSACTIONS' ? transactionResetMode : undefined,
+                startDate: usesTransactionRange ? transactionStartDate : undefined,
+                endDate: usesTransactionRange ? transactionEndDate : undefined,
+            }, { timeout: 30000 });
+            const resetState = response.data?.data?.resetState;
+            const resetVersion = Number(resetState?.version);
+            if (!Number.isInteger(resetVersion) || resetVersion < 1) {
+                throw new Error('Server tidak mengembalikan versi reset yang valid.');
+            }
+            await clearOperationalLocalData(
+                resetVersion,
+                resetState?.resetAt || null,
+                (resetState?.scope || resetType) as ResetType,
+                resetState?.transactionRange
+                    ? {
+                        transactionResetAll: false,
+                        transactionRanges: [{
+                            startAt: String(resetState.transactionRange.startAt),
+                            endAt: String(resetState.transactionRange.endAt),
+                        }],
+                    }
+                    : { transactionResetAll: true }
+            );
+            if ((resetState?.scope || resetType) === 'ALL') {
+                useStore.getState().setActiveShift(null);
+            }
+            useStore.getState().clearCart();
+            setSettings({
+                ...useStore.getState().settings,
+                dataResetVersion: resetVersion,
+                dataResetAt: resetState?.resetAt || new Date().toISOString(),
+                dataResetType: resetState?.scope || resetType || '',
+            });
+            setShowResetModal(false);
+            setResetCountdown(null);
+            setResetType(null);
+            setTransactionResetMode('ALL');
+            setTransactionStartDate('');
+            setTransactionEndDate('');
+            setResetPassword('');
+            setResetPhrase('');
+            Alert.alert(
+                'Reset Berhasil',
+                usesTransactionRange
+                    ? `Transaksi tanggal ${transactionStartDate} sampai ${transactionEndDate} telah dihapus. Stok, katalog, shift, dan pengeluaran tetap tersimpan.`
+                    : selectedReset?.successMessage || 'Data berhasil direset.'
+            );
+        } catch (error: any) {
+            setResetCountdown(null);
+            setShowResetModal(true);
+            Alert.alert(
+                'Reset Gagal',
+                error?.response?.data?.message || error?.message || 'Data tidak dapat direset.'
+            );
+        } finally {
+            setIsResettingData(false);
+        }
+    };
+
+    const confirmGlobalReset = () => {
+        if (!selectedReset) {
+            Alert.alert('Jenis Reset Belum Dipilih', 'Pilih reset stok, transaksi, atau semua data.');
+            return;
+        }
+        if (!resetPassword || resetPhrase.trim() !== selectedReset.phrase) {
+            Alert.alert('Konfirmasi Belum Lengkap', `Masukkan password Owner dan ketik ${selectedReset.phrase} dengan tepat.`);
+            return;
+        }
+        if (!transactionRangeValid) {
+            Alert.alert('Rentang Tanggal Belum Valid', 'Isi tanggal awal dan akhir dengan format YYYY-MM-DD. Tanggal akhir tidak boleh sebelum tanggal awal.');
+            return;
+        }
+        Alert.alert(
+            'Konfirmasi 1 dari 2',
+            `${resetImpactDescription}\n\nPerubahan berlaku permanen di website dan seluruh Android. Lanjut ke konfirmasi akhir?`,
+            [
+                { text: 'Batal', style: 'cancel' },
+                {
+                    text: 'Lanjut',
+                    style: 'destructive',
+                    onPress: () => {
+                        setShowResetModal(false);
+                        setResetCountdown(10);
+                    },
+                },
+            ]
+        );
     };
 
     const loadSettingsFromDB = async () => {
@@ -121,16 +330,20 @@ export default function SettingsScreen({ navigation }: any) {
             const normalizedApiBaseUrl = await persistApiBaseUrl(rawSettings.apiBaseUrl || await getApiBaseUrl());
             const finalSettings = {
                 ...settings,
-                storeName: rawSettings.storeName || 'Warna Warni',
+                storeName: rawSettings.storeName || 'LitePOS',
                 storeAddress: rawSettings.storeAddress || '',
                 storePhone: rawSettings.storePhone || '',
                 storeLogo: rawSettings.storeLogo || null,
                 enablePreOrder: rawSettings.enablePreOrder === 'true',
-                enableDineTable: false,
-                enableTableOrder: false,
-                enableKitchenQueue: false,
-                enableKitchenPrint: false,
+                enableDineTable: rawSettings.enableDineTable === 'true',
+                enableTableOrder: rawSettings.enableTableOrder === 'true',
+                enableKitchenQueue: rawSettings.enableKitchenQueue === 'true',
+                enableKitchenPrint: rawSettings.enableKitchenPrint === 'true',
                 enableShift: rawSettings.enableShift === undefined ? true : rawSettings.enableShift === 'true',
+                enableShiftReminder: rawSettings.enableShiftReminder === undefined ? true : rawSettings.enableShiftReminder === 'true',
+                shiftDurationMinutes: Number(rawSettings.shiftDurationMinutes || 480),
+                shiftReminderMinutes: Number(rawSettings.shiftReminderMinutes || 15),
+                shiftDayCutoff: /^([01]\d|2[0-3]):[0-5]\d$/.test(rawSettings.shiftDayCutoff || '') ? rawSettings.shiftDayCutoff : '23:50',
                 showImages: rawSettings.showImages === 'true',
                 printerAddress: rawSettings.printerAddress || null,
                 printerType: rawSettings.printerType || null,
@@ -138,13 +351,20 @@ export default function SettingsScreen({ navigation }: any) {
                 allowNegativeStock: rawSettings.allowNegativeStock === 'true',
                 showLogoOnReceipt: rawSettings.showLogoOnReceipt === undefined ? true : rawSettings.showLogoOnReceipt === 'true',
                 receiptFooter: rawSettings.receiptFooter || '',
+                taxRate: Number(rawSettings.taxRate || 0),
+                serviceCharge: Number(rawSettings.serviceCharge || 0),
                 loyalty_active: rawSettings.loyalty_active === 'true',
                 loyalty_multiplier: Number(rawSettings.loyalty_multiplier || 1),
                 loyalty_multiplier_amount: Number(rawSettings.loyalty_multiplier_amount || 1000),
                 loyalty_point_value: Number(rawSettings.loyalty_point_value || 0),
                 loyalty_min_points: Number(rawSettings.loyalty_min_points || 0),
+                loyalty_earning_mode: rawSettings.loyalty_earning_mode === 'SPEND_MULTIPLE' ? 'SPEND_MULTIPLE' : 'TRANSACTION_THRESHOLD',
+                loyalty_redemption_mode: rawSettings.loyalty_redemption_mode === 'CASH_DISCOUNT' ? 'CASH_DISCOUNT' : 'FREE_PRODUCT',
                 google_sheet_url: rawSettings.google_sheet_url || '',
                 apiBaseUrl: normalizedApiBaseUrl,
+                dataResetVersion: Number(rawSettings.dataResetVersion || 0),
+                dataResetAt: rawSettings.dataResetAt || '',
+                dataResetType: rawSettings.dataResetType || '',
             };
             setStoreName(finalSettings.storeName);
             setStoreAddress(finalSettings.storeAddress);
@@ -152,11 +372,21 @@ export default function SettingsScreen({ navigation }: any) {
             setStoreLogo(finalSettings.storeLogo);
             setEnablePreOrder(finalSettings.enablePreOrder);
             setEnableShift(rawSettings.enableShift === undefined ? true : rawSettings.enableShift === 'true');
+            setEnableShiftReminder(finalSettings.enableShiftReminder);
+            setShiftDurationHours(String(finalSettings.shiftDurationMinutes / 60));
+            setShiftReminderMinutes(String(finalSettings.shiftReminderMinutes));
+            setShiftDayCutoff(finalSettings.shiftDayCutoff);
+            setEnableDineTable(finalSettings.enableDineTable);
+            setEnableTableOrder(finalSettings.enableTableOrder);
+            setEnableKitchenQueue(finalSettings.enableKitchenQueue);
+            setEnableKitchenPrint(finalSettings.enableKitchenPrint);
             setLoyaltyActive(finalSettings.loyalty_active);
             setLoyaltyMultiplier(String(finalSettings.loyalty_multiplier));
             setLoyaltyMultiplierAmount(String(finalSettings.loyalty_multiplier_amount));
             setLoyaltyPointValue(String(finalSettings.loyalty_point_value));
             setLoyaltyMinPoints(String(finalSettings.loyalty_min_points));
+            setLoyaltyEarningMode(finalSettings.loyalty_earning_mode as 'SPEND_MULTIPLE' | 'TRANSACTION_THRESHOLD');
+            setLoyaltyRedemptionMode(finalSettings.loyalty_redemption_mode as 'CASH_DISCOUNT' | 'FREE_PRODUCT');
             setGoogleSheetUrl(finalSettings.google_sheet_url);
             setApiBaseUrlInput(finalSettings.apiBaseUrl);
             setShowImages(finalSettings.showImages);
@@ -179,20 +409,34 @@ export default function SettingsScreen({ navigation }: any) {
         }
     };
 
-        const saveSettings = async () => {
+    const saveSettings = async () => {
         try {
             const db = await getDBConnection();
             const themeToSave = isDarkMode ? 'dark' : 'light';
             const normalizedApiBaseUrl = await persistApiBaseUrl(apiBaseUrl || DEFAULT_API_URL);
-            const settingsToSave = [
+            const normalizedShiftDurationMinutes = Math.min(2880, Math.max(30, Math.round((Number(shiftDurationHours) || 8) * 60)));
+            const normalizedShiftReminderMinutes = Math.min(240, Math.max(0, Math.round(Number(shiftReminderMinutes) || 0)));
+            const normalizedShiftDayCutoff = /^([01]\d|2[0-3]):[0-5]\d$/.test(shiftDayCutoff) ? shiftDayCutoff : '23:50';
+            const localSettingsToSave = [
+                ['theme', themeToSave],
+                ['enableKitchenPrint', enableKitchenPrint ? 'true' : 'false'],
+                ['apiBaseUrl', normalizedApiBaseUrl],
+            ];
+            const businessSettingsToSave = [
                 ['storeName', storeName],
                 ['storeAddress', storeAddress],
                 ['storePhone', storePhone],
                 ['storeLogo', storeLogo || ''],
                 ['enablePreOrder', enablePreOrder ? 'true' : 'false'],
                 ['enableShift', enableShift ? 'true' : 'false'],
+                ['enableShiftReminder', enableShiftReminder ? 'true' : 'false'],
+                ['shiftDurationMinutes', String(normalizedShiftDurationMinutes)],
+                ['shiftReminderMinutes', String(normalizedShiftReminderMinutes)],
+                ['shiftDayCutoff', normalizedShiftDayCutoff],
+                ['enableDineTable', enableDineTable ? 'true' : 'false'],
+                ['enableTableOrder', enableTableOrder ? 'true' : 'false'],
+                ['enableKitchenQueue', enableKitchenQueue ? 'true' : 'false'],
                 ['showImages', showImages ? 'true' : 'false'],
-                ['theme', themeToSave],
                 ['allowNegativeStock', allowNegativeStock ? 'true' : 'false'],
                 ['showLogoOnReceipt', showLogoOnReceipt ? 'true' : 'false'],
                 ['receiptFooter', receiptFooter],
@@ -201,27 +445,69 @@ export default function SettingsScreen({ navigation }: any) {
                 ['loyalty_multiplier_amount', loyaltyMultiplierAmount],
                 ['loyalty_point_value', loyaltyPointValue],
                 ['loyalty_min_points', loyaltyMinPoints],
+                ['loyalty_earning_mode', loyaltyEarningMode],
+                ['loyalty_redemption_mode', loyaltyRedemptionMode],
                 ['google_sheet_url', googleSheetUrl],
-                ['apiBaseUrl', normalizedApiBaseUrl],
             ];
-            for (const [key, value] of settingsToSave) {
+
+            for (const [key, value] of localSettingsToSave) {
                 await db.executeSql(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, [key, value]);
+            }
+
+            let businessSettingsChanged = false;
+            if (canManageBusinessSettings) {
+                for (const [key, value] of businessSettingsToSave) {
+                    const [existing] = await db.executeSql('SELECT value FROM settings WHERE key = ?', [key]);
+                    const currentValue = existing.rows.length > 0 ? String(existing.rows.item(0).value ?? '') : null;
+                    if (currentValue !== String(value ?? '')) businessSettingsChanged = true;
+                    await db.executeSql(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, [key, value]);
+                }
             }
             if (connectedPrinter && printerType) {
                 await db.executeSql(`INSERT OR REPLACE INTO settings (key, value) VALUES ('printerAddress', ?)`, [connectedPrinter]);
                 await db.executeSql(`INSERT OR REPLACE INTO settings (key, value) VALUES ('printerType', ?)`, [printerType]);
             }
-            await db.executeSql(
-                `INSERT OR REPLACE INTO settings (key, value) VALUES ('settings_sync_pending', 'true')`
-            );
-            setSettings({ ...settings, storeName, storeAddress, storePhone, storeLogo, enablePreOrder, enableShift, enableDineTable: false, enableTableOrder: false, enableKitchenQueue: false, enableKitchenPrint: false, showImages, printerAddress: connectedPrinter, printerType, theme: themeToSave, allowNegativeStock, showLogoOnReceipt, receiptFooter,
+            if (businessSettingsChanged) {
+                await db.executeSql(
+                    `INSERT OR REPLACE INTO settings (key, value) VALUES ('settings_sync_pending', 'true')`
+                );
+            }
+
+            const businessSettings = canManageBusinessSettings ? {
+                storeName,
+                storeAddress,
+                storePhone,
+                storeLogo,
+                enablePreOrder,
+                enableShift,
+                enableShiftReminder,
+                shiftDurationMinutes: normalizedShiftDurationMinutes,
+                shiftReminderMinutes: normalizedShiftReminderMinutes,
+                shiftDayCutoff: normalizedShiftDayCutoff,
+                enableDineTable,
+                enableTableOrder,
+                enableKitchenQueue,
+                showImages,
+                allowNegativeStock,
+                showLogoOnReceipt,
+                receiptFooter,
                 loyalty_active: loyaltyActive,
                 loyalty_multiplier: Number(loyaltyMultiplier),
                 loyalty_multiplier_amount: Number(loyaltyMultiplierAmount),
                 loyalty_point_value: Number(loyaltyPointValue),
                 loyalty_min_points: Number(loyaltyMinPoints),
+                loyalty_earning_mode: loyaltyEarningMode,
+                loyalty_redemption_mode: loyaltyRedemptionMode,
                 google_sheet_url: googleSheetUrl,
-                apiBaseUrl: normalizedApiBaseUrl
+            } : {};
+            setSettings({
+                ...settings,
+                ...businessSettings,
+                enableKitchenPrint,
+                printerAddress: connectedPrinter,
+                printerType,
+                theme: themeToSave,
+                apiBaseUrl: normalizedApiBaseUrl,
             });
             setColorScheme(themeToSave);
         } catch (error) {
@@ -235,7 +521,7 @@ export default function SettingsScreen({ navigation }: any) {
             saveSettings();
         }, 800);
         return () => clearTimeout(timer);
-    }, [storeName, storeAddress, storePhone, storeLogo, enablePreOrder, enableShift, showImages, isDarkMode, allowNegativeStock, showLogoOnReceipt, receiptFooter, loyaltyActive, loyaltyMultiplier, loyaltyMultiplierAmount, loyaltyPointValue, loyaltyMinPoints, googleSheetUrl, apiBaseUrl]);
+    }, [storeName, storeAddress, storePhone, storeLogo, enablePreOrder, enableShift, enableShiftReminder, shiftDurationHours, shiftReminderMinutes, shiftDayCutoff, enableDineTable, enableTableOrder, enableKitchenQueue, enableKitchenPrint, showImages, isDarkMode, allowNegativeStock, showLogoOnReceipt, receiptFooter, loyaltyActive, loyaltyMultiplier, loyaltyMultiplierAmount, loyaltyPointValue, loyaltyMinPoints, loyaltyEarningMode, loyaltyRedemptionMode, googleSheetUrl, apiBaseUrl, canManageBusinessSettings]);
 
     const persistBackendUrl = async (value: string = apiBaseUrl) => {
         const normalized = await persistApiBaseUrl(value || DEFAULT_API_URL);
@@ -247,6 +533,7 @@ export default function SettingsScreen({ navigation }: any) {
     };
 
     const redirectToServerLogin = async () => {
+        try { await api.post('/auth/logout'); } catch { /* server lama bisa tidak tersedia */ }
         await clearAuthSession();
         useStore.getState().setUser(null);
         const rootNavigation = navigation.getParent?.();
@@ -305,7 +592,7 @@ export default function SettingsScreen({ navigation }: any) {
 
     // ── Test Print ───────────────────────────────────────────────────────────
     const getPrintableLogoBase64 = async (): Promise<string> => {
-        if (receiptLogoUri && logoShotRef.current?.capture) {
+        if (storeLogo && logoShotRef.current?.capture) {
             try {
                 const uri = await logoShotRef.current.capture();
                 return await RNFS.readFile(uri.replace('file://', ''), 'base64');
@@ -525,8 +812,8 @@ export default function SettingsScreen({ navigation }: any) {
 
                                         for (const s of (data.settings || [])) await db.executeSql('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [s.key, s.value]);
                                         for (const c of (data.categories || [])) await db.executeSql('INSERT OR REPLACE INTO categories (id, name) VALUES (?, ?)', [c.id, c.name]);
-                                        for (const p of (data.products || [])) await db.executeSql('INSERT OR REPLACE INTO products (id, categoryId, name, price, costPrice, enableCostPrice, stock, imageUrl, isUnlimitedStock, barcode, minStock, discountActive, discountType, discountValue, discountStartAt, discountEndAt, discountStartTime, discountEndTime, discountDays, discountLabel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [p.id, p.categoryId, p.name, p.price, p.costPrice || 0, p.enableCostPrice || 0, p.stock || 0, p.imageUrl || null, p.isUnlimitedStock || 0, p.barcode || null, p.minStock || 0, p.discountActive || 0, p.discountType || null, p.discountValue || 0, p.discountStartAt || null, p.discountEndAt || null, p.discountStartTime || null, p.discountEndTime || null, p.discountDays || null, p.discountLabel || null]);
-                                        for (const u of (data.users || [])) await db.executeSql('INSERT OR REPLACE INTO users (id, name, pin, role) VALUES (?,?,?,?)', [u.id, u.name, u.pin, u.role || 'CASHIER']);
+                                        for (const p of (data.products || [])) await db.executeSql('INSERT OR REPLACE INTO products (id, categoryId, name, price, costPrice, enableCostPrice, stock, imageUrl, isUnlimitedStock, barcode, minStock, discountActive, discountType, discountValue, discountStartAt, discountEndAt, discountStartTime, discountEndTime, discountDays, discountLabel, isActive, availabilityScheduleEnabled, availabilityStartTime, availabilityEndTime, availabilityDays) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [p.id, p.categoryId, p.name, p.price, p.costPrice || 0, p.enableCostPrice || 0, p.stock || 0, p.imageUrl || null, p.isUnlimitedStock || 0, p.barcode || null, p.minStock || 0, p.discountActive || 0, p.discountType || null, p.discountValue || 0, p.discountStartAt || null, p.discountEndAt || null, p.discountStartTime || null, p.discountEndTime || null, p.discountDays || null, p.discountLabel || null, p.isActive === undefined ? 1 : (p.isActive ? 1 : 0), p.availabilityScheduleEnabled ? 1 : 0, p.availabilityStartTime || null, p.availabilityEndTime || null, p.availabilityDays || null]);
+                                        for (const u of (data.users || [])) await db.executeSql('INSERT OR REPLACE INTO users (id, name, email, username, pin, role) VALUES (?,?,?,?,?,?)', [u.id, u.name, u.email || null, u.username || null, u.pin, u.role || 'CASHIER']);
                                         for (const c of (data.customers || [])) await db.executeSql('INSERT OR REPLACE INTO customers (id, name, phone, notes, loyaltyDiscount) VALUES (?,?,?,?,?)', [c.id, c.name, c.phone || null, c.notes || null, c.loyaltyDiscount || 0]);
                                         for (const s of (data.suppliers || [])) await db.executeSql('INSERT OR REPLACE INTO suppliers (id, name, phone, address, notes) VALUES (?,?,?,?,?)', [s.id, s.name, s.phone || null, s.address || null, s.notes || null]);
                                         for (const p of (data.packages || [])) await db.executeSql('INSERT OR REPLACE INTO packages (id, name, description, price, isActive, createdAt) VALUES (?,?,?,?,?,?)', [p.id, p.name, p.description || null, p.price, p.isActive, p.createdAt]);
@@ -587,17 +874,59 @@ export default function SettingsScreen({ navigation }: any) {
                 </View>
             ) : null}
 
-            <ScrollView contentContainerStyle={[tw`p-4 pb-10`, isTablet && { width: '100%', maxWidth: 960, alignSelf: 'center', paddingHorizontal: 24 }]}>
+            <ScrollView contentContainerStyle={tw`p-4 pb-10`}>
                 {/* ── PROFIL TOKO ────────────────────────────────────────────────── */}
+                {canManageBusinessSettings && (
                 <SectionItem
                     icon="storefront-outline" iconColor={tw.color('blue-600')}
                     label="Profil Toko" sublabel="Nama, alamat, logo bisnis"
                     isOpen={openSection === 'profile'} onPress={() => toggleSection('profile')}
                 >
                     <View style={tw`pt-4`}>
+                        <View style={tw`bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40 rounded-xl p-3 mb-4`}>
+                            <Text style={tw`text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 uppercase tracking-wider`}>Lisensi Outlet</Text>
+                            <View style={tw`flex-row items-center justify-between`}>
+                                <Text selectable style={tw`flex-1 text-base font-black text-gray-800 dark:text-gray-100 tracking-widest`}>{licenseNumber}</Text>
+                                <TouchableOpacity
+                                    style={tw`ml-3 flex-row items-center bg-blue-600 px-3 py-2 rounded-lg`}
+                                    onPress={handleCopyLicenseNumber}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Salin nomor lisensi"
+                                >
+                                    <Icon name="content-copy" size={15} color="white" style={tw`mr-1.5`} />
+                                    <Text style={tw`text-white text-xs font-bold`}>Salin</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={tw`text-[10px] text-blue-700 dark:text-blue-300 mt-2`}>Status {settings?.license_status || 'UNKNOWN'} · Berlaku untuk website dan semua Android outlet.</Text>
+                            {settings?.license_expire_date ? (
+                                <Text style={tw`text-[10px] text-blue-700 dark:text-blue-300 mt-1`}>
+                                    Berlaku sampai {new Date(settings.license_expire_date).toLocaleDateString('id-ID')}.
+                                </Text>
+                            ) : null}
+                            {user?.role === 'OWNER' ? (
+                                <View style={tw`mt-3 pt-3 border-t border-blue-100 dark:border-blue-900/40`}>
+                                    <TextInput
+                                        value={licenseCode}
+                                        onChangeText={(value) => setLicenseCode(value.toUpperCase())}
+                                        placeholder="LP-XXXX-XXXX-XXXX-XXXX-XXXX"
+                                        placeholderTextColor={tw.color('gray-400')}
+                                        autoCapitalize="characters"
+                                        style={tw`bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2.5 text-gray-900 dark:text-white font-bold tracking-wider`}
+                                    />
+                                    <TouchableOpacity
+                                        onPress={handleActivateLicense}
+                                        disabled={isActivatingLicense}
+                                        style={tw`bg-blue-600 rounded-xl py-3 items-center mt-2 ${isActivatingLicense ? 'opacity-60' : ''}`}
+                                    >
+                                        <Text style={tw`text-white font-black`}>{isActivatingLicense ? 'Memproses...' : 'Aktifkan / Perpanjang'}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : null}
+                        </View>
+
                         <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Nama Toko (Tercetak di Struk)</Text>
                         <TextInput style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 font-bold text-gray-800 dark:text-gray-100 mb-3`}
-                            value={storeName} onChangeText={setStoreName} placeholder="Warna Warni Boneka" />
+                            value={storeName} onChangeText={setStoreName} placeholder="Warung Makan Barokah" />
 
                         <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Alamat Toko</Text>
                         <TextInput style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-gray-100 mb-3`}
@@ -609,9 +938,9 @@ export default function SettingsScreen({ navigation }: any) {
 
                         <Text style={tw`text-xs font-bold text-gray-500 mb-2`}>Logo Toko</Text>
                         <View style={tw`flex-row items-center mb-4`}>
-                            {storeLogo ? (
+                            {receiptLogoUri ? (
                                 <View style={tw`w-24 h-16 rounded-xl mr-4 border border-gray-200 bg-white items-center justify-center overflow-hidden`}>
-                                    <Image source={{ uri: storeLogo }} style={{ width: 88, height: 56 }} resizeMode="contain" />
+                                    <Image source={{ uri: receiptLogoUri }} style={{ width: 88, height: 56 }} resizeMode="contain" />
                                 </View>
                             ) : (
                                 <View style={tw`w-16 h-16 rounded-xl mr-4 bg-gray-100 dark:bg-gray-900 items-center justify-center border border-dashed border-gray-300`}>
@@ -653,11 +982,13 @@ export default function SettingsScreen({ navigation }: any) {
                         <Text style={tw`text-[10px] text-gray-400 mb-2`}>Teks ini akan tampil di bagian bawah struk</Text>
                     </View>
                 </SectionItem>
+                )}
 
                 {/* ── FITUR TOKO ─────────────────────────────────────────────────── */}
+                {canManageBusinessSettings && (
                 <SectionItem
                     icon="cog-outline" iconColor={tw.color('purple-600')}
-                    label="Fitur Toko" sublabel="Pre-order, shift, dan tampilan produk"
+                    label="Fitur Toko" sublabel="Pre-order, shift, meja dine-in"
                     isOpen={openSection === 'features'} onPress={() => toggleSection('features')}
                 >
                     <View style={tw`pt-4`}>
@@ -694,6 +1025,107 @@ export default function SettingsScreen({ navigation }: any) {
                             <Switch value={enableShift} onValueChange={setEnableShift} trackColor={{ false: '#d1d5db', true: '#93c5fd' }} thumbColor={enableShift ? '#2563eb' : '#f3f4f6'} />
                         </View>
 
+                        {enableShift && (
+                            <View style={tw`mb-4 rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-4`}>
+                                <View style={tw`flex-row items-center justify-between mb-3`}>
+                                    <View style={tw`flex-1 mr-4`}>
+                                        <Text style={tw`text-gray-800 dark:text-gray-100 font-bold`}>Pengingat Closing</Text>
+                                        <Text style={tw`text-gray-500 text-xs mt-0.5`}>Alert sebelum target tutup dan pergantian hari</Text>
+                                    </View>
+                                    <Switch value={enableShiftReminder} onValueChange={setEnableShiftReminder} trackColor={{ false: '#d1d5db', true: '#93c5fd' }} thumbColor={enableShiftReminder ? '#2563eb' : '#f3f4f6'} />
+                                </View>
+                                {enableShiftReminder && (
+                                    <View>
+                                        <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mb-1.5`}>Durasi shift (jam)</Text>
+                                        <TextInput
+                                            value={shiftDurationHours}
+                                            onChangeText={value => setShiftDurationHours(value.replace(/[^0-9.,]/g, '').replace(',', '.'))}
+                                            keyboardType="decimal-pad"
+                                            placeholder="8"
+                                            placeholderTextColor={tw.color('gray-400')}
+                                            style={tw`bg-white dark:bg-gray-900 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-2.5 text-gray-800 dark:text-gray-100 mb-3`}
+                                        />
+                                        <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mb-1.5`}>Ingatkan sebelumnya (menit)</Text>
+                                        <TextInput
+                                            value={shiftReminderMinutes}
+                                            onChangeText={value => setShiftReminderMinutes(value.replace(/[^0-9]/g, ''))}
+                                            keyboardType="number-pad"
+                                            placeholder="15"
+                                            placeholderTextColor={tw.color('gray-400')}
+                                            style={tw`bg-white dark:bg-gray-900 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-2.5 text-gray-800 dark:text-gray-100 mb-3`}
+                                        />
+                                        <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mb-1.5`}>Jam peringatan pergantian hari (HH:MM)</Text>
+                                        <TextInput
+                                            value={shiftDayCutoff}
+                                            onChangeText={setShiftDayCutoff}
+                                            keyboardType="numbers-and-punctuation"
+                                            maxLength={5}
+                                            placeholder="23:50"
+                                            placeholderTextColor={tw.color('gray-400')}
+                                            style={tw`bg-white dark:bg-gray-900 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-2.5 text-gray-800 dark:text-gray-100`}
+                                        />
+                                    </View>
+                                )}
+                            </View>
+                        )}
+
+                        {/* Dine Table */}
+                        <View style={tw`flex-row items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800`}>
+                            <View style={tw`flex-1 mr-4`}>
+                                <View style={tw`flex-row items-center mb-1`}>
+                                    <Icon name="silverware-fork-knife" size={14} color={tw.color('green-600')} style={tw`mr-2`} />
+                                    <Text style={tw`text-gray-800 dark:text-gray-100 font-bold`}>Manajemen Meja</Text>
+                                </View>
+                                <Text style={tw`text-gray-500 text-xs`}>Kelola meja dine-in (restoran, kafe)</Text>
+                            </View>
+                            <Switch
+                                value={enableDineTable}
+                                onValueChange={(value) => {
+                                    setEnableDineTable(value);
+                                    if (!value) setEnableTableOrder(false);
+                                }}
+                                trackColor={{ false: '#d1d5db', true: '#86efac' }}
+                                thumbColor={enableDineTable ? '#16a34a' : '#f3f4f6'}
+                            />
+                        </View>
+
+                        {/* Table Order */}
+                        <View style={tw`flex-row items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800`}>
+                            <View style={tw`flex-1 mr-4`}>
+                                <View style={tw`flex-row items-center mb-1`}>
+                                    <Icon name="qrcode-scan" size={14} color={tw.color('emerald-600')} style={tw`mr-2`} />
+                                    <Text style={tw`text-gray-800 dark:text-gray-100 font-bold`}>Order Meja via QR</Text>
+                                </View>
+                                <Text style={tw`text-gray-500 text-xs`}>Terima order pembeli dari QR meja</Text>
+                            </View>
+                            <Switch
+                                value={enableTableOrder}
+                                onValueChange={(value) => {
+                                    setEnableTableOrder(value);
+                                    if (value) setEnableDineTable(true);
+                                }}
+                                trackColor={{ false: '#d1d5db', true: '#6ee7b7' }}
+                                thumbColor={enableTableOrder ? '#059669' : '#f3f4f6'}
+                            />
+                        </View>
+
+                        {/* Kitchen Queue */}
+                        <View style={tw`flex-row items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800`}>
+                            <View style={tw`flex-1 mr-4`}>
+                                <View style={tw`flex-row items-center mb-1`}>
+                                    <Icon name="chef-hat" size={15} color={tw.color('orange-600')} style={tw`mr-2`} />
+                                    <Text style={tw`text-gray-800 dark:text-gray-100 font-bold`}>Antrean Dapur</Text>
+                                </View>
+                                <Text style={tw`text-gray-500 text-xs`}>Pantau urutan dan status pesanan dapur</Text>
+                            </View>
+                            <Switch
+                                value={enableKitchenQueue}
+                                onValueChange={setEnableKitchenQueue}
+                                trackColor={{ false: '#d1d5db', true: '#fdba74' }}
+                                thumbColor={enableKitchenQueue ? '#ea580c' : '#f3f4f6'}
+                            />
+                        </View>
+
                         {/* Allow Negative Stock */}
                         <View style={tw`flex-row items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800`}>
                             <View style={tw`flex-1 mr-4`}>
@@ -707,8 +1139,10 @@ export default function SettingsScreen({ navigation }: any) {
                         </View>
                     </View>
                 </SectionItem>
+                )}
 
                 {/* ── POIN LOYALITAS ──────────────────────────────────────────────── */}
+                {canManageBusinessSettings && (
                 <SectionItem
                     icon="heart-outline" iconColor={tw.color('red-500')}
                     label="Poin Loyalitas" sublabel="Reward poin tiap belanja"
@@ -725,8 +1159,24 @@ export default function SettingsScreen({ navigation }: any) {
 
                         {loyaltyActive && (
                             <View style={tw`pt-4 border-t border-gray-100 dark:border-gray-800`}>
+                                <Text style={tw`text-xs font-bold text-gray-500 mb-2`}>Cara Mendapat Poin</Text>
+                                <View style={tw`flex-row bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mb-4`}>
+                                    <TouchableOpacity
+                                        style={tw.style(`flex-1 rounded-lg py-2 px-2`, loyaltyEarningMode === 'TRANSACTION_THRESHOLD' && 'bg-white dark:bg-gray-700')}
+                                        onPress={() => setLoyaltyEarningMode('TRANSACTION_THRESHOLD')}
+                                    >
+                                        <Text style={tw.style(`text-[11px] text-center font-bold`, loyaltyEarningMode === 'TRANSACTION_THRESHOLD' ? 'text-blue-600' : 'text-gray-500')}>Per Transaksi</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={tw.style(`flex-1 rounded-lg py-2 px-2`, loyaltyEarningMode === 'SPEND_MULTIPLE' && 'bg-white dark:bg-gray-700')}
+                                        onPress={() => setLoyaltyEarningMode('SPEND_MULTIPLE')}
+                                    >
+                                        <Text style={tw.style(`text-[11px] text-center font-bold`, loyaltyEarningMode === 'SPEND_MULTIPLE' ? 'text-blue-600' : 'text-gray-500')}>Kelipatan (Lama)</Text>
+                                    </TouchableOpacity>
+                                </View>
+
                                 <View style={tw`mb-4`}>
-                                    <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Setiap Belanja Senilai (Rp)</Text>
+                                    <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>{loyaltyEarningMode === 'TRANSACTION_THRESHOLD' ? 'Minimal Transaksi untuk 1 Poin (Rp)' : 'Setiap Belanja Senilai (Rp)'}</Text>
                                     <TextInput 
                                         style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-gray-100`}
                                         value={loyaltyMultiplierAmount}
@@ -734,10 +1184,10 @@ export default function SettingsScreen({ navigation }: any) {
                                         keyboardType="numeric"
                                         placeholder="Contoh: 1000"
                                     />
-                                    <Text style={tw`text-[10px] text-gray-400 mt-1`}>Nominal belanja kelipatan untuk dapat poin</Text>
+                                    <Text style={tw`text-[10px] text-gray-400 mt-1`}>{loyaltyEarningMode === 'TRANSACTION_THRESHOLD' ? 'Transaksi yang mencapai nominal ini mendapat tepat 1 poin' : 'Nominal belanja kelipatan untuk dapat poin'}</Text>
                                 </View>
 
-                                <View style={tw`mb-4`}>
+                                {loyaltyEarningMode === 'SPEND_MULTIPLE' && <View style={tw`mb-4`}>
                                     <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Dapatkan Poin Sebanyak</Text>
                                     <TextInput 
                                         style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-gray-100`}
@@ -747,9 +1197,25 @@ export default function SettingsScreen({ navigation }: any) {
                                         placeholder="Contoh: 1"
                                     />
                                     <Text style={tw`text-[10px] text-gray-400 mt-1`}>Misal: tiap belanja 1000 dapat 1 poin</Text>
+                                </View>}
+
+                                <Text style={tw`text-xs font-bold text-gray-500 mb-2`}>Cara Menukar Poin</Text>
+                                <View style={tw`flex-row bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mb-4`}>
+                                    <TouchableOpacity
+                                        style={tw.style(`flex-1 rounded-lg py-2 px-2`, loyaltyRedemptionMode === 'FREE_PRODUCT' && 'bg-white dark:bg-gray-700')}
+                                        onPress={() => setLoyaltyRedemptionMode('FREE_PRODUCT')}
+                                    >
+                                        <Text style={tw.style(`text-[11px] text-center font-bold`, loyaltyRedemptionMode === 'FREE_PRODUCT' ? 'text-blue-600' : 'text-gray-500')}>Gratis Produk</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={tw.style(`flex-1 rounded-lg py-2 px-2`, loyaltyRedemptionMode === 'CASH_DISCOUNT' && 'bg-white dark:bg-gray-700')}
+                                        onPress={() => setLoyaltyRedemptionMode('CASH_DISCOUNT')}
+                                    >
+                                        <Text style={tw.style(`text-[11px] text-center font-bold`, loyaltyRedemptionMode === 'CASH_DISCOUNT' ? 'text-blue-600' : 'text-gray-500')}>Potongan Rp (Lama)</Text>
+                                    </TouchableOpacity>
                                 </View>
 
-                                <View style={tw`mb-4`}>
+                                {loyaltyRedemptionMode === 'CASH_DISCOUNT' && <View style={tw`mb-4`}>
                                     <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Nilai 1 Poin Jika Ditukar (Rp)</Text>
                                     <TextInput 
                                         style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-gray-100`}
@@ -759,7 +1225,7 @@ export default function SettingsScreen({ navigation }: any) {
                                         placeholder="Contoh: 100"
                                     />
                                     <Text style={tw`text-[10px] text-gray-400 mt-1`}>Harga tukar per poin untuk jadi diskon</Text>
-                                </View>
+                                </View>}
 
                                 <View>
                                     <Text style={tw`text-xs font-bold text-gray-500 mb-1`}>Minimal Poin untuk Tukar</Text>
@@ -770,12 +1236,13 @@ export default function SettingsScreen({ navigation }: any) {
                                         keyboardType="numeric"
                                         placeholder="Contoh: 50"
                                     />
-                                    <Text style={tw`text-[10px] text-gray-400 mt-1`}>Batas minimal poin sebelum bisa digunakan</Text>
+                                    <Text style={tw`text-[10px] text-gray-400 mt-1`}>{loyaltyRedemptionMode === 'FREE_PRODUCT' ? `Setiap ${loyaltyMinPoints || '10'} poin dapat ditukar 1 produk; poin boleh disimpan` : 'Batas minimal poin sebelum bisa digunakan'}</Text>
                                 </View>
                             </View>
                         )}
                     </View>
                 </SectionItem>
+                )}
 
                 {/* ── TEMA ───────────────────────────────────────────────────────── */}
                 <SectionItem
@@ -806,6 +1273,34 @@ export default function SettingsScreen({ navigation }: any) {
                                 <Text style={tw`text-green-700 font-bold ml-2 flex-1 text-xs`}>Tersambung: {printerType} — {connectedPrinter.substring(0, 20)}</Text>
                             </View>
                         )}
+                        <View style={tw`flex-row rounded-xl bg-gray-100 dark:bg-gray-900 p-1 mb-4`}>
+                            {(['BLE', 'USB'] as const).map(type => (
+                                <TouchableOpacity
+                                    key={type}
+                                    onPress={() => setActiveTab(type)}
+                                    style={tw`flex-1 items-center rounded-lg py-2.5 ${activeTab === type ? 'bg-white dark:bg-gray-700' : ''}`}
+                                >
+                                    <Text style={tw`text-xs font-black ${activeTab === type ? 'text-blue-600 dark:text-blue-300' : 'text-gray-500'}`}>
+                                        {type === 'BLE' ? 'Bluetooth' : 'USB / OTG'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <View style={tw`flex-row items-center justify-between mb-4 pb-4 border-b border-gray-100 dark:border-gray-800`}>
+                            <View style={tw`flex-1 mr-4`}>
+                                <View style={tw`flex-row items-center mb-1`}>
+                                    <Icon name="chef-hat" size={16} color={tw.color('orange-600')} style={tw`mr-2`} />
+                                    <Text style={tw`text-gray-800 dark:text-gray-100 font-bold`}>Aktifkan Cetak Dapur</Text>
+                                </View>
+                                <Text style={tw`text-gray-500 text-xs`}>Tampilkan tombol tiket dapur di layar kasir</Text>
+                            </View>
+                            <Switch
+                                value={enableKitchenPrint}
+                                onValueChange={setEnableKitchenPrint}
+                                trackColor={{ false: '#d1d5db', true: '#fdba74' }}
+                                thumbColor={enableKitchenPrint ? '#ea580c' : '#f3f4f6'}
+                            />
+                        </View>
                         <View style={tw`flex-row items-center justify-between mb-3`}>
                             <Text style={tw`text-gray-800 dark:text-gray-100 font-bold text-sm`}>Daftar Perangkat</Text>
                             <View style={tw`flex-row`}>
@@ -863,6 +1358,7 @@ export default function SettingsScreen({ navigation }: any) {
                 </SectionItem>
 
                 {/* ── PENGGUNA ──────────────────────────────────────────────────── */}
+                {isOwner && (
                 <SectionItem
                     icon="account-group" iconColor={tw.color('red-500')}
                     label="Pengguna" sublabel="Kelola akun kasir & admin"
@@ -877,8 +1373,10 @@ export default function SettingsScreen({ navigation }: any) {
                         </TouchableOpacity>
                     </View>
                 </SectionItem>
+                )}
 
                 {/* ── BACKUP & RESTORE ──────────────────────────────────────────── */}
+                {isOwner && (
                 <SectionItem
                     icon="database" iconColor={tw.color('amber-600')}
                     label="Backup & Restore" sublabel="Cadangkan & pulihkan data"
@@ -896,34 +1394,23 @@ export default function SettingsScreen({ navigation }: any) {
                             <Icon name="restore" size={16} color={tw.color('amber-600')} style={tw`mr-2`} />
                             <Text style={tw`font-bold text-amber-700`}>Restore dari Backup</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={tw`bg-red-50 border border-red-300 py-3 rounded-xl flex-row justify-center items-center`}
-                            onPress={() => {
-                                Alert.alert('Reset Semua Data', 'Tindakan ini akan menghapus SEMUA data. Tidak bisa dikembalikan!', [
-                                    { text: 'Batal', style: 'cancel' },
-                                    {
-                                        text: 'Hapus Semua', style: 'destructive', onPress: async () => {
-                                            try {
-                                                const db = await getDBConnection();
-                                                for (const t of ['transaction_items', 'transactions', 'expenses', 'stock_receipt_items', 'stock_receipts', 'shifts', 'customers', 'suppliers', 'package_items', 'packages', 'product_addons', 'products', 'categories', 'settings']) {
-                                                    await db.executeSql(`DELETE FROM ${t}`);
-                                                }
-                                                Alert.alert('Selesai', 'Semua data dihapus. Restart aplikasi.');
-                                            } catch { Alert.alert('Error', 'Gagal menghapus data.'); }
-                                        }
-                                    }
-                                ]);
-                            }}>
+                        <TouchableOpacity
+                            style={tw`bg-red-50 border border-red-300 py-3 rounded-xl flex-row justify-center items-center`}
+                            onPress={() => setShowResetModal(true)}
+                        >
                             <Icon name="delete-outline" size={16} color={tw.color('red-600')} style={tw`mr-2`} />
-                            <Text style={tw`font-bold text-red-600`}>Reset Semua Data</Text>
+                            <Text style={tw`font-bold text-red-600`}>Pilih Data untuk Direset</Text>
                         </TouchableOpacity>
                         <View style={tw`flex-row items-center justify-center mt-3`}>
                             <Icon name="alert" size={11} color={tw.color('gray-400')} style={tw`mr-1`} />
-                            <Text style={tw`text-[10px] text-gray-400 italic`}>Restore akan menggantikan semua data saat ini</Text>
+                            <Text style={tw`text-[10px] text-gray-400 italic`}>Reset berlaku ke website dan seluruh Android; koneksi internet wajib aktif</Text>
                         </View>
                     </View>
                 </SectionItem>
+                )}
 
                 {/* ✨ INTEGRASI LAPORAN ✨ */}
+                {canManageBusinessSettings && (
                 <SectionItem
                     icon="database" iconColor={tw.color('green-500')}
                     label="Integrasi Google Sheets" sublabel="Kirim laporan ke Sheets"
@@ -949,8 +1436,10 @@ export default function SettingsScreen({ navigation }: any) {
                         {/* Button was here */}
                     </View>
                 </SectionItem>
+                )}
 
                 {/* ── SINKRONISASI ────────────────────────────────────────────────── */}
+                {canManageBusinessSettings && (
                 <SectionItem
                     icon="refresh" iconColor={tw.color('blue-500')}
                     label="Sinkronisasi Server" sublabel="Tarik/Dorong data ke Web"
@@ -964,7 +1453,7 @@ export default function SettingsScreen({ navigation }: any) {
                             <Text style={tw`text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider ml-1`}>URL Backend / API</Text>
                             <TextInput
                                 style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-xl px-4 py-3 font-medium`}
-                                placeholder="https://api.103-175-221-2.sslip.io"
+                                placeholder="http://192.168.1.10:5000"
                                 placeholderTextColor={tw.color('gray-400')}
                                 value={apiBaseUrl}
                                 onChangeText={setApiBaseUrlInput}
@@ -998,7 +1487,17 @@ export default function SettingsScreen({ navigation }: any) {
                                         text: 'Ya, Sinkron',
                                         onPress: async () => {
                                             try {
-                                                const { syncService } = require('../services/syncService');
+                                                const resetRes: any = await syncService.reconcileResetState();
+                                                if (!resetRes.success) {
+                                                    Alert.alert('Sinkronisasi Ditunda', resetRes.error || 'Status reset outlet gagal diperiksa.');
+                                                    return;
+                                                }
+                                                if (resetRes.resetApplied) {
+                                                    if (resetRes.scopes?.includes('ALL')) {
+                                                        useStore.getState().setActiveShift(null);
+                                                    }
+                                                    useStore.getState().clearCart();
+                                                }
                                                 // 1. Dorong perubahan lokal sebelum menarik data server.
                                                 console.log('[SYNC] Starting pushLocalData...');
                                                 let pushRes: any = await syncService.pushLocalData();
@@ -1039,6 +1538,23 @@ export default function SettingsScreen({ navigation }: any) {
                                                 console.log('[SYNC] syncTransactionHistory result:', historyRes);
                                                 if (!historyRes.success) {
                                                     console.warn('[SYNC] Gagal sync histori transaksi:', historyRes.error);
+                                                } else {
+                                                    const db = await getDBConnection();
+                                                    const [shiftResult] = await db.executeSql(
+                                                        `SELECT * FROM shifts WHERE status = 'OPEN' ORDER BY openedAt DESC LIMIT 1`
+                                                    );
+                                                    if (shiftResult.rows.length > 0) {
+                                                        const shift = shiftResult.rows.item(0);
+                                                        useStore.getState().setActiveShift({
+                                                            id: String(shift.id),
+                                                            openingCash: Number(shift.openingCash || 0),
+                                                            openedAt: shift.openedAt,
+                                                            expectedCloseAt: shift.expectedCloseAt || null,
+                                                            userName: shift.userName || undefined,
+                                                        });
+                                                    } else {
+                                                        useStore.getState().setActiveShift(null);
+                                                    }
                                                 }
                                                 // 4. Reload settings dari SQLite ke Zustand agar UI langsung update
                                                 try {
@@ -1047,19 +1563,14 @@ export default function SettingsScreen({ navigation }: any) {
                                                     let reloadedSettings: any = {};
                                                     for (let i = 0; i < settingsRes.rows.length; i++) {
                                                         const row = settingsRes.rows.item(i);
-                                                        if (['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'].includes(row.key)) continue;
-                                                        if (['showImages', 'enablePreOrder', 'enableShift', 'allowNegativeStock', 'loyalty_active'].includes(row.key)) {
+                                                        if (['showImages', 'enablePreOrder', 'enableShift', 'enableShiftReminder', 'enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'allowNegativeStock', 'loyalty_active', 'enableKitchenPrint'].includes(row.key)) {
                                                             reloadedSettings[row.key] = row.value === 'true';
-                                                        } else if (['loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points'].includes(row.key)) {
+                                                        } else if (['shiftDurationMinutes', 'shiftReminderMinutes', 'taxRate', 'serviceCharge', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points', 'dataResetVersion'].includes(row.key)) {
                                                             reloadedSettings[row.key] = Number(row.value || 0);
                                                         } else {
                                                             reloadedSettings[row.key] = row.value || null;
                                                         }
                                                     }
-                                                    reloadedSettings.enableDineTable = false;
-                                                    reloadedSettings.enableTableOrder = false;
-                                                    reloadedSettings.enableKitchenQueue = false;
-                                                    reloadedSettings.enableKitchenPrint = false;
                                                     useStore.getState().setSettings(reloadedSettings);
                                                 } catch (e) { console.warn('Gagal reload settings setelah sync:', e); }
                                                 if (pushRes.warnings?.length > 0) {
@@ -1088,16 +1599,17 @@ export default function SettingsScreen({ navigation }: any) {
                         <Text style={tw`text-[10px] text-gray-400 text-center`}>Catatan: HP otomatis sinkron setiap 60 detik di background.</Text>
                     </View>
                 </SectionItem>
+                )}
 
                 {/* ── TENTANG APLIKASI ──────────────────────────────────────────── */}
                 <SectionItem
                     icon="information-outline" iconColor={tw.color('gray-500')}
-                    label="Tentang Aplikasi" sublabel="LitePOS v1.0.0"
+                    label="Tentang Aplikasi" sublabel="LitePOS v3.1.0"
                     isOpen={openSection === 'about'} onPress={() => toggleSection('about')}
                 >
                     <View style={tw`pt-4 items-center`}>
                         <Text style={tw`text-2xl font-black text-gray-800 dark:text-gray-100 mb-1`}>LitePOS</Text>
-                        <Text style={tw`text-gray-500 text-sm mb-3`}>Versi 3.0.0</Text>
+                        <Text style={tw`text-gray-500 text-sm mb-3`}>Versi 3.1.0</Text>
                         <Text style={tw`text-gray-400 text-xs text-center mb-5`}>
                             Aplikasi kasir & manajemen bisnis untuk UMKM Indonesia.
                         </Text>
@@ -1130,6 +1642,205 @@ export default function SettingsScreen({ navigation }: any) {
                     </View>
                 </SectionItem>
             </ScrollView>
+
+            <Modal
+                visible={showResetModal}
+                transparent
+                animationType="fade"
+                onRequestClose={closeResetModal}
+            >
+                <View style={tw`flex-1 bg-black/60 justify-center px-5`}>
+                    <ScrollView
+                        style={[tw`bg-white dark:bg-gray-800 rounded-3xl`, { maxHeight: '90%' }]}
+                        contentContainerStyle={tw`p-6`}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        <View style={tw`w-12 h-12 rounded-2xl bg-red-100 items-center justify-center mb-4`}>
+                            <Icon name="alert-octagon-outline" size={25} color={tw.color('red-600')} />
+                        </View>
+                        <Text style={tw`text-xl font-black text-gray-900 dark:text-white`}>Pilih data yang akan direset</Text>
+                        <Text style={tw`text-sm text-gray-500 dark:text-gray-400 mt-2 leading-5`}>
+                            Reset berlaku ke website dan seluruh Android. Data yang sudah dihapus tidak dapat dikembalikan.
+                        </Text>
+
+                        <View style={tw`mt-4`}>
+                            {RESET_OPTIONS.map(option => {
+                                const selected = resetType === option.type;
+                                return (
+                                    <TouchableOpacity
+                                        key={option.type}
+                                        style={tw`${selected ? 'bg-red-50 border-red-500' : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700'} border rounded-2xl p-3 mb-2 flex-row items-start`}
+                                        onPress={() => {
+                                            setResetType(option.type);
+                                            setResetPhrase('');
+                                            if (option.type !== 'TRANSACTIONS') {
+                                                setTransactionResetMode('ALL');
+                                                setTransactionStartDate('');
+                                                setTransactionEndDate('');
+                                            }
+                                        }}
+                                        disabled={isResettingData}
+                                    >
+                                        <View style={tw`${selected ? 'bg-red-600' : 'bg-gray-200 dark:bg-gray-700'} w-10 h-10 rounded-xl items-center justify-center mr-3`}>
+                                            <Icon name={option.icon} size={20} color={selected ? 'white' : tw.color('gray-600')} />
+                                        </View>
+                                        <View style={tw`flex-1`}>
+                                            <Text style={tw`font-black text-gray-900 dark:text-white`}>{option.label}</Text>
+                                            <Text style={tw`text-xs text-gray-500 dark:text-gray-400 mt-1 leading-4`}>{option.description}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        {resetType === 'TRANSACTIONS' && (
+                            <View style={tw`mt-3 bg-amber-50 dark:bg-gray-900 border border-amber-200 dark:border-amber-800 rounded-2xl p-4`}>
+                                <Text style={tw`text-xs font-black text-gray-700 dark:text-gray-200 mb-3`}>CAKUPAN TRANSAKSI</Text>
+                                <View style={tw`flex-row gap-2`}>
+                                    {([
+                                        ['ALL', 'Semua transaksi'],
+                                        ['RANGE', 'Rentang tanggal'],
+                                    ] as Array<[TransactionResetMode, string]>).map(([mode, label]) => (
+                                        <TouchableOpacity
+                                            key={mode}
+                                            style={tw`${transactionResetMode === mode ? 'bg-white dark:bg-gray-800 border-amber-500' : 'border-amber-200 dark:border-gray-700'} flex-1 border rounded-xl px-3 py-3 items-center`}
+                                            onPress={() => setTransactionResetMode(mode)}
+                                            disabled={isResettingData}
+                                        >
+                                            <Text style={tw`${transactionResetMode === mode ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500'} text-xs font-bold text-center`}>{label}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                {usesTransactionRange && (
+                                    <View style={tw`mt-4`}>
+                                        <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mb-2`}>Dari tanggal (YYYY-MM-DD)</Text>
+                                        <TextInput
+                                            style={tw`bg-white dark:bg-gray-800 border border-amber-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white`}
+                                            value={transactionStartDate}
+                                            onChangeText={setTransactionStartDate}
+                                            placeholder="2026-08-01"
+                                            placeholderTextColor={tw.color('gray-400')}
+                                            keyboardType="numbers-and-punctuation"
+                                            maxLength={10}
+                                            editable={!isResettingData}
+                                        />
+                                        <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mt-3 mb-2`}>Sampai tanggal (YYYY-MM-DD)</Text>
+                                        <TextInput
+                                            style={tw`bg-white dark:bg-gray-800 border border-amber-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white`}
+                                            value={transactionEndDate}
+                                            onChangeText={setTransactionEndDate}
+                                            placeholder="2026-08-15"
+                                            placeholderTextColor={tw.color('gray-400')}
+                                            keyboardType="numbers-and-punctuation"
+                                            maxLength={10}
+                                            editable={!isResettingData}
+                                        />
+                                    </View>
+                                )}
+                                <Text style={tw`text-xs text-gray-500 dark:text-gray-400 mt-3 leading-4`}>{resetImpactDescription}</Text>
+                            </View>
+                        )}
+
+                        <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mt-5 mb-2`}>Password Owner</Text>
+                        <TextInput
+                            style={tw`border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white`}
+                            value={resetPassword}
+                            onChangeText={setResetPassword}
+                            secureTextEntry
+                            autoCapitalize="none"
+                            placeholder="Masukkan password"
+                            placeholderTextColor={tw.color('gray-400')}
+                            editable={!isResettingData && Boolean(selectedReset)}
+                        />
+
+                        <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mt-4 mb-2`}>
+                            Ketik {selectedReset?.phrase || 'pilih jenis reset dahulu'}
+                        </Text>
+                        <TextInput
+                            style={tw`border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white font-bold`}
+                            value={resetPhrase}
+                            onChangeText={setResetPhrase}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            placeholder={selectedReset?.phrase || 'Pilih jenis reset'}
+                            placeholderTextColor={tw.color('gray-400')}
+                            editable={!isResettingData && Boolean(selectedReset)}
+                        />
+
+                        <View style={tw`flex-row gap-3 mt-6`}>
+                            <TouchableOpacity
+                                style={tw`flex-1 py-3.5 rounded-xl bg-gray-100 dark:bg-gray-700 items-center`}
+                                onPress={closeResetModal}
+                                disabled={isResettingData}
+                            >
+                                <Text style={tw`font-bold text-gray-700 dark:text-gray-200`}>Batal</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={tw`flex-1 py-3.5 rounded-xl bg-red-600 items-center flex-row justify-center ${isResettingData ? 'opacity-60' : ''}`}
+                                onPress={confirmGlobalReset}
+                                disabled={isResettingData || !selectedReset || !transactionRangeValid || !resetPassword || resetPhrase.trim() !== selectedReset.phrase}
+                            >
+                                {isResettingData
+                                    ? <ActivityIndicator size="small" color="white" style={tw`mr-2`} />
+                                    : <Icon name="delete-forever-outline" size={17} color="white" style={tw`mr-2`} />}
+                                <Text style={tw`font-bold text-white`}>{isResettingData ? 'Mereset...' : selectedReset?.label || 'Lanjutkan'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
+                </View>
+            </Modal>
+
+            <Modal
+                visible={resetCountdown !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={closeResetModal}
+            >
+                <View style={tw`flex-1 bg-black/70 justify-center px-5`}>
+                    <View style={tw`bg-white dark:bg-gray-800 rounded-3xl p-6 items-center`}>
+                        <View style={tw`w-14 h-14 rounded-2xl bg-red-100 items-center justify-center mb-4`}>
+                            <Icon name="timer-alert-outline" size={29} color={tw.color('red-600')} />
+                        </View>
+                        <Text style={tw`text-xl font-black text-gray-900 dark:text-white text-center`}>Konfirmasi terakhir</Text>
+                        <Text style={tw`text-sm text-gray-500 dark:text-gray-400 mt-2 leading-5 text-center`}>
+                            {resetImpactDescription}
+                        </Text>
+
+                        <View style={tw`w-24 h-24 rounded-full bg-red-50 dark:bg-red-950 border-4 border-red-200 dark:border-red-800 items-center justify-center mt-6`}>
+                            {isResettingData
+                                ? <ActivityIndicator size="large" color={tw.color('red-600')} />
+                                : <Text style={tw`text-4xl font-black text-red-600`}>{resetCountdown || 0}</Text>}
+                        </View>
+                        <Text style={tw`text-xs text-gray-500 dark:text-gray-400 mt-3 text-center`}>
+                            {isResettingData
+                                ? 'Reset sedang diproses. Jangan tutup aplikasi.'
+                                : resetCountdown && resetCountdown > 0
+                                    ? 'Tombol reset aktif setelah hitung mundur selesai.'
+                                    : 'Waktu berpikir selesai. Anda masih dapat membatalkan.'}
+                        </Text>
+
+                        <View style={tw`flex-row gap-3 mt-6 w-full`}>
+                            <TouchableOpacity
+                                style={tw`flex-1 py-3.5 rounded-xl bg-gray-100 dark:bg-gray-700 items-center`}
+                                onPress={closeResetModal}
+                                disabled={isResettingData}
+                            >
+                                <Text style={tw`font-bold text-gray-700 dark:text-gray-200`}>Batalkan Reset</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={tw`flex-1 py-3.5 rounded-xl bg-red-600 items-center justify-center ${isResettingData || resetCountdown !== 0 ? 'opacity-50' : ''}`}
+                                onPress={performGlobalReset}
+                                disabled={isResettingData || resetCountdown !== 0}
+                            >
+                                <Text style={tw`font-bold text-white`}>
+                                    {isResettingData ? 'Memproses...' : selectedReset?.label || 'Reset Sekarang'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }

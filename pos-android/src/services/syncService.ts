@@ -1,14 +1,138 @@
 import api, { isDeviceAssetUrl } from './api';
-import { getDBConnection } from '../database/db';
+import { ensureStoreSessionCache, getDBConnection } from '../database/db';
+import { useStore } from '../store/useStore';
+import { assertTenantResponse, normalizeStoreId } from '../utils/tenantIsolation';
 
 // Keys yang hanya ada di device lokal, tidak boleh ditimpa oleh server
-const RETAIL_DISABLED_KEYS = ['enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'enableKitchenPrint'];
-const LICENSE_DEVICE_KEYS = ['license_number', 'license_status', 'license_expire_date', 'license_type', 'license_offline'];
 const LOCAL_ONLY_KEYS = [
-    'printerAddress', 'printerType', 'apiBaseUrl', 'settings_sync_pending', 'sync_initialized',
-    ...LICENSE_DEVICE_KEYS,
-    ...RETAIL_DISABLED_KEYS,
+    'printerAddress', 'printerType', 'apiBaseUrl', 'enableKitchenPrint', 'theme', 'settings_sync_pending', 'sync_initialized',
+    'store_id', 'license_number', 'license_status', 'license_expire_date', 'license_type', 'license_offline',
+    'dataResetVersion', 'dataResetAt', 'dataResetType', 'cache_store_id',
 ];
+
+const requireActiveStoreId = async () => {
+    const storeId = normalizeStoreId(useStore.getState().user?.activeStoreId);
+    if (!storeId) throw new Error('Sesi tidak memiliki store aktif yang valid.');
+    await ensureStoreSessionCache(storeId);
+    return storeId;
+};
+
+const OPERATIONAL_LOCAL_TABLES = [
+    'transaction_items',
+    'transactions',
+    'expenses',
+    'stock_receipt_items',
+    'stock_receipts',
+    'shifts',
+    'saved_transactions',
+    'package_items',
+    'packages',
+    'product_addons',
+    'products',
+    'categories',
+    'customers',
+    'suppliers',
+    'dine_tables',
+];
+
+export type DataResetScope = 'STOCK' | 'TRANSACTIONS' | 'ALL';
+export type TransactionResetRange = { startAt: string; endAt: string };
+export type DataResetDetails = {
+    transactionRanges?: TransactionResetRange[];
+    transactionResetAll?: boolean;
+};
+
+const normalizeResetScopes = (scopes?: DataResetScope | DataResetScope[] | null): DataResetScope[] => {
+    const values = Array.isArray(scopes) ? scopes : scopes ? [scopes] : ['ALL'];
+    if (values.includes('ALL')) return ['ALL'];
+    const normalized = Array.from(new Set(values.filter(
+        (scope): scope is DataResetScope => scope === 'STOCK' || scope === 'TRANSACTIONS'
+    )));
+    return normalized.length > 0 ? normalized : ['ALL'];
+};
+
+export const clearOperationalLocalData = async (
+    version: number,
+    resetAt?: string | null,
+    scopes?: DataResetScope | DataResetScope[] | null,
+    details: DataResetDetails = {}
+) => {
+    const db = await getDBConnection();
+    const normalizedScopes = normalizeResetScopes(scopes);
+
+    if (normalizedScopes.includes('ALL')) {
+        for (const table of OPERATIONAL_LOCAL_TABLES) {
+            await db.executeSql(`DELETE FROM ${table}`);
+        }
+    } else {
+        if (normalizedScopes.includes('TRANSACTIONS')) {
+            const ranges = Array.isArray(details.transactionRanges)
+                ? details.transactionRanges.filter((range) => range?.startAt && range?.endAt)
+                : [];
+            const resetAllTransactions = details.transactionResetAll !== false || ranges.length === 0;
+
+            if (resetAllTransactions) {
+                for (const table of ['transaction_items', 'transactions', 'saved_transactions']) {
+                    await db.executeSql(`DELETE FROM ${table}`);
+                }
+                await db.executeSql(`UPDATE dine_tables SET status = 'AVAILABLE'`);
+            } else {
+                for (const range of ranges) {
+                    const dateWhere = 'datetime(createdAt) >= datetime(?) AND datetime(createdAt) <= datetime(?)';
+                    const dateParams = [range.startAt, range.endAt];
+                    const [tableResult] = await db.executeSql(
+                        `SELECT DISTINCT tableName FROM transactions WHERE ${dateWhere} AND tableName IS NOT NULL AND tableName != ''`,
+                        dateParams
+                    );
+                    const tableNames: string[] = [];
+                    for (let index = 0; index < tableResult.rows.length; index++) {
+                        tableNames.push(String(tableResult.rows.item(index).tableName));
+                    }
+
+                    await db.executeSql(
+                        `DELETE FROM transaction_items WHERE transactionId IN (SELECT id FROM transactions WHERE ${dateWhere})`,
+                        dateParams
+                    );
+                    await db.executeSql(
+                        `DELETE FROM transactions WHERE ${dateWhere}`,
+                        dateParams
+                    );
+
+                    if (tableNames.length > 0) {
+                        const placeholders = tableNames.map(() => '?').join(',');
+                        await db.executeSql(
+                            `UPDATE dine_tables SET status = 'AVAILABLE' WHERE number IN (${placeholders})`,
+                            tableNames
+                        );
+                    }
+                }
+            }
+        }
+
+        if (normalizedScopes.includes('STOCK')) {
+            await db.executeSql('DELETE FROM stock_receipt_items');
+            await db.executeSql('DELETE FROM stock_receipts');
+            await db.executeSql('UPDATE products SET stock = 0');
+        }
+    }
+    await db.executeSql(
+        `INSERT OR REPLACE INTO settings (key, value) VALUES ('dataResetVersion', ?)`,
+        [String(version)]
+    );
+    await db.executeSql(
+        `INSERT OR REPLACE INTO settings (key, value) VALUES ('dataResetAt', ?)`,
+        [resetAt || new Date().toISOString()]
+    );
+    await db.executeSql(
+        `INSERT OR REPLACE INTO settings (key, value) VALUES ('dataResetType', ?)`,
+        [normalizedScopes.join(',')]
+    );
+    if (normalizedScopes.includes('ALL')) {
+        await db.executeSql(
+            `INSERT OR REPLACE INTO settings (key, value) VALUES ('settings_sync_pending', 'false')`
+        );
+    }
+};
 
 const markRowsSynced = async (db: any, table: string, ids: Array<string | number>) => {
     if (ids.length === 0) return;
@@ -59,12 +183,128 @@ const uploadProductImage = async (serverProductId: number, imageUri: string) => 
     return remoteImageUrl as string;
 };
 
+const uploadCustomerImage = async (serverCustomerId: number, imageUri: string) => {
+    const formData = new FormData();
+    const metadata = getImageUploadMetadata(imageUri);
+    formData.append('image', {
+        uri: imageUri,
+        name: metadata.name.replace('product-', 'customer-'),
+        type: metadata.type,
+    } as any);
+
+    const response = await api.put(`/customers/${serverCustomerId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000,
+    });
+    const remoteImageUrl = response.data?.data?.imageUrl;
+    if (!remoteImageUrl) throw new Error('Backend tidak mengembalikan URL foto pelanggan.');
+    return remoteImageUrl as string;
+};
+
 export const syncService = {
+    reconcileResetState: async () => {
+        try {
+            await requireActiveStoreId();
+            const db = await getDBConnection();
+            const [result] = await db.executeSql(
+                `SELECT value FROM settings WHERE key = 'dataResetVersion'`
+            );
+            const parsedLocalVersion = result.rows.length > 0
+                ? Number(result.rows.item(0).value || 0)
+                : 0;
+            const localVersion = Number.isInteger(parsedLocalVersion) && parsedLocalVersion >= 0
+                ? parsedLocalVersion
+                : 0;
+            const response = await api.get('/license/reset-state', {
+                timeout: 15000,
+                params: { sinceVersion: localVersion },
+            });
+            const serverState = response.data?.data || {};
+            const serverVersion = Number(serverState.version || 0);
+            if (serverState.inProgress) {
+                throw new Error('Reset data outlet sedang berlangsung. Sinkronisasi ditunda.');
+            }
+            if (!Number.isInteger(serverVersion) || serverVersion < 0) {
+                throw new Error('Versi reset server tidak valid.');
+            }
+
+            if (serverVersion > localVersion) {
+                const allResetVersion = Number(serverState.allResetVersion || 0);
+                const stockResetVersion = Number(serverState.stockResetVersion || 0);
+                const transactionResetVersion = Number(serverState.transactionResetVersion || 0);
+                let scopes: DataResetScope[] = [];
+                const details: DataResetDetails = {};
+                const resetEvents = Array.isArray(serverState.events)
+                    ? serverState.events.filter((event: any) => Number(event?.version) > localVersion)
+                    : [];
+
+                if (allResetVersion > localVersion) {
+                    scopes = ['ALL'];
+                } else {
+                    if (stockResetVersion > localVersion) scopes.push('STOCK');
+                    if (transactionResetVersion > localVersion) {
+                        scopes.push('TRANSACTIONS');
+                        const transactionEvents = resetEvents.filter(
+                            (event: any) => String(event?.scope).toUpperCase() === 'TRANSACTIONS'
+                        );
+                        const hasFullTransactionReset = transactionEvents.some(
+                            (event: any) => !event?.transactionRange?.startAt || !event?.transactionRange?.endAt
+                        );
+                        if (hasFullTransactionReset || transactionEvents.length === 0) {
+                            details.transactionResetAll = true;
+                        } else {
+                            details.transactionResetAll = false;
+                            details.transactionRanges = transactionEvents.map((event: any) => ({
+                                startAt: String(event.transactionRange.startAt),
+                                endAt: String(event.transactionRange.endAt),
+                            }));
+                        }
+                    }
+                }
+
+                // Kompatibilitas dengan server yang belum memiliki versi per cakupan.
+                if (scopes.length === 0) {
+                    const fallbackScope = String(serverState.scope || '').toUpperCase();
+                    scopes = fallbackScope === 'STOCK' || fallbackScope === 'TRANSACTIONS'
+                        ? [fallbackScope as DataResetScope]
+                        : ['ALL'];
+                }
+
+                await clearOperationalLocalData(serverVersion, serverState.resetAt, scopes, details);
+                return {
+                    success: true,
+                    resetApplied: true,
+                    version: serverVersion,
+                    resetAt: serverState.resetAt || null,
+                    scopes,
+                    transactionRanges: details.transactionRanges || [],
+                };
+            }
+
+            return {
+                success: true,
+                resetApplied: false,
+                version: serverVersion,
+                resetAt: serverState.resetAt || null,
+                scopes: [],
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                resetApplied: false,
+                status: error?.response?.status,
+                error: error?.response?.data?.message || error?.message || 'Status reset outlet gagal diperiksa.',
+            };
+        }
+    },
+
     // 1. Ambil data master dari server
     syncMasterData: async () => {
         try {
+            const expectedStoreId = await requireActiveStoreId();
             const res = await api.get('/sync/master');
             const data = res.data.data;
+            assertTenantResponse(expectedStoreId, data?.activeStore?.id);
             
             const db = await getDBConnection();
             
@@ -75,8 +315,8 @@ export const syncService = {
                 // Settings — "NON-EMPTY WINS" merge strategy
                 // Boolean keys: selalu update (false adalah value valid)
                 // String keys: hanya update jika server value non-kosong, atau lokal belum ada
-                const BOOLEAN_KEYS = ['enablePreOrder', 'enableShift', 'allowNegativeStock', 'showImages', 'loyalty_active'];
-                const NUMERIC_KEYS = ['taxRate', 'serviceCharge', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points'];
+                const BOOLEAN_KEYS = ['enablePreOrder', 'enableShift', 'enableShiftReminder', 'enableDineTable', 'enableTableOrder', 'enableKitchenQueue', 'allowNegativeStock', 'showImages', 'loyalty_active'];
+                const NUMERIC_KEYS = ['taxRate', 'serviceCharge', 'shiftDurationMinutes', 'shiftReminderMinutes', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points'];
                 
                 if (data.settings && data.settings.length > 0) {
                     const [pendingSettingsResult] = await tx.executeSql(
@@ -125,14 +365,69 @@ export const syncService = {
 
                 // Products
                 if (data.products) {
+                    // === CLEANUP: Hapus duplikat produk yang sudah terlanjur ada ===
+                    // 1. Duplikat serverId: simpan yang paling lama (id terkecil), hapus sisanya
+                    const [dupServerIdRes] = await tx.executeSql(`
+                        SELECT serverId, MIN(id) as keepId FROM products
+                        WHERE serverId IS NOT NULL
+                        GROUP BY serverId HAVING COUNT(*) > 1
+                    `);
+                    for (let i = 0; i < dupServerIdRes.rows.length; i++) {
+                        const row = dupServerIdRes.rows.item(i);
+                        await tx.executeSql(
+                            'DELETE FROM products WHERE serverId = ? AND id != ?',
+                            [row.serverId, row.keepId]
+                        );
+                        console.log(`[SYNC CLEANUP] Hapus duplikat serverId=${row.serverId}, keep id=${row.keepId}`);
+                    }
+
+                    // 2. Duplikat nama: jika ada produk tanpa serverId yang namanya sama
+                    //    dengan produk yang sudah punya serverId, hapus yang tanpa serverId
+                    const [dupNameRes] = await tx.executeSql(`
+                        SELECT orphan.id as orphanId, orphan.name
+                        FROM products orphan
+                        INNER JOIN products synced
+                            ON LOWER(orphan.name) = LOWER(synced.name)
+                            AND synced.serverId IS NOT NULL
+                            AND orphan.serverId IS NULL
+                            AND orphan.id != synced.id
+                    `);
+                    for (let i = 0; i < dupNameRes.rows.length; i++) {
+                        const row = dupNameRes.rows.item(i);
+                        await tx.executeSql('DELETE FROM products WHERE id = ?', [row.orphanId]);
+                        console.log(`[SYNC CLEANUP] Hapus orphan "${row.name}" id=${row.orphanId}`);
+                    }
+
                     for (const p of data.products) {
                         const [catCheck] = await tx.executeSql('SELECT id FROM categories WHERE serverId = ? OR id = ?', [p.categoryId, p.categoryId]);
                         const localCategoryId = catCheck.rows.length > 0 ? catCheck.rows.item(0).id : p.categoryId;
 
-                        const [prodCheck] = await tx.executeSql(
-                            'SELECT id, serverId, isSynced FROM products WHERE serverId = ? OR id = ?',
-                            [p.id, p.androidId]
+                        // Multi-step matching: serverId first, then androidId, then
+                        // deduplicate by name+category+price for products created on
+                        // different platforms (Web vs Android) that lack cross-IDs.
+                        let prodCheck;
+                        [prodCheck] = await tx.executeSql(
+                            'SELECT id, serverId, isSynced FROM products WHERE serverId = ?',
+                            [p.id]
                         );
+                        if (prodCheck.rows.length === 0 && p.androidId != null) {
+                            [prodCheck] = await tx.executeSql(
+                                'SELECT id, serverId, isSynced FROM products WHERE id = ?',
+                                [p.androidId]
+                            );
+                        }
+                        // Fallback: match unsynced local product by name + category +
+                        // price to prevent duplicate inserts when a product was created
+                        // on Web (androidId=NULL) while a matching one exists locally.
+                        if (prodCheck.rows.length === 0) {
+                            [prodCheck] = await tx.executeSql(
+                                'SELECT id, serverId, isSynced FROM products WHERE serverId IS NULL AND name = ? AND categoryId = ? AND price = ?',
+                                [p.name, localCategoryId, p.price]
+                            );
+                        }
+
+                        const isActive = p.isActive === false || p.isActive === 0 ? 0 : 1;
+
                         if (prodCheck.rows.length > 0) {
                             const localProduct = prodCheck.rows.item(0);
                             const localId = localProduct.id;
@@ -141,44 +436,47 @@ export const syncService = {
                                 // Jangan timpa perubahan/gambar lokal yang belum sempat didorong.
                                 // serverId tetap boleh dipetakan agar upload file punya tujuan pasti.
                                 await tx.executeSql(
-                                    'UPDATE products SET serverId = COALESCE(serverId, ?) WHERE id = ?',
-                                    [p.id, localId]
+                                    'UPDATE products SET serverId = COALESCE(serverId, ?), isActive = ? WHERE id = ?',
+                                    [p.id, isActive, localId]
                                 );
                             } else {
                                 await tx.executeSql(
-                                    'UPDATE products SET categoryId = ?, name = ?, price = ?, costPrice = ?, enableCostPrice = ?, stock = ?, imageUrl = ?, isUnlimitedStock = ?, barcode = ?, minStock = ?, discountActive = ?, discountType = ?, discountValue = ?, discountStartAt = ?, discountEndAt = ?, discountStartTime = ?, discountEndTime = ?, discountDays = ?, discountLabel = ?, serverId = ?, isSynced = 1 WHERE id = ?',
-                                    [localCategoryId, p.name, p.price, p.costPrice || 0, p.enableCostPrice ? 1 : 0, p.stock || 0, p.imageUrl, p.isUnlimitedStock ? 1 : 0, p.barcode, p.minStock || 0, p.discountActive ? 1 : 0, p.discountType || null, p.discountValue || 0, p.discountStartAt || null, p.discountEndAt || null, p.discountStartTime || null, p.discountEndTime || null, p.discountDays || null, p.discountLabel || null, p.id, localId]
+                                    'UPDATE products SET categoryId = ?, name = ?, price = ?, costPrice = ?, enableCostPrice = ?, stock = ?, imageUrl = ?, isUnlimitedStock = ?, barcode = ?, minStock = ?, discountActive = ?, discountType = ?, discountValue = ?, discountStartAt = ?, discountEndAt = ?, discountStartTime = ?, discountEndTime = ?, discountDays = ?, discountLabel = ?, isActive = ?, availabilityScheduleEnabled = ?, availabilityStartTime = ?, availabilityEndTime = ?, availabilityDays = ?, serverId = ?, isSynced = 1 WHERE id = ?',
+                                    [localCategoryId, p.name, p.price, p.costPrice || 0, p.enableCostPrice ? 1 : 0, p.stock || 0, p.imageUrl, p.isUnlimitedStock ? 1 : 0, p.barcode, p.minStock || 0, p.discountActive ? 1 : 0, p.discountType || null, p.discountValue || 0, p.discountStartAt || null, p.discountEndAt || null, p.discountStartTime || null, p.discountEndTime || null, p.discountDays || null, p.discountLabel || null, isActive, p.availabilityScheduleEnabled ? 1 : 0, p.availabilityStartTime || null, p.availabilityEndTime || null, p.availabilityDays || null, p.id, localId]
                                 );
                             }
                         } else {
                             await tx.executeSql(
-                                'INSERT INTO products (categoryId, name, price, costPrice, enableCostPrice, stock, imageUrl, isUnlimitedStock, barcode, minStock, discountActive, discountType, discountValue, discountStartAt, discountEndAt, discountStartTime, discountEndTime, discountDays, discountLabel, serverId, isSynced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
-                                [localCategoryId, p.name, p.price, p.costPrice || 0, p.enableCostPrice ? 1 : 0, p.stock || 0, p.imageUrl, p.isUnlimitedStock ? 1 : 0, p.barcode, p.minStock || 0, p.discountActive ? 1 : 0, p.discountType || null, p.discountValue || 0, p.discountStartAt || null, p.discountEndAt || null, p.discountStartTime || null, p.discountEndTime || null, p.discountDays || null, p.discountLabel || null, p.id]
+                                'INSERT INTO products (categoryId, name, price, costPrice, enableCostPrice, stock, imageUrl, isUnlimitedStock, barcode, minStock, discountActive, discountType, discountValue, discountStartAt, discountEndAt, discountStartTime, discountEndTime, discountDays, discountLabel, isActive, availabilityScheduleEnabled, availabilityStartTime, availabilityEndTime, availabilityDays, serverId, isSynced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+                                [localCategoryId, p.name, p.price, p.costPrice || 0, p.enableCostPrice ? 1 : 0, p.stock || 0, p.imageUrl, p.isUnlimitedStock ? 1 : 0, p.barcode, p.minStock || 0, p.discountActive ? 1 : 0, p.discountType || null, p.discountValue || 0, p.discountStartAt || null, p.discountEndAt || null, p.discountStartTime || null, p.discountEndTime || null, p.discountDays || null, p.discountLabel || null, isActive, p.availabilityScheduleEnabled ? 1 : 0, p.availabilityStartTime || null, p.availabilityEndTime || null, p.availabilityDays || null, p.id]
                             );
                         }
                     }
                 }
 
-                // Users (Tetap sama, asumsikan ID user di manage di server)
+                // User server boleh disinkronkan, tetapi kredensial offline hanya
+                // dipertahankan jika sudah berupa hash bcrypt dari login sah.
                 if (data.users) {
-                    const [resAll] = await tx.executeSql('SELECT id, email, pin FROM users');
+                    const [resAll] = await tx.executeSql('SELECT id, email, username, pin FROM users');
                     const pinMap: any = {};
                     for (let i = 0; i < resAll.rows.length; i++) {
                         const row = resAll.rows.item(i);
-                        if (row.email) pinMap[row.email] = row.pin;
-                        pinMap[row.id] = row.pin;
+                        const safePin = typeof row.pin === 'string' && row.pin.startsWith('$2') ? row.pin : '';
+                        if (row.email) pinMap[`email:${String(row.email).toLowerCase()}`] = safePin;
+                        if (row.username) pinMap[`username:${String(row.username).toLowerCase()}`] = safePin;
+                        pinMap[`id:${row.id}`] = safePin;
                     }
                     await tx.executeSql('DELETE FROM users');
                     for (const u of data.users) {
-                        const existPin = pinMap[u.email] || pinMap[u.id] || (u.role === 'CASHIER' ? '111111' : '123456');
-                        await tx.executeSql('INSERT OR REPLACE INTO users (id, name, email, pin, role) VALUES (?, ?, ?, ?, ?)', [u.id, u.name, u.email, existPin, u.role]);
+                        const existPin = pinMap[`id:${u.id}`]
+                            || pinMap[`email:${String(u.email || '').toLowerCase()}`]
+                            || pinMap[`username:${String(u.username || '').toLowerCase()}`]
+                            || '';
+                        await tx.executeSql(
+                            'INSERT OR REPLACE INTO users (id, name, email, username, pin, role) VALUES (?, ?, ?, ?, ?, ?)',
+                            [u.id, u.name, u.email, u.username || null, existPin, u.role]
+                        );
                     }
-                    
-                    // Always ensure default offline users exist
-                    const emails = data.users.map((u: any) => u.email);
-                    if (!emails.includes('boss@litepos.com')) await tx.executeSql(`INSERT INTO users (name, email, pin, role) VALUES ('Owner', 'boss@litepos.com', '123456', 'OWNER')`);
-                    if (!emails.includes('admin@litepos.com')) await tx.executeSql(`INSERT INTO users (name, email, pin, role) VALUES ('Admin Toko', 'admin@litepos.com', '123456', 'ADMIN')`);
-                    if (!emails.includes('kasir@litepos.com')) await tx.executeSql(`INSERT INTO users (name, email, pin, role) VALUES ('Kasir 1', 'kasir@litepos.com', '111111', 'CASHIER')`);
                 }
 
                 // Customers
@@ -190,7 +488,7 @@ export const syncService = {
                             if (Number(localCustomer.isSynced) === 0) {
                                 await tx.executeSql('UPDATE customers SET serverId = COALESCE(serverId, ?) WHERE id = ?', [c.id, localCustomer.id]);
                             } else {
-                                await tx.executeSql('UPDATE customers SET name = ?, phone = ?, email = ?, notes = ?, imageUrl = ?, displayType = ?, memberId = ?, loyaltyDiscount = ?, points = ?, serverId = ?, isSynced = 1 WHERE id = ?', [c.name, c.phone, c.email || null, c.notes || null, c.imageUrl || null, c.displayType || 'normal', c.memberId || null, c.loyaltyDiscount || 0, c.points || 0, c.id, localCustomer.id]);
+                                await tx.executeSql('UPDATE customers SET name = ?, phone = ?, email = ?, notes = ?, imageUrl = ?, displayType = ?, memberId = ?, loyaltyDiscount = ?, points = ?, pointsManuallyEdited = 0, serverId = ?, isSynced = 1 WHERE id = ?', [c.name, c.phone, c.email || null, c.notes || null, c.imageUrl || null, c.displayType || 'normal', c.memberId || null, c.loyaltyDiscount || 0, c.points || 0, c.id, localCustomer.id]);
                             }
                         } else {
                             await tx.executeSql('INSERT INTO customers (name, phone, email, notes, imageUrl, displayType, memberId, loyaltyDiscount, points, serverId, isSynced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)', [c.name, c.phone, c.email || null, c.notes || null, c.imageUrl || null, c.displayType || 'normal', c.memberId || null, c.loyaltyDiscount || 0, c.points || 0, c.id]);
@@ -249,6 +547,23 @@ export const syncService = {
                             await tx.executeSql('UPDATE package_items SET quantity = ? WHERE packageId = ? AND productId = ?', [pki.quantity || pki.qty || 1, localPackageId, localProductId]);
                         } else {
                             await tx.executeSql('INSERT INTO package_items (packageId, productId, quantity) VALUES (?, ?, ?)', [localPackageId, localProductId, pki.quantity || pki.qty || 1]);
+                        }
+                    }
+                }
+
+                // Dine-in Tables — upsert by serverId
+                if (data.tables) {
+                    for (const tb of data.tables) {
+                        const [checkRes] = await tx.executeSql('SELECT id, isSynced FROM dine_tables WHERE serverId = ? OR id = ?', [tb.id, tb.id]);
+                        if (checkRes.rows.length > 0) {
+                            const localTable = checkRes.rows.item(0);
+                            if (Number(localTable.isSynced) === 0) {
+                                await tx.executeSql('UPDATE dine_tables SET serverId = COALESCE(serverId, ?) WHERE id = ?', [tb.id, localTable.id]);
+                            } else {
+                                await tx.executeSql('UPDATE dine_tables SET number = ?, name = ?, capacity = ?, status = ?, serverId = ?, isSynced = 1 WHERE id = ?', [tb.number, tb.name, tb.capacity || 4, tb.status || 'AVAILABLE', tb.id, localTable.id]);
+                            }
+                        } else {
+                            await tx.executeSql('INSERT INTO dine_tables (number, name, capacity, status, serverId, isSynced) VALUES (?, ?, ?, ?, ?, 1)', [tb.number, tb.name, tb.capacity || 4, tb.status || 'AVAILABLE', tb.id]);
                         }
                     }
                 }
@@ -348,6 +663,17 @@ export const syncService = {
                     }
                 }
 
+                // Cleanup Dine Tables
+                if (data.tables) {
+                    const serverTableIds = data.tables.map((t: any) => t.id);
+                    if (serverTableIds.length > 0) {
+                        const placeholders = serverTableIds.map(() => '?').join(',');
+                        await tx.executeSql(
+                            `DELETE FROM dine_tables WHERE isSynced = 1 AND serverId IS NOT NULL AND serverId NOT IN (${placeholders})`,
+                            serverTableIds
+                        );
+                    }
+                }
             // End of sequential db execution
 
             await db.executeSql(
@@ -368,7 +694,14 @@ export const syncService = {
     // 2. Kirim transaksi offline ke server
     pushLocalData: async () => {
         try {
+            await requireActiveStoreId();
             const db = await getDBConnection();
+            const [resetVersionResult] = await db.executeSql(
+                `SELECT value FROM settings WHERE key = 'dataResetVersion'`
+            );
+            const dataResetVersion = resetVersionResult.rows.length > 0
+                ? Number(resetVersionResult.rows.item(0).value || 0)
+                : 0;
             const [initialSyncResult] = await db.executeSql(
                 `SELECT value FROM settings WHERE key = 'sync_initialized'`
             );
@@ -392,7 +725,7 @@ export const syncService = {
                 for (let i = 0; i < trxRes.rows.length; i++) {
                     const tx = trxRes.rows.item(i);
                     const txToSend = { ...tx };
-                    if (tx.custServerId) txToSend.customerId = tx.custServerId;
+                    if (tx.custServerId) txToSend.customerServerId = tx.custServerId;
                     delete txToSend.custServerId;
 
                     const [itemsRes] = await db.executeSql(`
@@ -530,6 +863,15 @@ export const syncService = {
                 }
             } catch(e) { console.warn('Push: gagal ambil packages:', e); }
 
+            // Ambil dine tables
+            let dineTables: any[] = [];
+            try {
+                const [tableRes] = await db.executeSql('SELECT * FROM dine_tables WHERE isSynced = 0');
+                for (let i = 0; i < tableRes.rows.length; i++) {
+                    dineTables.push(tableRes.rows.item(i));
+                }
+            } catch(e) { console.warn('Push: gagal ambil dine_tables:', e); }
+
             // Ambil product addons
             let addons: any[] = [];
             try {
@@ -569,7 +911,7 @@ export const syncService = {
             const hasData = transactions.length > 0 || expenses.length > 0 || shifts.length > 0 || 
                 categories.length > 0 || products.length > 0 || customers.length > 0 || 
                 settings.length > 0 || stockReceipts.length > 0 ||
-                suppliers.length > 0 || packages.length > 0 || addons.length > 0;
+                suppliers.length > 0 || packages.length > 0 || dineTables.length > 0 || addons.length > 0;
             if (!hasData) {
                 return { success: true, message: 'No local data to sync' };
             }
@@ -582,10 +924,20 @@ export const syncService = {
                 delete productWithoutLocalImage.imageUrl;
                 return productWithoutLocalImage;
             });
-            const payload = { transactions, expenses, shifts, categories, products: productsForPush, customers, settings, stockReceipts, suppliers, packages, addons };
+            const customersForPush = customers.map((customer) => {
+                if (!isDeviceAssetUrl(customer.imageUrl)) return customer;
+                const customerWithoutLocalImage = { ...customer };
+                delete customerWithoutLocalImage.imageUrl;
+                return customerWithoutLocalImage;
+            });
+            const payload = { transactions, expenses, shifts, categories, products: productsForPush, customers: customersForPush, settings, stockReceipts, suppliers, packages, dineTables, addons, dataResetVersion };
             const res = await api.post('/sync/push', payload, {
                 headers: { 'X-LitePOS-Sync-Version': '2' },
             });
+            assertTenantResponse(
+                useStore.getState().user?.activeStoreId,
+                res.data?.activeStore?.id
+            );
             
             if (res.data.success) {
                 const idMap = res.data.idMap || {};
@@ -607,30 +959,10 @@ export const syncService = {
                         .filter((id) => !rejected.has(String(id)));
                 };
 
-                // File galeri hanya ada di perangkat. Upload setelah serverId produk tersedia,
-                // lalu simpan kembali path relatif backend agar tetap mengikuti apiBaseUrl aktif.
-                const productServerIds = new Map<string, number>(
-                    (idMap.products || []).map(
-                        (item: any) => [String(item.androidId), Number(item.serverId)] as [string, number]
-                    )
-                );
-                for (const product of products.filter((item) => isDeviceAssetUrl(item.imageUrl))) {
-                    const serverProductId = Number(
-                        product.serverId || productServerIds.get(String(product.id)) || 0
-                    );
-                    if (!serverProductId) {
-                        throw new Error(`Server ID untuk gambar produk ${product.name} tidak ditemukan.`);
-                    }
-
-                    const remoteImageUrl = await uploadProductImage(serverProductId, product.imageUrl);
-                    await db.executeSql(
-                        'UPDATE products SET imageUrl = ? WHERE id = ?',
-                        [remoteImageUrl, product.id]
-                    );
-                }
-                
                 // react-native-sqlite-storage tidak menunggu callback transaction yang async.
                 // Jalankan pembaruan berurutan agar status sinkron selalu selesai sebelum return.
+                // PENTING: Mapping serverId HARUS dilakukan SEBELUM upload gambar agar
+                // meskipun upload gagal, serverId sudah tercatat dan sync berikutnya tidak duplikat.
                 if (idMap.categories) {
                     for (const item of idMap.categories) {
                         await db.executeSql('UPDATE categories SET serverId = ?, isSynced = 1 WHERE id = ?', [item.serverId, item.androidId]);
@@ -645,7 +977,7 @@ export const syncService = {
 
                 if (idMap.customers) {
                     for (const item of idMap.customers) {
-                        await db.executeSql('UPDATE customers SET serverId = ?, isSynced = 1 WHERE id = ?', [item.serverId, item.androidId]);
+                        await db.executeSql('UPDATE customers SET serverId = ?, pointsManuallyEdited = 0, isSynced = 1 WHERE id = ?', [item.serverId, item.androidId]);
                     }
                 }
 
@@ -671,9 +1003,64 @@ export const syncService = {
                     }
                 }
 
+                if (idMap.dineTables) {
+                    for (const item of idMap.dineTables) {
+                        await db.executeSql('UPDATE dine_tables SET serverId = ?, isSynced = 1 WHERE id = ?', [item.serverId, item.androidId]);
+                    }
+                }
+
                 if (idMap.addons) {
                     for (const item of idMap.addons) {
                         await db.executeSql('UPDATE product_addons SET serverId = ?, isSynced = 1 WHERE id = ?', [item.serverId, item.androidId]);
+                    }
+                }
+
+                // File galeri hanya ada di perangkat. Upload setelah serverId dipetakan,
+                // lalu simpan kembali path relatif backend agar tetap mengikuti apiBaseUrl aktif.
+                // Wrap per-item dalam try-catch agar satu kegagalan tidak membatalkan seluruh sync.
+                const productServerIds = new Map<string, number>(
+                    (idMap.products || []).map(
+                        (item: any) => [String(item.androidId), Number(item.serverId)] as [string, number]
+                    )
+                );
+                for (const product of products.filter((item) => isDeviceAssetUrl(item.imageUrl))) {
+                    try {
+                        const serverProductId = Number(
+                            product.serverId || productServerIds.get(String(product.id)) || 0
+                        );
+                        if (!serverProductId) {
+                            console.warn(`Server ID untuk gambar produk ${product.name} tidak ditemukan, lewati upload.`);
+                            continue;
+                        }
+
+                        const remoteImageUrl = await uploadProductImage(serverProductId, product.imageUrl);
+                        await db.executeSql(
+                            'UPDATE products SET imageUrl = ? WHERE id = ?',
+                            [remoteImageUrl, product.id]
+                        );
+                    } catch (imgErr) {
+                        console.warn(`Gagal upload gambar produk ${product.name}:`, imgErr);
+                    }
+                }
+
+                const customerServerIds = new Map<string, number>(
+                    (idMap.customers || []).map(
+                        (item: any) => [String(item.androidId), Number(item.serverId)] as [string, number]
+                    )
+                );
+                for (const customer of customers.filter((item) => isDeviceAssetUrl(item.imageUrl))) {
+                    try {
+                        const serverCustomerId = Number(
+                            customer.serverId || customerServerIds.get(String(customer.id)) || 0
+                        );
+                        if (!serverCustomerId) {
+                            console.warn(`Server ID untuk foto pelanggan ${customer.name} tidak ditemukan, lewati upload.`);
+                            continue;
+                        }
+                        const remoteImageUrl = await uploadCustomerImage(serverCustomerId, customer.imageUrl);
+                        await db.executeSql('UPDATE customers SET imageUrl = ? WHERE id = ?', [remoteImageUrl, customer.id]);
+                    } catch (imgErr) {
+                        console.warn(`Gagal upload foto pelanggan ${customer.name}:`, imgErr);
                     }
                 }
 
@@ -704,8 +1091,10 @@ export const syncService = {
     // Agar laporan dan dashboard di Android menampilkan semua transaksi antar perangkat
     syncTransactionHistory: async () => {
         try {
+            const expectedStoreId = await requireActiveStoreId();
             const res = await api.get('/sync/history');
             const data = res.data.data;
+            assertTenantResponse(expectedStoreId, data?.activeStore?.id);
 
             const db = await getDBConnection();
 
@@ -734,13 +1123,14 @@ export const syncService = {
 
                             // Insert transaction
                             await db.executeSql(
-                                `INSERT INTO transactions (id, invoiceNumber, grandTotal, discountAmount, paymentMethod, cashAmount, changeAmount, customerId, customerName, createdAt, status, preOrderDate, paymentStatus, paidAmount, remainingAmount, paidAt, orderType, tableName, preOrderConfirmed, isSynced)
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+                                `INSERT INTO transactions (id, invoiceNumber, grandTotal, discountAmount, taxAmount, paymentMethod, cashAmount, changeAmount, customerId, customerName, createdAt, status, preOrderDate, paymentStatus, paidAmount, remainingAmount, paidAt, orderType, tableName, preOrderConfirmed, pointsEarned, pointsRedeemed, pointsBalanceAfter, loyaltyRedemptionMode, shiftId, isSynced)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
                                 [
                                     tx.id,
                                     tx.invoiceNumber,
                                     tx.grandTotal,
                                     tx.discountAmount || 0,
+                                    tx.taxAmount || 0,
                                     tx.paymentMethod || 'CASH',
                                     tx.cashAmount,
                                     tx.changeAmount,
@@ -756,6 +1146,11 @@ export const syncService = {
                                     tx.orderType || 'TAKE_AWAY',
                                     tx.tableName,
                                     tx.preOrderConfirmed === true || Number(tx.preOrderConfirmed) === 1 ? 1 : 0,
+                                    tx.pointsEarned || 0,
+                                    tx.pointsRedeemed || 0,
+                                    tx.pointsBalanceAfter,
+                                    tx.loyaltyRedemptionMode,
+                                    tx.shiftId,
                                 ]
                             );
 
@@ -775,14 +1170,18 @@ export const syncService = {
                                     }
 
                                     await db.executeSql(
-                                        `INSERT INTO transaction_items (transactionId, productId, quantity, price, notes)
-                                         VALUES (?, ?, ?, ?, ?)`,
+                                        `INSERT INTO transaction_items (transactionId, productId, quantity, price, originalPrice, discountAmount, notes, loyaltyRewardQty, loyaltyRewardDiscount)
+                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                                         [
                                             tx.id,
                                             localProductId,
                                             item.quantity || 1,
                                             item.price,
+                                            item.originalPrice || item.price,
+                                            item.discountAmount || 0,
                                             item.notes || null,
+                                            item.loyaltyRewardQty || 0,
+                                            item.loyaltyRewardDiscount || 0,
                                         ]
                                     );
                                 }
@@ -809,12 +1208,12 @@ export const syncService = {
                                     `UPDATE transactions
                                      SET status = ?, preOrderConfirmed = ?, paymentMethod = ?, cashAmount = ?,
                                          changeAmount = ?, paymentStatus = ?, paidAmount = ?, remainingAmount = ?,
-                                         paidAt = ?, isSynced = 1
+                                         paidAt = ?, shiftId = ?, isSynced = 1
                                      WHERE id = ?`,
                                     [
                                         tx.status || 'COMPLETED', mergedConfirmed, tx.paymentMethod || 'CASH',
                                         tx.cashAmount, tx.changeAmount, paymentStatus, paidAmount,
-                                        remainingAmount, tx.paidAt, existing.id,
+                                        remainingAmount, tx.paidAt, tx.shiftId, existing.id,
                                     ]
                                 );
                             }
@@ -836,9 +1235,9 @@ export const syncService = {
                         );
                         if (checkRes.rows.length === 0) {
                             await db.executeSql(
-                                `INSERT INTO expenses (description, amount, category, type, createdAt, isSynced)
-                                 VALUES (?, ?, ?, ?, ?, 1)`,
-                                [exp.description, exp.amount, exp.category || 'Umum', exp.type === 'PURCHASE' ? 'PURCHASE' : 'EXPENSE', exp.createdAt]
+                                `INSERT INTO expenses (description, amount, category, type, shiftId, createdAt, isSynced)
+                                 VALUES (?, ?, ?, ?, ?, ?, 1)`,
+                                [exp.description, exp.amount, exp.category || 'Umum', exp.type === 'PURCHASE' ? 'PURCHASE' : 'EXPENSE', exp.shiftId || null, exp.createdAt]
                             );
                         }
                     } catch (expErr: any) {
@@ -857,13 +1256,14 @@ export const syncService = {
                         );
                         if (checkRes.rows.length === 0) {
                             await db.executeSql(
-                                `INSERT INTO shifts (id, userId, userName, openedAt, closedAt, openingCash, closingCash, status, isSynced)
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+                                `INSERT INTO shifts (id, userId, userName, openedAt, expectedCloseAt, closedAt, openingCash, closingCash, status, isSynced)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
                                 [
                                     shift.id,
                                     shift.userId,
                                     shift.userName,
                                     shift.openedAt,
+                                    shift.expectedCloseAt || null,
                                     shift.closedAt,
                                     shift.openingCash,
                                     shift.closingCash,
@@ -871,17 +1271,43 @@ export const syncService = {
                                 ]
                             );
                         } else {
-                            // Update status jika shift ditutup
-                            if (shift.status === 'CLOSED') {
-                                await db.executeSql(
-                                    'UPDATE shifts SET status = ?, closedAt = ?, closingCash = ?, isSynced = 1 WHERE id = ? AND status = ?',
-                                    [shift.status, shift.closedAt, shift.closingCash, shift.id, 'OPEN']
-                                );
-                            }
+                            // Server adalah sumber kebenaran untuk nama kasir dan state shift.
+                            await db.executeSql(
+                                `UPDATE shifts
+                                 SET userId = ?, userName = ?, openedAt = ?, expectedCloseAt = ?,
+                                     closedAt = ?, openingCash = ?, closingCash = ?, status = ?, isSynced = 1
+                                 WHERE id = ?`,
+                                [
+                                    shift.userId,
+                                    shift.userName || 'Kasir',
+                                    shift.openedAt,
+                                    shift.expectedCloseAt || null,
+                                    shift.closedAt || null,
+                                    Number(shift.openingCash || 0),
+                                    shift.closingCash == null ? null : Number(shift.closingCash),
+                                    shift.status || 'OPEN',
+                                    shift.id,
+                                ]
+                            );
                         }
                     } catch (shiftErr: any) {
                         console.warn('[SYNC-HISTORY] Gagal upsert shift:', shiftErr?.message);
                     }
+                }
+
+                // Backend hanya mengizinkan satu shift OPEN untuk satu outlet.
+                // Jika perangkat pernah membuka shift saat offline sementara server
+                // sudah mempunyai shift aktif lain, singkirkan state OPEN lokal yang
+                // konflik supaya UI Android mengikuti sumber kebenaran server.
+                const serverOpenShiftIds = data.shifts
+                    .filter((shift: any) => shift.status === 'OPEN')
+                    .map((shift: any) => String(shift.id));
+                if (serverOpenShiftIds.length > 0) {
+                    const placeholders = serverOpenShiftIds.map(() => '?').join(',');
+                    await db.executeSql(
+                        `DELETE FROM shifts WHERE status = 'OPEN' AND id NOT IN (${placeholders})`,
+                        serverOpenShiftIds
+                    );
                 }
             }
 

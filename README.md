@@ -79,7 +79,7 @@ Gunakan hanya file APK dari tautan yang diberikan langsung oleh pengelola LitePO
 5. Jika pemasangan diblokir, tekan **Setelan/Settings** pada pesan yang muncul.
 6. Aktifkan sementara izin **Instal aplikasi tidak dikenal** untuk aplikasi yang digunakan membuka APK, misalnya Google Drive, Chrome, atau Files.
 7. Kembali ke halaman pemasangan, lalu tekan **Instal**.
-8. Setelah selesai, tekan **Buka**.
+8. Setelah selesai, tekan **Buka**. Nama aplikasi yang tampil adalah **LitePOS Demo**.
 9. Demi keamanan, matikan kembali izin **Instal aplikasi tidak dikenal** yang tadi diaktifkan.
 
 Nama menu dapat sedikit berbeda pada setiap merek ponsel. Biasanya pengaturannya berada di:
@@ -91,7 +91,7 @@ Tidak perlu mematikan Google Play Protect secara keseluruhan. Jika muncul pering
 ### Masuk ke aplikasi Android
 
 1. Pastikan internet aktif.
-2. Buka aplikasi **LitePOS**.
+2. Buka aplikasi **LitePOS Demo**.
 3. Masukkan username/email dan password yang sama dengan akun website.
 4. Tekan **Masuk**.
 
@@ -105,7 +105,9 @@ Jika pengelola membagikan versi APK yang lebih baru:
 2. Buka file tersebut dan tekan **Perbarui/Update**.
 3. Tidak perlu menghapus aplikasi lama terlebih dahulu.
 
-Jika Android meminta aplikasi lama dihapus, jangan lanjutkan dahulu. Hubungi pengelola karena kemungkinan APK baru dibuat dengan kunci aplikasi yang berbeda. Menghapus aplikasi tidak menghapus data usaha di server, tetapi pengaturan khusus pada perangkat—misalnya preferensi printer—dapat kembali ke awal.
+Rilis resmi **LitePOS Demo 1.4.2** memakai identitas aplikasi baru sehingga dapat dipasang tanpa berbenturan dengan APK uji lama **LitePOS Warna Warni**. Setelah LitePOS Demo berhasil dipasang dan login, aplikasi lama boleh dihapus agar tidak membingungkan pengguna.
+
+Setelah versi 1.4.2 terpasang, pembaruan berikutnya tidak perlu menghapus aplikasi selama pengelola selalu menggunakan identitas dan kunci rilis yang sama. Jika Android meminta aplikasi dihapus pada versi berikutnya, jangan lanjutkan dahulu dan hubungi pengelola.
 
 ## 3. Hal penting saat menggunakan demo
 

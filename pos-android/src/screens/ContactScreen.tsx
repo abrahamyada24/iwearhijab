@@ -5,12 +5,17 @@ import {
 import tw, { useAppColorScheme } from 'twrnc';
 import { getDBConnection } from '../database/db';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { resolveApiAssetUrl } from '../services/api';
+import api from '../services/api';
+import { useStore } from '../store/useStore';
 
 type ContactTab = 'supplier' | 'customer';
 
 export default function ContactScreen({ navigation }: any) {
     useAppColorScheme(tw);
+    const user = useStore(state => state.user);
+    const canEditPoints = ['ADMIN', 'OWNER'].includes(String(user?.role || '').toUpperCase());
     const [activeTab, setActiveTab] = useState<ContactTab>('customer');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -26,6 +31,8 @@ export default function ContactScreen({ navigation }: any) {
     const [formEmail, setFormEmail] = useState('');
     const [formAddress, setFormAddress] = useState('');
     const [formNotes, setFormNotes] = useState('');
+    const [formImageUrl, setFormImageUrl] = useState('');
+    const [formDisplayType, setFormDisplayType] = useState('normal');
     const [formLoyalty, setFormLoyalty] = useState('0');
     const [formPoints, setFormPoints] = useState('0');
 
@@ -40,10 +47,39 @@ export default function ContactScreen({ navigation }: any) {
             for (let i = 0; i < sRes.rows.length; i++) sArr.push(sRes.rows.item(i));
             setSuppliers(sArr);
 
-            const [cRes] = await db.executeSql('SELECT * FROM customers ORDER BY name');
+            const [cRes] = await db.executeSql(`
+                SELECT c.*,
+                    COUNT(t.id) as totalVisits,
+                    COALESCE(SUM(CASE
+                        WHEN COALESCE(t.paidAmount, 0) > 0 THEN t.paidAmount
+                        ELSE t.grandTotal
+                    END), 0) as totalSpent
+                FROM customers c
+                LEFT JOIN transactions t ON t.customerId = c.id
+                    AND UPPER(COALESCE(t.status, 'COMPLETED')) IN ('PAID', 'COMPLETED')
+                    AND UPPER(COALESCE(t.paymentStatus, 'PAID')) = 'PAID'
+                GROUP BY c.id
+                ORDER BY c.name
+            `);
             const cArr: any[] = [];
             for (let i = 0; i < cRes.rows.length; i++) cArr.push(cRes.rows.item(i));
-            setCustomers(cArr);
+            try {
+                const response = await api.get('/customers');
+                const serverCustomers = Array.isArray(response.data?.data) ? response.data.data : [];
+                const serverById = new Map(serverCustomers.map((item: any) => [Number(item.id), item]));
+                setCustomers(cArr.map(item => {
+                    const remote: any = serverById.get(Number(item.serverId || item.id));
+                    return remote ? {
+                        ...item,
+                        memberId: remote.memberId || item.memberId,
+                        points: Number(remote.points || 0),
+                        totalVisits: Number(remote.totalVisits || 0),
+                        totalSpent: Number(remote.totalSpent || 0),
+                    } : item;
+                }));
+            } catch {
+                setCustomers(cArr);
+            }
         } catch (e) { console.error(e); }
     }, []);
 
@@ -60,6 +96,8 @@ export default function ContactScreen({ navigation }: any) {
         setFormEmail('');
         setFormAddress('');
         setFormNotes('');
+        setFormImageUrl('');
+        setFormDisplayType('normal');
         setFormLoyalty('0');
         setFormPoints('0');
     };
@@ -76,6 +114,8 @@ export default function ContactScreen({ navigation }: any) {
         setFormEmail(item.email || '');
         setFormAddress(item.address || '');
         setFormNotes(item.notes || '');
+        setFormImageUrl(item.imageUrl || '');
+        setFormDisplayType(item.displayType || 'normal');
         setFormLoyalty((item.loyaltyDiscount || 0).toString());
         setFormPoints((item.points || 0).toString());
         setMenuItemId(null);
@@ -101,21 +141,27 @@ export default function ContactScreen({ navigation }: any) {
                 }
             } else {
                 const loyalty = parseFloat(formLoyalty.replace(/[^0-9.]/g, '') || '0');
-                const points = parseInt(formPoints.replace(/[^0-9]/g, '') || '0');
+                const points = canEditPoints
+                    ? parseInt(formPoints.replace(/[^0-9]/g, '') || '0')
+                    : Number(editing?.points || 0);
                 if (loyalty < 0 || loyalty > 100) return Alert.alert('Validasi', 'Diskon pelanggan harus antara 0 sampai 100%.');
                 if (formPhone.trim()) {
-                    const [duplicateResult] = await db.executeSql('SELECT id FROM customers WHERE phone = ? AND id != ? LIMIT 1', [formPhone.trim(), editing?.id || -1]);
+                    const [duplicateResult] = await db.executeSql(
+                        'SELECT id FROM customers WHERE phone = ? AND id != ? LIMIT 1',
+                        [formPhone.trim(), editing?.id || -1]
+                    );
                     if (duplicateResult.rows.length > 0) return Alert.alert('Nomor sudah terdaftar', 'Pilih atau edit pelanggan yang sudah menggunakan nomor tersebut.');
                 }
                 if (editing) {
+                    const pointsManuallyEdited = canEditPoints && points !== Number(editing.points || 0) ? 1 : Number(editing.pointsManuallyEdited || 0);
                     await db.executeSql(
-                        'UPDATE customers SET name = ?, phone = ?, email = ?, notes = ?, loyaltyDiscount = ?, points = ?, isSynced = 0 WHERE id = ?',
-                        [formName.trim(), formPhone.trim() || null, formEmail.trim() || null, formNotes.trim() || null, loyalty, points, editing.id]
+                        'UPDATE customers SET name = ?, phone = ?, email = ?, notes = ?, imageUrl = ?, displayType = ?, loyaltyDiscount = ?, points = ?, pointsManuallyEdited = ?, isSynced = 0 WHERE id = ?',
+                        [formName.trim(), formPhone.trim() || null, formEmail.trim() || null, formNotes.trim() || null, formImageUrl || null, formDisplayType, loyalty, points, pointsManuallyEdited, editing.id]
                     );
                 } else {
                     await db.executeSql(
-                        'INSERT INTO customers (name, phone, email, notes, loyaltyDiscount, points, isSynced) VALUES (?, ?, ?, ?, ?, ?, 0)',
-                        [formName.trim(), formPhone.trim() || null, formEmail.trim() || null, formNotes.trim() || null, loyalty, points]
+                        'INSERT INTO customers (name, phone, email, notes, imageUrl, displayType, loyaltyDiscount, points, pointsManuallyEdited, isSynced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
+                        [formName.trim(), formPhone.trim() || null, formEmail.trim() || null, formNotes.trim() || null, formImageUrl || null, formDisplayType, loyalty, points, canEditPoints && points > 0 ? 1 : 0]
                     );
                 }
             }
@@ -148,9 +194,7 @@ export default function ContactScreen({ navigation }: any) {
     const data = activeTab === 'supplier' ? suppliers : customers;
     const filtered = searchQuery.trim()
         ? data.filter(d => d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (d.phone || '').includes(searchQuery) ||
-            (d.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (d.memberId || '').toLowerCase().includes(searchQuery.toLowerCase()))
+            (d.phone || '').includes(searchQuery))
         : data;
 
     const renderContactItem = ({ item }: { item: any }) => (
@@ -182,6 +226,12 @@ export default function ContactScreen({ navigation }: any) {
                                 <Text style={tw`text-[10px] font-black text-blue-600`}>{item.points} Poin</Text>
                             </View>
                         )}
+                        <View style={tw`bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full`}>
+                            <Text style={tw`text-[10px] font-black text-purple-600`}>{Number(item.totalVisits || 0)} Kunjungan</Text>
+                        </View>
+                        <View style={tw`bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full`}>
+                            <Text style={tw`text-[10px] font-black text-amber-700`}>Rp {Number(item.totalSpent || 0).toLocaleString('id-ID')}</Text>
+                        </View>
                         {item.loyaltyDiscount > 0 && (
                             <View style={tw`bg-green-50 border border-green-200 px-2 py-0.5 rounded-full`}>
                                 <Text style={tw`text-[10px] font-black text-green-600`}>Diskon {item.loyaltyDiscount}%</Text>
@@ -359,9 +409,40 @@ export default function ContactScreen({ navigation }: any) {
                                         value={formEmail}
                                         onChangeText={setFormEmail}
                                     />
+
+                                    <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mb-2`}>Foto Profil</Text>
+                                    <TouchableOpacity
+                                        style={tw`h-28 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl items-center justify-center mb-4 overflow-hidden bg-gray-50 dark:bg-gray-900`}
+                                        onPress={async () => {
+                                            const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, quality: 0.8 });
+                                            const uri = result.assets?.[0]?.uri;
+                                            if (uri) setFormImageUrl(uri);
+                                        }}
+                                    >
+                                        {formImageUrl ? (
+                                            <Image source={{ uri: resolveApiAssetUrl(formImageUrl) || formImageUrl }} style={tw`w-full h-full`} resizeMode="cover" />
+                                        ) : (
+                                            <View style={tw`items-center`}>
+                                                <Icon name="cloud-upload-outline" size={26} color={tw.color('gray-400')} />
+                                                <Text style={tw`text-xs text-gray-400 mt-1`}>Pilih foto</Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+
+                                    <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mb-2`}>Highlight Card</Text>
+                                    <View style={tw`flex-row flex-wrap gap-2 mb-4`}>
+                                        {[
+                                            ['normal', 'Normal'], ['tall', 'Tinggi'], ['wide', 'Lebar'], ['large', 'VIP Besar']
+                                        ].map(([value, label]) => (
+                                            <TouchableOpacity key={value} onPress={() => setFormDisplayType(value)} style={tw`px-3 py-2 rounded-xl border ${formDisplayType === value ? 'bg-blue-600 border-blue-600' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'}`}>
+                                                <Text style={tw`text-xs font-bold ${formDisplayType === value ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}>{label}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+
                                     {editing?.memberId ? (
-                                        <View style={tw`bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 mb-4`}>
-                                            <Text style={tw`text-[10px] text-orange-600 font-bold uppercase`}>Member ID</Text>
+                                        <View style={tw`bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-4`}>
+                                            <Text style={tw`text-[10px] text-blue-500 font-bold uppercase`}>Member ID</Text>
                                             <Text style={tw`text-sm text-gray-800 font-black mt-0.5`}>{editing.memberId}</Text>
                                         </View>
                                     ) : null}
@@ -422,13 +503,15 @@ export default function ContactScreen({ navigation }: any) {
                                         <Text style={tw`text-xs font-bold text-gray-600 dark:text-gray-300 mb-1`}>Poin</Text>
                                         <View style={tw`flex-row items-center bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden`}>
                                             <TextInput
-                                                style={tw`flex-1 px-4 py-3 text-gray-800 dark:text-gray-100 font-bold`}
+                                                style={tw`flex-1 px-4 py-3 font-bold ${canEditPoints ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}
                                                 keyboardType="numeric"
                                                 placeholder="0"
                                                 value={formPoints}
                                                 onChangeText={t => setFormPoints(t.replace(/[^0-9]/g, ''))}
+                                                editable={canEditPoints}
                                             />
                                         </View>
+                                        {!canEditPoints && <Text style={tw`text-[10px] text-gray-400 mt-1`}>Saldo poin hanya dapat diubah Admin/Owner.</Text>}
                                     </View>
                                 </View>
                             )}

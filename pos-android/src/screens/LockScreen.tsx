@@ -1,22 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, BackHandler, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import tw from 'twrnc';
 import { useStore } from '../store/useStore';
+import { clearAuthSession } from '../services/secureAuthStorage';
 import {
     activateLicense,
     licenseToSettings,
     resolveLicenseStatus,
-    type LicenseStatus,
 } from '../services/licenseService';
-import { clearAuthSession } from '../services/secureAuthStorage';
+import type { LicenseStatus } from '../services/secureLicenseStorage';
 
 const formatDate = (value?: string | null) => value
     ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(new Date(value))
     : 'Tanpa batas waktu';
 
-export default function LockScreen() {
+export default function LockScreen({ navigation }: any) {
     const user = useStore((state) => state.user);
     const settings = useStore((state) => state.settings);
     const setSettings = useStore((state) => state.setSettings);
@@ -28,7 +29,8 @@ export default function LockScreen() {
 
     const applyLicense = (nextLicense: LicenseStatus) => {
         setLicense(nextLicense);
-        setSettings({ ...useStore.getState().settings, ...licenseToSettings(nextLicense) });
+        setSettings({ ...settings, ...licenseToSettings(nextLicense) });
+        if (nextLicense.isActive) navigation.replace('Main');
     };
 
     const refresh = async () => {
@@ -41,7 +43,7 @@ export default function LockScreen() {
     };
 
     useEffect(() => {
-        void refresh();
+        refresh();
         const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
         return () => subscription.remove();
     }, []);
@@ -56,7 +58,7 @@ export default function LockScreen() {
             const nextLicense = await activateLicense(activationCode);
             setActivationCode('');
             applyLicense(nextLicense);
-            Alert.alert('Lisensi Aktif', 'Lisensi Warna Warni berlaku untuk web, desktop, dan Android yang terhubung ke outlet ini.');
+            Alert.alert('Lisensi Aktif', 'Lisensi outlet berlaku untuk website dan seluruh Android yang login.');
         } catch (error: any) {
             Alert.alert('Aktivasi Gagal', error?.response?.data?.message || error?.message || 'Kode tidak dapat diproses.');
         } finally {
@@ -67,6 +69,7 @@ export default function LockScreen() {
     const switchAccount = async () => {
         await clearAuthSession();
         setUser(null);
+        navigation.replace('Login');
     };
 
     return (
@@ -75,19 +78,26 @@ export default function LockScreen() {
                 <View style={tw`w-16 h-16 rounded-2xl bg-red-500/15 items-center justify-center mb-5`}>
                     <Icon name="shield-lock-outline" size={34} color={tw.color('red-400')} />
                 </View>
-                <Text style={tw`text-2xl font-black text-white`}>Lisensi Warna Warni Tidak Aktif</Text>
+                <Text style={tw`text-2xl font-black text-white`}>Lisensi Outlet Tidak Aktif</Text>
                 <Text style={tw`text-sm text-gray-400 leading-5 mt-2`}>
-                    Operasional POS dikunci. Hubungkan perangkat ke server atau perpanjang lisensi outlet.
+                    Operasional POS dikunci, tetapi akun tetap dapat login untuk memeriksa atau memperpanjang lisensi.
                 </Text>
 
                 <View style={tw`bg-gray-800 rounded-2xl p-4 mt-6`}>
                     <Text style={tw`text-[10px] font-black text-gray-500 uppercase`}>Nomor Lisensi</Text>
-                    <Text selectable style={tw`text-lg font-black text-white tracking-wider mt-1`}>
-                        {license?.licenseNumber || settings.license_number || 'Belum tersedia'}
-                    </Text>
-                    <View style={tw`border-t border-gray-700 mt-3 pt-3`}>
-                        <Text style={tw`text-xs text-gray-400`}>Status: {license?.status || settings.license_status || 'UNKNOWN'}</Text>
-                        <Text style={tw`text-xs text-gray-400 mt-1`}>Berakhir: {formatDate(license?.expiresAt || settings.license_expire_date)}</Text>
+                    <View style={tw`flex-row items-center mt-1`}>
+                        <Text selectable style={tw`flex-1 text-lg font-black text-white tracking-wider`}>
+                            {license?.licenseNumber || 'Belum tersedia'}
+                        </Text>
+                        {license?.licenseNumber ? (
+                            <TouchableOpacity onPress={() => Clipboard.setString(license.licenseNumber || '')} style={tw`p-2`}>
+                                <Icon name="content-copy" size={18} color={tw.color('gray-300')} />
+                            </TouchableOpacity>
+                        ) : null}
+                    </View>
+                    <View style={tw`border-t border-gray-700 mt-3 pt-3 flex-row justify-between`}>
+                        <Text style={tw`text-xs text-gray-400`}>Status: {license?.status || 'UNKNOWN'}</Text>
+                        <Text style={tw`text-xs text-gray-400`}>Berakhir: {formatDate(license?.expiresAt)}</Text>
                     </View>
                     {license?.offline ? (
                         <Text style={tw`text-[10px] text-amber-400 mt-3`}>Status berasal dari cache offline perangkat.</Text>
@@ -100,10 +110,9 @@ export default function LockScreen() {
                         <TextInput
                             value={activationCode}
                             onChangeText={(value) => setActivationCode(value.toUpperCase())}
-                            placeholder="LP1-..."
+                            placeholder="LP-XXXX-XXXX-XXXX-XXXX-XXXX"
                             placeholderTextColor={tw.color('gray-600')}
                             autoCapitalize="characters"
-                            autoCorrect={false}
                             style={tw`bg-gray-950 border border-gray-700 rounded-xl px-4 py-3 text-white font-bold tracking-wider`}
                         />
                         <TouchableOpacity

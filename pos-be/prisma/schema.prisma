@@ -215,6 +215,56 @@ model LicenseActivation {
   @@map("license_activations")
 }
 
+// Akun pengelola platform sengaja dipisahkan dari User/StoreMembership.
+// Dengan begitu role OWNER/ADMIN milik tenant tidak pernah memperoleh akses platform.
+model PlatformAdmin {
+  id          Int                    @id @default(autoincrement())
+  name        String                 @db.VarChar(255)
+  email       String                 @unique @db.VarChar(255)
+  password    String                 @db.VarChar(255)
+  isActive    Boolean                @default(true) @map("is_active")
+  lastLoginAt DateTime?              @map("last_login_at")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  sessions    PlatformAdminSession[]
+  auditLogs   PlatformAuditLog[]
+
+  @@map("platform_admins")
+}
+
+model PlatformAdminSession {
+  id           String        @id @default(uuid())
+  jwtId        String        @unique @map("jwt_id") @db.VarChar(64)
+  adminId      Int           @map("admin_id")
+  userAgent    String?       @map("user_agent") @db.VarChar(255)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  lastSeenAt   DateTime      @default(now()) @map("last_seen_at")
+  expiresAt    DateTime      @map("expires_at")
+  revokedAt    DateTime?     @map("revoked_at")
+  revokeReason String?       @map("revoke_reason") @db.VarChar(100)
+  admin        PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, revokedAt])
+  @@index([lastSeenAt])
+  @@map("platform_admin_sessions")
+}
+
+model PlatformAuditLog {
+  id         String         @id @default(uuid())
+  requestId  String?        @unique @map("request_id") @db.VarChar(100)
+  adminId    Int?           @map("admin_id")
+  action     String         @db.VarChar(80)
+  targetType String         @map("target_type") @db.VarChar(60)
+  targetId   String?        @map("target_id") @db.VarChar(100)
+  details    String?        @db.Text
+  createdAt  DateTime       @default(now()) @map("created_at")
+  admin      PlatformAdmin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId, createdAt])
+  @@index([targetType, targetId])
+  @@map("platform_audit_logs")
+}
+
 model Category {
   id          Int       @id @default(autoincrement())
   storeId     Int       @map("store_id")

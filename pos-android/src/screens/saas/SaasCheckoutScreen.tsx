@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import tw, { useAppColorScheme } from 'twrnc';
 import { createTransaction, fetchCustomers } from '../../services/saasDataService';
 import { showApiError } from '../../services/api';
 import { useStore } from '../../store/useStore';
+import { createIdempotencyKey, fingerprintPayload } from '../../utils/idempotency';
 
 const rupiah = (value: unknown) => `Rp ${Math.round(Number(value || 0)).toLocaleString('id-ID')}`;
 
@@ -21,6 +22,7 @@ export default function SaasCheckoutScreen({ navigation }: any) {
     const [paymentType, setPaymentType] = useState<'CASH' | 'QRIS_MANUAL' | 'TRANSFER'>('CASH');
     const [cashAmount, setCashAmount] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const pendingCheckout = useRef<{ fingerprint: string; key: string } | null>(null);
 
     useEffect(() => {
         fetchCustomers().then(setCustomers).catch(() => setCustomers([]));
@@ -40,7 +42,7 @@ export default function SaasCheckoutScreen({ navigation }: any) {
         }
         setSubmitting(true);
         try {
-            const transaction = await createTransaction({
+            const payload = {
                 customerId: selectedCustomer?.id || null,
                 customerName: selectedCustomer?.name || 'Umum',
                 items: cart.map(item => ({
@@ -59,7 +61,15 @@ export default function SaasCheckoutScreen({ navigation }: any) {
                 discountAmount: discount,
                 discountType,
                 loyaltyPointsRedeemed: 0,
-            });
+            };
+            const fingerprint = fingerprintPayload(payload);
+            if (!pendingCheckout.current || pendingCheckout.current.fingerprint !== fingerprint) {
+                pendingCheckout.current = {
+                    fingerprint,
+                    key: createIdempotencyKey('checkout'),
+                };
+            }
+            const transaction = await createTransaction(payload, pendingCheckout.current.key);
 
             const receiptData = {
                 invoiceNumber: transaction.invoiceNumber,
@@ -80,6 +90,7 @@ export default function SaasCheckoutScreen({ navigation }: any) {
                 orderType: 'TAKE_AWAY',
                 tableName: null,
             };
+            pendingCheckout.current = null;
             clearCart();
             navigation.replace('ReceiptPreview', { receiptData });
         } catch (error: any) {

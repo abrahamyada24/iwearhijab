@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getCartItemLineTotal } from '../utils/cartPricing';
 
 export interface CartItem {
     id: number | string;
@@ -27,12 +28,14 @@ interface StoreState {
     cart: CartItem[];
     discount: number;
     discountType: 'amount' | 'percent';
-    activeShift: { id: string; openingCash: number; openedAt: string } | null;
+    activeShift: { id: string; openingCash: number; openedAt: string; expectedCloseAt?: string | null; userName?: string; transactionCount?: number; totalSales?: number; cashSales?: number; qrisSales?: number; transferSales?: number; cashExpenses?: number } | null;
     tableOrderNotificationCount: number;
     pendingOrderContext: {
         orderType?: 'DINE_IN' | 'TAKE_AWAY';
         tableNumber?: string;
         customerName?: string;
+        customerServerId?: number;
+        customerMemberId?: string;
         note?: string;
         source?: string;
         orderCode?: string;
@@ -46,6 +49,10 @@ interface StoreState {
         storeLogo: string | null;
         enablePreOrder: boolean;
         enableShift: boolean;
+        enableShiftReminder: boolean;
+        shiftDurationMinutes: number;
+        shiftReminderMinutes: number;
+        shiftDayCutoff: string;
         enableDineTable: boolean;
         enableTableOrder: boolean;
         enableKitchenQueue: boolean;
@@ -57,22 +64,30 @@ interface StoreState {
         allowNegativeStock: boolean;
         showLogoOnReceipt: boolean;
         receiptFooter: string;
+        taxRate: number | string;
+        serviceCharge: number | string;
         loyalty_active: boolean;
         loyalty_multiplier: number;
         loyalty_multiplier_amount: number;
         loyalty_point_value: number;
         loyalty_min_points: number;
-        license_number?: string;
-        license_status?: 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'UNKNOWN';
+        loyalty_earning_mode: 'SPEND_MULTIPLE' | 'TRANSACTION_THRESHOLD';
+        loyalty_redemption_mode: 'CASH_DISCOUNT' | 'FREE_PRODUCT';
+        store_id?: string;
         license_expire_date?: string;
         license_type?: 'TRIAL' | 'PREMIUM';
+        license_number?: string;
+        license_status?: 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'UNKNOWN';
         license_offline?: boolean;
         google_sheet_url?: string;
         apiBaseUrl?: string;
+        dataResetVersion?: number;
+        dataResetAt?: string;
+        dataResetType?: string;
     };
     setSettings: (settings: any) => void;
     setUser: (user: any) => void;
-    setActiveShift: (shift: { id: string; openingCash: number; openedAt: string } | null) => void;
+    setActiveShift: (shift: { id: string; openingCash: number; openedAt: string; expectedCloseAt?: string | null; userName?: string; transactionCount?: number; totalSales?: number; cashSales?: number; qrisSales?: number; transferSales?: number; cashExpenses?: number } | null) => void;
     setTableOrderNotificationCount: (count: number) => void;
     setPendingOrderContext: (context: StoreState['pendingOrderContext']) => void;
     clearPendingOrderContext: () => void;
@@ -98,12 +113,16 @@ export const useStore = create<StoreState>((set, get) => ({
     tableOrderNotificationCount: 0,
     pendingOrderContext: null,
     settings: {
-        storeName: 'Warna Warni',
+        storeName: 'LitePOS',
         storeAddress: '',
         storePhone: '',
         storeLogo: null,
         enablePreOrder: false,
         enableShift: true,
+        enableShiftReminder: true,
+        shiftDurationMinutes: 480,
+        shiftReminderMinutes: 15,
+        shiftDayCutoff: '23:50',
         enableDineTable: false,
         enableTableOrder: false,
         enableKitchenQueue: false,
@@ -115,17 +134,19 @@ export const useStore = create<StoreState>((set, get) => ({
         allowNegativeStock: false,
         showLogoOnReceipt: true,
         receiptFooter: '',
+        taxRate: 0,
+        serviceCharge: 0,
         loyalty_active: false,
         loyalty_multiplier: 1,
-        loyalty_multiplier_amount: 1000,
+        loyalty_multiplier_amount: 25000,
         loyalty_point_value: 0,
-        loyalty_min_points: 0,
-        license_number: '',
-        license_status: 'UNKNOWN',
-        license_expire_date: '',
-        license_type: 'TRIAL',
-        license_offline: false,
+        loyalty_min_points: 10,
+        loyalty_earning_mode: 'TRANSACTION_THRESHOLD',
+        loyalty_redemption_mode: 'FREE_PRODUCT',
         apiBaseUrl: '',
+        dataResetVersion: 0,
+        dataResetAt: '',
+        dataResetType: '',
     },
     setSettings: (settings) => set({ settings }),
     setUser: (user) => set({ user }),
@@ -195,11 +216,11 @@ export const useStore = create<StoreState>((set, get) => ({
     clearCart: () => set({ cart: [], discount: 0, discountType: 'amount', pendingOrderContext: null }),
     cartSubtotal: () => {
         const { cart } = get();
-        return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+        return cart.reduce((total, item) => total + getCartItemLineTotal(item), 0);
     },
     cartTotal: () => {
         const { cart, discount, discountType } = get();
-        const subtotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+        const subtotal = cart.reduce((total, item) => total + getCartItemLineTotal(item), 0);
         if (discountType === 'percent') {
             return Math.max(0, subtotal - Math.round(subtotal * discount / 100));
         }

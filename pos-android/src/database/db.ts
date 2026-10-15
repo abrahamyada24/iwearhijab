@@ -1,9 +1,108 @@
 import SQLite from 'react-native-sqlite-storage';
+import { normalizeStoreId, shouldResetTenantCache } from '../utils/tenantIsolation';
 
 SQLite.enablePromise(true);
 
+// Mode demo SaaS memakai backend sebagai sumber data utama. Database ini hanya
+// cache sesi agar seluruh UI AndroidPos-web dapat dipakai tanpa membuat pos.db
+// permanen di perangkat. Cache dihapus setiap proses aplikasi dimulai ulang.
+const SESSION_DATABASE = 'litepos-session-cache.db';
+let sessionDatabasePromise: Promise<any> | null = null;
+
+const TENANT_CACHE_TABLES = [
+  'transaction_items',
+  'stock_receipt_items',
+  'package_items',
+  'product_addons',
+  'transactions',
+  'expenses',
+  'stock_receipts',
+  'shifts',
+  'saved_transactions',
+  'packages',
+  'products',
+  'categories',
+  'customers',
+  'suppliers',
+  'dine_tables',
+  'users',
+  'settings',
+];
+
 export const getDBConnection = async () => {
-  return SQLite.openDatabase({ name: 'pos.db', location: 'default' });
+  if (!sessionDatabasePromise) {
+    sessionDatabasePromise = (async () => {
+      try {
+        await SQLite.deleteDatabase({ name: SESSION_DATABASE, location: 'default' });
+      } catch {
+        // Cache mungkin memang belum pernah dibuat pada instalasi baru.
+      }
+      return SQLite.openDatabase({ name: SESSION_DATABASE, location: 'default' });
+    })();
+  }
+  return sessionDatabasePromise;
+};
+
+// Cache Android tidak memiliki kolom storeId karena struktur UI mengikuti
+// AndroidPos-web. Karena itu cache wajib dimiliki tepat oleh satu store dan
+// dikosongkan sebelum sesi berpindah ke store lain.
+export const ensureStoreSessionCache = async (storeId: number) => {
+  const activeStoreId = normalizeStoreId(storeId);
+  if (!activeStoreId) throw new Error('Store aktif tidak valid.');
+
+  const db = await getDBConnection();
+  await createTables(db);
+  const [markerResult] = await db.executeSql(
+    `SELECT value FROM settings WHERE key = 'cache_store_id'`
+  );
+  const cachedStoreId = markerResult.rows.length > 0
+    ? markerResult.rows.item(0).value
+    : null;
+
+  if (!shouldResetTenantCache(cachedStoreId, activeStoreId)) {
+    await prepareStoreScopedCacheIds(db, activeStoreId);
+    return false;
+  }
+
+  await db.executeSql('PRAGMA foreign_keys = OFF');
+  try {
+    for (const table of TENANT_CACHE_TABLES) {
+      await db.executeSql(`DELETE FROM ${table}`);
+    }
+    const sequenceTables = TENANT_CACHE_TABLES.filter(table => table !== 'settings');
+    const placeholders = sequenceTables.map(() => '?').join(',');
+    await db.executeSql(
+      `DELETE FROM sqlite_sequence WHERE name IN (${placeholders})`,
+      sequenceTables
+    );
+  } finally {
+    await db.executeSql('PRAGMA foreign_keys = ON');
+  }
+
+  await seedInitialData(db);
+  await db.executeSql(
+    `INSERT OR REPLACE INTO settings (key, value) VALUES ('cache_store_id', ?)`,
+    [String(activeStoreId)]
+  );
+  await prepareStoreScopedCacheIds(db, activeStoreId);
+  return true;
+};
+
+// ID lokal baru diberi rentang per store agar dua usaha yang memakai APK yang
+// sama tidak menghasilkan androidId yang bentrok saat dikirim ke backend.
+export const prepareStoreScopedCacheIds = async (db: any, storeId: number) => {
+  const parsedStoreId = Number(storeId);
+  if (!Number.isInteger(parsedStoreId) || parsedStoreId <= 0) return;
+  const baseSequence = parsedStoreId * 1_000_000;
+  const tables = ['categories', 'products', 'customers', 'suppliers', 'dine_tables', 'packages', 'product_addons'];
+  for (const table of tables) {
+    const [result] = await db.executeSql(`SELECT COALESCE(MAX(id), 0) AS maxId FROM ${table}`);
+    const currentMax = Number(result.rows.item(0)?.maxId || 0);
+    await db.executeSql(
+      'INSERT OR REPLACE INTO sqlite_sequence(name, seq) VALUES (?, ?)',
+      [table, Math.max(currentMax, baseSequence)]
+    );
+  }
 };
 
 export const createTables = async (db: any) => {
@@ -12,6 +111,7 @@ export const createTables = async (db: any) => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       email TEXT,
+      username TEXT,
       pin TEXT NOT NULL,
       role TEXT DEFAULT 'CASHIER'
     );
@@ -44,6 +144,10 @@ export const createTables = async (db: any) => {
       discountEndTime TEXT,
       discountDays TEXT,
       discountLabel TEXT,
+      availabilityScheduleEnabled INTEGER DEFAULT 0,
+      availabilityStartTime TEXT,
+      availabilityEndTime TEXT,
+      availabilityDays TEXT,
       FOREIGN KEY (categoryId) REFERENCES categories(id)
     );
   `;
@@ -66,7 +170,13 @@ export const createTables = async (db: any) => {
       remainingAmount REAL DEFAULT 0,
       paidAt TEXT,
       orderType TEXT DEFAULT 'TAKE_AWAY',
-      tableName TEXT
+      tableName TEXT,
+      taxAmount REAL DEFAULT 0,
+      pointsEarned INTEGER DEFAULT 0,
+      pointsRedeemed INTEGER DEFAULT 0,
+      pointsBalanceAfter INTEGER,
+      loyaltyRedemptionMode TEXT,
+      shiftId TEXT
     );
   `;
   const queryTransactionItems = `
@@ -80,6 +190,8 @@ export const createTables = async (db: any) => {
         discountAmount REAL DEFAULT 0,
         costPrice REAL DEFAULT 0,
         notes TEXT,
+        loyaltyRewardQty INTEGER DEFAULT 0,
+        loyaltyRewardDiscount REAL DEFAULT 0,
       FOREIGN KEY (transactionId) REFERENCES transactions(id),
       FOREIGN KEY (productId) REFERENCES products(id)
     );
@@ -101,7 +213,8 @@ export const createTables = async (db: any) => {
       displayType TEXT DEFAULT 'normal',
       memberId TEXT,
       loyaltyDiscount REAL DEFAULT 0,
-      points INTEGER DEFAULT 0
+      points INTEGER DEFAULT 0,
+      pointsManuallyEdited INTEGER DEFAULT 0
     );
   `;
   const queryExpenses = `
@@ -111,6 +224,7 @@ export const createTables = async (db: any) => {
       amount REAL NOT NULL,
       category TEXT DEFAULT 'Umum',
       type TEXT DEFAULT 'EXPENSE',
+      shiftId TEXT,
       createdAt TEXT NOT NULL
     );
   `;
@@ -149,6 +263,7 @@ export const createTables = async (db: any) => {
       userId INTEGER,
       userName TEXT,
       openedAt TEXT NOT NULL,
+      expectedCloseAt TEXT,
       closedAt TEXT,
       openingCash REAL DEFAULT 0,
       closingCash REAL,
@@ -177,10 +292,10 @@ export const createTables = async (db: any) => {
     CREATE TABLE IF NOT EXISTS packages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      description TEXT,
-      price REAL NOT NULL,
-      imageUrl TEXT,
-      isActive INTEGER DEFAULT 1,
+       description TEXT,
+       price REAL NOT NULL,
+       imageUrl TEXT,
+       isActive INTEGER DEFAULT 1,
       createdAt TEXT NOT NULL
     );
   `;
@@ -229,6 +344,7 @@ export const createTables = async (db: any) => {
     await db.executeSql('CREATE INDEX IF NOT EXISTS idx_transaction_items_txId ON transaction_items(transactionId)');
     await db.executeSql('CREATE INDEX IF NOT EXISTS idx_expenses_createdAt ON expenses(createdAt)');
     await db.executeSql('CREATE INDEX IF NOT EXISTS idx_shifts_openedAt ON shifts(openedAt)');
+    await db.executeSql('CREATE UNIQUE INDEX IF NOT EXISTS idx_products_serverId ON products(serverId) WHERE serverId IS NOT NULL');
   } catch (e) {
     console.log('Failed to create indexes', e);
   }
@@ -251,6 +367,14 @@ export const createTables = async (db: any) => {
     { table: 'transactions', column: 'paidAt', def: 'TEXT' },
     { table: 'transactions', column: 'orderType', def: "TEXT DEFAULT 'TAKE_AWAY'" },
     { table: 'transactions', column: 'tableName', def: 'TEXT' },
+    { table: 'transactions', column: 'taxAmount', def: 'REAL DEFAULT 0' },
+    { table: 'transactions', column: 'pointsEarned', def: 'INTEGER DEFAULT 0' },
+    { table: 'transactions', column: 'pointsRedeemed', def: 'INTEGER DEFAULT 0' },
+    { table: 'transactions', column: 'pointsBalanceAfter', def: 'INTEGER' },
+    { table: 'transactions', column: 'loyaltyRedemptionMode', def: 'TEXT' },
+    { table: 'transactions', column: 'shiftId', def: 'TEXT' },
+    { table: 'transaction_items', column: 'loyaltyRewardQty', def: 'INTEGER DEFAULT 0' },
+    { table: 'transaction_items', column: 'loyaltyRewardDiscount', def: 'REAL DEFAULT 0' },
     { table: 'customers', column: 'loyaltyDiscount', def: 'REAL DEFAULT 0' },
     { table: 'transactions', column: 'preOrderConfirmed', def: 'INTEGER DEFAULT 0' },
     { table: 'products', column: 'barcode', def: 'TEXT' },
@@ -264,20 +388,29 @@ export const createTables = async (db: any) => {
     { table: 'products', column: 'discountEndTime', def: 'TEXT' },
     { table: 'products', column: 'discountDays', def: 'TEXT' },
     { table: 'products', column: 'discountLabel', def: 'TEXT' },
+    { table: 'products', column: 'availabilityScheduleEnabled', def: 'INTEGER DEFAULT 0' },
+    { table: 'products', column: 'availabilityStartTime', def: 'TEXT' },
+    { table: 'products', column: 'availabilityEndTime', def: 'TEXT' },
+    { table: 'products', column: 'availabilityDays', def: 'TEXT' },
     { table: 'transaction_items', column: 'originalPrice', def: 'REAL DEFAULT 0' },
     { table: 'transaction_items', column: 'discountAmount', def: 'REAL DEFAULT 0' },
     { table: 'expenses', column: 'type', def: "TEXT DEFAULT 'EXPENSE'" },
+    { table: 'expenses', column: 'shiftId', def: 'TEXT' },
     // Offline Sync Migrations
     { table: 'transactions', column: 'isSynced', def: 'INTEGER DEFAULT 0' },
     { table: 'expenses', column: 'isSynced', def: 'INTEGER DEFAULT 0' },
     { table: 'shifts', column: 'isSynced', def: 'INTEGER DEFAULT 0' },
+    { table: 'shifts', column: 'expectedCloseAt', def: 'TEXT' },
     { table: 'users', column: 'email', def: 'TEXT' },
+    { table: 'users', column: 'username', def: 'TEXT' },
     { table: 'categories', column: 'serverId', def: 'INTEGER' },
     { table: 'categories', column: 'isSynced', def: 'INTEGER DEFAULT 0' },
     { table: 'products', column: 'serverId', def: 'INTEGER' },
     { table: 'products', column: 'isSynced', def: 'INTEGER DEFAULT 0' },
+    { table: 'products', column: 'isActive', def: 'INTEGER DEFAULT 1' },
     { table: 'customers', column: 'serverId', def: 'INTEGER' },
     { table: 'customers', column: 'points', def: 'INTEGER DEFAULT 0' },
+    { table: 'customers', column: 'pointsManuallyEdited', def: 'INTEGER DEFAULT 0' },
     { table: 'customers', column: 'email', def: 'TEXT' },
     { table: 'customers', column: 'imageUrl', def: 'TEXT' },
     { table: 'customers', column: 'displayType', def: "TEXT DEFAULT 'normal'" },
@@ -316,7 +449,8 @@ export const createTables = async (db: any) => {
 };
 
 export const getStoreSummary = async (db: any) => {
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const [revenueRes] = await db.executeSql(
     `SELECT SUM(
        CASE
@@ -325,19 +459,19 @@ export const getStoreSummary = async (db: any) => {
        END
      ) as total
      FROM transactions
-     WHERE COALESCE(paidAt, createdAt) LIKE '${today}%'
+     WHERE date(COALESCE(paidAt, createdAt), 'localtime') = '${today}'
        AND status != 'RETURNED'
        AND COALESCE(paymentStatus, 'PAID') = 'PAID'`
   );
   const [countRes] = await db.executeSql(
     `SELECT COUNT(*) as count
      FROM transactions
-     WHERE COALESCE(paidAt, createdAt) LIKE '${today}%'
+     WHERE date(COALESCE(paidAt, createdAt), 'localtime') = '${today}'
        AND status != 'RETURNED'
        AND COALESCE(paymentStatus, 'PAID') = 'PAID'`
   );
   const [returnRes] = await db.executeSql(
-    `SELECT COUNT(*) as count FROM transactions WHERE createdAt LIKE '${today}%' AND status = 'RETURNED'`
+    `SELECT COUNT(*) as count FROM transactions WHERE date(createdAt, 'localtime') = '${today}' AND status = 'RETURNED'`
   );
 
   return {
@@ -348,31 +482,9 @@ export const getStoreSummary = async (db: any) => {
 };
 
 export const seedInitialData = async (db: any) => {
-  const [results] = await db.executeSql('SELECT count(*) as count FROM users');
-  if (results.rows.item(0).count === 0) {
-    await db.executeSql(`INSERT INTO users (name, email, pin, role) VALUES ('Owner', 'boss@litepos.com', '123456', 'OWNER')`);
-    await db.executeSql(`INSERT INTO users (name, email, pin, role) VALUES ('Admin Toko', 'admin@litepos.com', '123456', 'ADMIN')`);
-    await db.executeSql(`INSERT INTO users (name, email, pin, role) VALUES ('Kasir 1', 'kasir@litepos.com', '111111', 'CASHIER')`);
-  } else {
-    // Ensure OWNER exists and update credentials
-    const [ownerRes] = await db.executeSql("SELECT count(*) as count FROM users WHERE role = 'OWNER'");
-    if (ownerRes.rows.item(0).count === 0) {
-      await db.executeSql(`INSERT INTO users (name, email, pin, role) VALUES ('Owner', 'boss@litepos.com', '123456', 'OWNER')`);
-    } else {
-      // Update existing OWNER with correct email and pin
-      await db.executeSql(`UPDATE users SET email = 'boss@litepos.com', pin = '123456' WHERE role = 'OWNER' AND (email IS NULL OR email = '')`);
-    }
-    // Update ADMIN credentials
-    const [adminRes] = await db.executeSql("SELECT count(*) as count FROM users WHERE role = 'ADMIN'");
-    if (adminRes.rows.item(0).count > 0) {
-      await db.executeSql(`UPDATE users SET email = 'admin@litepos.com', pin = '123456' WHERE role = 'ADMIN' AND (email IS NULL OR email = '')`);
-    }
-    // Update CASHIER credentials
-    const [cashierRes] = await db.executeSql("SELECT count(*) as count FROM users WHERE role = 'CASHIER'");
-    if (cashierRes.rows.item(0).count > 0) {
-      await db.executeSql(`UPDATE users SET email = 'kasir@litepos.com', pin = '111111' WHERE role = 'CASHIER' AND (email IS NULL OR email = '')`);
-    }
-  }
+  // Jangan pernah membuat akun/PIN default di perangkat. Akun offline hanya
+  // dibuat setelah login server berhasil dan PIN disimpan sebagai hash bcrypt.
+  await db.executeSql(`UPDATE users SET pin = '' WHERE pin NOT LIKE '$2%'`);
 
   const [catResults] = await db.executeSql('SELECT count(*) as count FROM categories');
   if (catResults.rows.item(0).count === 0) {
@@ -381,35 +493,51 @@ export const seedInitialData = async (db: any) => {
 
   const [setResults] = await db.executeSql('SELECT count(*) as count FROM settings');
   if (setResults.rows.item(0).count === 0) {
-    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeName', 'Warna Warni')`);
+    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeName', 'LitePOS')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeAddress', '')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storePhone', '')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('showImages', 'true')`);
+    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('enableTableOrder', 'false')`);
+    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('enableKitchenQueue', 'false')`);
+    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('enableKitchenPrint', 'false')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('theme', 'light')`);
   }
 
-  // Selalu pastikan konfigurasi lisensi tersedia, termasuk pada instalasi baru.
-  const settingKeys = [
-    'storeAddress', 'storePhone', 'enablePreOrder', 'allowNegativeStock', 'receiptFooter',
-    'loyalty_active', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points',
-    'license_number', 'license_status', 'license_expire_date', 'license_type', 'license_offline',
-    'google_sheet_url', 'apiBaseUrl'
-  ];
-  for (const key of settingKeys) {
-    let defaultVal = '';
-    if (key === 'enablePreOrder' || key === 'allowNegativeStock' || key === 'loyalty_active') {
-      defaultVal = 'false';
-    } else if (key === 'loyalty_multiplier' || key === 'loyalty_multiplier_amount' || key === 'loyalty_point_value' || key === 'loyalty_min_points') {
-      defaultVal = key === 'loyalty_multiplier_amount' ? '1000' : (key === 'loyalty_multiplier' ? '1' : '0');
-    } else if (key === 'license_status') {
-      defaultVal = 'UNKNOWN';
-    } else if (key === 'license_type') {
-      defaultVal = 'TRIAL';
-    } else if (key === 'license_offline') {
-      defaultVal = 'false';
+    // Always ensure licensing keys exist, including on a brand-new installation.
+    const settingKeys = [
+      'storeAddress', 'storePhone', 'enablePreOrder', 'enableTableOrder', 'enableKitchenQueue', 'allowNegativeStock', 'receiptFooter', 'enableKitchenPrint',
+      'enableShiftReminder', 'shiftDurationMinutes', 'shiftReminderMinutes', 'shiftDayCutoff',
+      'loyalty_active', 'loyalty_multiplier', 'loyalty_multiplier_amount', 'loyalty_point_value', 'loyalty_min_points',
+      'loyalty_earning_mode', 'loyalty_redemption_mode',
+      'license_number', 'license_status', 'license_expire_date', 'license_type', 'license_offline', 'google_sheet_url', 'apiBaseUrl'
+    ];
+    for (const key of settingKeys) {
+      let defaultVal = '';
+      if (key === 'enablePreOrder' || key === 'enableTableOrder' || key === 'enableKitchenQueue' || key === 'allowNegativeStock' || key === 'loyalty_active' || key === 'enableKitchenPrint') {
+        defaultVal = 'false';
+      } else if (key === 'enableShiftReminder') {
+        defaultVal = 'true';
+      } else if (key === 'shiftDurationMinutes') {
+        defaultVal = '480';
+      } else if (key === 'shiftReminderMinutes') {
+        defaultVal = '15';
+      } else if (key === 'shiftDayCutoff') {
+        defaultVal = '23:50';
+      } else if (key === 'loyalty_multiplier' || key === 'loyalty_multiplier_amount' || key === 'loyalty_point_value' || key === 'loyalty_min_points') {
+        defaultVal = key === 'loyalty_multiplier_amount' ? '25000' : (key === 'loyalty_multiplier' ? '1' : (key === 'loyalty_min_points' ? '10' : '0'));
+      } else if (key === 'loyalty_earning_mode') {
+        defaultVal = 'TRANSACTION_THRESHOLD';
+      } else if (key === 'loyalty_redemption_mode') {
+        defaultVal = 'FREE_PRODUCT';
+      } else if (key === 'license_status') {
+        defaultVal = 'UNKNOWN';
+      } else if (key === 'license_type') {
+        defaultVal = 'TRIAL';
+      } else if (key === 'license_offline') {
+        defaultVal = 'false';
+      }
+      try {
+        await db.executeSql(`INSERT OR IGNORE INTO settings (key, value) VALUES ('${key}', '${defaultVal}')`);
+      } catch (e) { }
     }
-    try {
-      await db.executeSql('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', [key, defaultVal]);
-    } catch (e) { }
-  }
 };

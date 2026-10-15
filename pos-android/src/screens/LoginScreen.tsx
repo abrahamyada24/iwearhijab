@@ -1,114 +1,170 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import tw, { useAppColorScheme } from 'twrnc';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useStore } from '../store/useStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useStore } from '../store/useStore';
 import api from '../services/api';
-import { clearAuthSession, getAuthToken, migrateLegacyAuthStorage, setAuthToken } from '../services/secureAuthStorage';
+import {
+    clearAuthSession,
+    loadAuthSession,
+    migrateLegacyAuthStorage,
+    saveAuthSession,
+} from '../services/secureAuthStorage';
+import { licenseToSettings, resolveLicenseStatus } from '../services/licenseService';
+import { ensureStoreSessionCache } from '../database/db';
 
 export default function LoginScreen({ navigation }: any) {
     useAppColorScheme(tw);
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isAutoLogging, setIsAutoLogging] = useState(true);
+    const [rememberMe, setRememberMe] = useState(true);
     const setUser = useStore((state) => state.setUser);
+    const setSettings = useStore((state) => state.setSettings);
 
-    // ── Auto-login: cek session tersimpan di AsyncStorage ──────────────────
+    const activateTenant = async (user: any) => {
+        const activeStoreId = Number(user?.activeStoreId);
+        const cacheWasReset = await ensureStoreSessionCache(activeStoreId);
+        if (!cacheWasReset) return;
+
+        const activeStore = Array.isArray(user?.stores)
+            ? user.stores.find((store: any) => Number(store?.id) === activeStoreId)
+            : null;
+        useStore.getState().clearCart();
+        useStore.getState().setActiveShift(null);
+        useStore.getState().setTableOrderNotificationCount(0);
+        useStore.getState().clearPendingOrderContext();
+        setSettings({
+            ...useStore.getState().settings,
+            storeName: activeStore?.name || 'LitePOS',
+            storeAddress: '',
+            storePhone: '',
+            storeLogo: null,
+            receiptFooter: '',
+            taxRate: 0,
+            serviceCharge: 0,
+            loyalty_active: false,
+            license_number: '',
+            license_expire_date: '',
+            license_status: 'UNKNOWN',
+        });
+    };
+
+    const continueAfterLicenseCheck = async () => {
+        const license = await resolveLicenseStatus();
+        setSettings({ ...useStore.getState().settings, ...licenseToSettings(license) });
+        navigation.replace(license.isActive ? 'Main' : 'Lock');
+    };
+
     useEffect(() => {
         const tryAutoLogin = async () => {
             try {
                 await migrateLegacyAuthStorage();
-                const savedToken = await getAuthToken();
+                const session = await loadAuthSession();
+                if (!session) return;
 
-                if (!savedToken) {
-                    // Belum pernah login → tampilkan halaman login
-                    setIsAutoLogging(false);
+                if (session.offline) {
+                    await clearAuthSession();
                     return;
                 }
 
-                // Mode SaaS wajib memvalidasi sesi ke backend. User cache tidak
-                // pernah dipakai sebagai pengganti otorisasi server.
                 try {
-                    const res = await api.get('/auth/me');
-                    if (res.data?.success && res.data?.user) {
-                        // Token masih valid — pakai data terbaru dari server
-                        const freshUser = res.data.user;
+                    const response = await api.get('/auth/me');
+                    if (response.data?.success && response.data?.user) {
+                        const freshUser = response.data.user;
+                        await activateTenant(freshUser);
+                        await AsyncStorage.setItem('@auth_user', JSON.stringify(freshUser));
                         setUser(freshUser);
-                        navigation.replace('Main');
+                        await continueAfterLicenseCheck();
                         return;
                     }
-                } catch (e: any) {
-                    const status = e?.response?.status;
-                    if (status === 401 || status === 403) {
-                        // Token sudah expired/invalid — hapus session, tampilkan login
-                        console.log('Auto-login: token expired, harus login ulang');
+                } catch (error: any) {
+                    if (error?.response?.status === 401 || error?.response?.status === 403) {
                         await clearAuthSession();
-                        setIsAutoLogging(false);
                         return;
                     }
-                    await clearAuthSession();
+
+                    // Mode SaaS demo wajib memvalidasi tenant dan hak akses ke
+                    // backend. Sesi cache tidak boleh menggantikan otorisasi server.
+                    return;
                 }
-                setIsAutoLogging(false);
-            } catch (e) {
-                console.error('Auto-login error:', e);
+            } catch (error) {
+                console.error('Auto-login error:', error);
+                await clearAuthSession();
+            } finally {
                 setIsAutoLogging(false);
             }
         };
         tryAutoLogin();
-    }, []);
+    }, [navigation, setUser]);
 
     const handleLogin = async () => {
-        const identifier = email.trim().toLowerCase();
-        if (!identifier || !password) {
-            Alert.alert('Data Belum Lengkap', 'Email/username dan password harus diisi.');
+        const normalizedIdentifier = identifier.trim().toLowerCase();
+        if (!normalizedIdentifier || !password) {
+            Alert.alert('Error', 'Email/username dan password harus diisi.');
+            return;
+        }
+        const identifierIsValid = normalizedIdentifier.includes('@')
+            ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedIdentifier)
+            : /^[a-z0-9][a-z0-9._-]{2,49}$/.test(normalizedIdentifier);
+        if (!identifierIsValid) {
+            Alert.alert('Validasi Gagal', 'Masukkan email atau username yang valid.');
+            return;
+        }
+        if (password.length < 6) {
+            Alert.alert('Validasi Gagal', 'Password minimal 6 karakter.');
             return;
         }
 
         setIsLoading(true);
         try {
-            // Coba Login Online ke VPS
             const response = await api.post('/auth/login', {
-                identifier,
+                identifier: normalizedIdentifier,
+                email: normalizedIdentifier,
                 password,
                 clientType: 'ANDROID',
-                deviceName: 'LitePOS Warna Warni Android',
+                deviceName: `Android ${String(Platform.Version)}`,
             });
-            if (response.data.success) {
+
+            if (response.data?.success) {
                 const { token, user } = response.data;
-                // Token tetap diperlukan oleh setiap request API selama aplikasi
-                // dipakai. Tombol logout akan menghapusnya dari perangkat.
-                await setAuthToken(token);
-                setUser(user); // user.role dari backend
+                if (user?.mustChangePassword) {
+                    try {
+                        await api.post('/auth/logout', {}, { headers: { Authorization: `Bearer ${token}` } });
+                    } catch { /* sesi tetap akan kedaluwarsa di server */ }
+                    await clearAuthSession();
+                    Alert.alert(
+                        'Ganti Password Diperlukan',
+                        'Masuk ke website LitePOS dan buat password baru terlebih dahulu, lalu login kembali di Android.'
+                    );
+                    return;
+                }
 
-                navigation.replace('Main');
-                return;
+                await activateTenant(user);
+                await saveAuthSession({ token, user, remember: rememberMe });
+                setUser(user);
+
+                await continueAfterLicenseCheck();
             }
-            
         } catch (error: any) {
-            // Cek jika error dari respon server (kredensial salah)
-            if (error.response && error.response.status >= 400 && error.response.status < 500) {
-                Alert.alert('Login Gagal', error.response?.data?.message || 'Email atau password salah');
-                setIsLoading(false);
+            if (error?.response && error.response.status >= 400 && error.response.status < 500) {
+                Alert.alert('Login Gagal', error.response?.data?.message || 'Email/username atau password salah.');
                 return;
             }
 
-            console.log('Login online gagal:', error.message);
+            Alert.alert('Tidak Ada Koneksi', 'LitePOS Demo memerlukan internet untuk memvalidasi akun dan data usaha. Periksa koneksi lalu coba lagi.');
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Tampilkan loading spinner saat auto-login
     if (isAutoLogging) {
         return (
             <SafeAreaView style={tw`flex-1 justify-center items-center bg-gray-100 dark:bg-gray-800`}>
-                <Image
-                    source={require('../assets/icon.png')}
-                    style={tw`w-28 h-28 mb-6 rounded-3xl`}
-                    resizeMode="contain"
-                />
+                <Image source={require('../assets/logo.png')} style={tw`w-24 h-24 mb-6`} resizeMode="contain" />
                 <ActivityIndicator size="large" color={tw.color('blue-600')} />
                 <Text style={tw`text-gray-500 dark:text-gray-400 mt-4 font-bold text-sm`}>Memuat sesi...</Text>
             </SafeAreaView>
@@ -116,43 +172,36 @@ export default function LoginScreen({ navigation }: any) {
     }
 
     return (
-        <SafeAreaView style={tw`flex-1 justify-center items-center bg-orange-50 dark:bg-gray-900 p-6`}>
-            {/* Logo/Icon Container */}
+        <SafeAreaView style={tw`flex-1 justify-center items-center bg-gray-100 dark:bg-gray-800 p-6`}>
             <View style={tw`items-center mb-8`}>
-                <Image
-                    source={require('../assets/icon.png')}
-                    style={tw`w-28 h-28 mb-4 rounded-3xl`}
-                    resizeMode="contain"
-                />
-                <Text style={tw`text-3xl font-black text-center text-gray-900 dark:text-white tracking-tight`}>LitePOS</Text>
-                <Text style={tw`text-sm font-bold text-center text-orange-600 dark:text-orange-400 mt-1`}>Kasir Retail &amp; F&amp;B</Text>
+                <Image source={require('../assets/logo.png')} style={tw`w-24 h-24 mb-4`} resizeMode="contain" />
+                <Text style={tw`text-4xl font-black text-center text-gray-900 dark:text-white tracking-tight`}>LitePOS</Text>
+                <Text style={tw`text-sm font-bold text-center text-gray-500 dark:text-gray-400 mt-1`}>Sistem Point of Sale</Text>
             </View>
 
             <View style={tw`bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-md w-full max-w-sm border border-gray-100 dark:border-gray-800`}>
                 <Text style={tw`text-lg text-center text-gray-700 dark:text-gray-200 font-bold mb-6`}>Login POS</Text>
-
                 <TextInput
-                    style={tw`bg-gray-50 dark:bg-gray-900 border focus:border-blue-500 border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 mb-4 text-center text-lg font-bold text-gray-900 dark:text-white shadow-sm`}
-                    value={email}
-                    onChangeText={setEmail}
+                    style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 mb-4 text-center text-lg font-bold text-gray-900 dark:text-white shadow-sm`}
+                    value={identifier}
+                    onChangeText={setIdentifier}
                     keyboardType="default"
                     autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="username"
                     placeholder="Email atau username"
                     placeholderTextColor="#9ca3af"
                 />
-
                 <TextInput
-                    style={tw`bg-gray-50 dark:bg-gray-900 border focus:border-blue-500 border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 mb-4 text-center text-xl font-black tracking-[8px] text-gray-900 dark:text-white shadow-sm`}
+                    style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 mb-4 text-center text-xl font-black tracking-[8px] text-gray-900 dark:text-white shadow-sm`}
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry
-                    autoComplete="current-password"
                     placeholder="Password"
                     placeholderTextColor="#9ca3af"
                 />
-
+                <TouchableOpacity style={tw`flex-row items-center mb-6 self-start pl-2`} onPress={() => setRememberMe(!rememberMe)}>
+                    <Icon name={rememberMe ? 'checkbox-marked' : 'checkbox-blank-outline'} size={20} color={tw.color(rememberMe ? 'blue-600' : 'gray-400')} />
+                    <Text style={tw`ml-2 text-sm text-gray-600 dark:text-gray-300 font-bold`}>Ingat Saya</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                     style={tw`bg-blue-600 rounded-xl py-3 items-center ${isLoading ? 'opacity-70' : ''}`}
                     onPress={handleLogin}
@@ -160,11 +209,7 @@ export default function LoginScreen({ navigation }: any) {
                 >
                     <Text style={tw`text-white font-bold text-lg`}>{isLoading ? 'Loading...' : 'Masuk'}</Text>
                 </TouchableOpacity>
-                <Text style={tw`text-center text-xs text-gray-400 mt-4`}>
-                    Pendaftaran usaha baru tersedia melalui website LitePOS.
-                </Text>
             </View>
-
         </SafeAreaView>
     );
 }

@@ -77,6 +77,7 @@ export default function ManagementScreen({ navigation }: any) {
             const [prodResults] = await db.executeSql(`
                 SELECT p.*, c.name as categoryName
                 FROM products p LEFT JOIN categories c ON p.categoryId = c.id
+                WHERE COALESCE(p.isActive, 1) = 1
             `);
             const prods: any[] = [];
             for (let i = 0; i < prodResults.rows.length; i++) prods.push(prodResults.rows.item(i));
@@ -685,7 +686,7 @@ export default function ManagementScreen({ navigation }: any) {
                         </View>
                         <TextInput
                             style={tw`bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-5 text-gray-800 dark:text-gray-100`}
-                            placeholder="Contoh: Boneka Karakter"
+                            placeholder="Contoh: Makanan Berat"
                             value={categoryName}
                             onChangeText={setCategoryName}
                         />

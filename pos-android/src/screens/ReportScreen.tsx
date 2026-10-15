@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, ScrollView,
-    Modal, TextInput, Alert, Platform, KeyboardAvoidingView, useWindowDimensions,
+    Modal, TextInput, Alert, PermissionsAndroid, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import tw, { useAppColorScheme } from 'twrnc';
 import Share, { Social } from 'react-native-share';
@@ -13,17 +13,12 @@ import Svg, { Defs, LinearGradient, Stop, Path, Circle as SvgCircle, Text as Svg
 import DatePickerDropdown from '../components/DatePickerDropdown';
 import { getPaidAmount, getPaymentStatusLabel } from '../utils/preOrderPayment';
 import { connectConfiguredPrinter } from '../utils/printerConnection';
-import { errorCodes, isErrorWithCode, saveDocuments } from '@react-native-documents/picker';
-import { buildSimplePdf } from '../utils/simplePdf';
+import ClosingReportPreviewModal from '../components/ClosingReportPreviewModal';
+import { shouldShowLitePosBranding } from '../utils/receiptBranding';
+import api from '../services/api';
 
 const formatRp = (num: number) => 'Rp ' + (Math.round(num) || 0).toLocaleString('id-ID');
-const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ')}"`;
-const sanitizeFilePart = (value: string) => value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'Semua-Periode';
-const isSaveCancelled = (error: unknown) => isErrorWithCode(error) && error.code === errorCodes.OPERATION_CANCELED;
+const localDateKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 // Area Chart ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â using react-native-svg
 function AreaChart({ data }: { data: { label: string; value: number }[] }) {
@@ -146,11 +141,13 @@ function SimpleBarChart({ data }: { data: { label: string; value: number }[] }) 
 // Main Report Screen
 export default function ReportScreen({ navigation }: any) {
     useAppColorScheme(tw);
-    const { width, height } = useWindowDimensions();
-    const isTablet = Math.min(width, height) >= 600;
-    const tabletModalStyle = isTablet ? { width: '100%' as const, maxWidth: 720, alignSelf: 'center' as const, borderTopLeftRadius: 24, borderTopRightRadius: 24 } : null;
     const settings = useStore(state => state.settings);
     const user = useStore(state => state.user);
+    const activeShift = useStore(state => state.activeShift);
+    const normalizedRole = String(user?.role || 'CASHIER').toUpperCase();
+    const isCashier = normalizedRole === 'CASHIER';
+    const userCanReturn = normalizedRole === 'OWNER';
+    const showLitePosBranding = shouldShowLitePosBranding(settings);
     const [mainTab, setMainTab] = useState<'penjualan' | 'pengeluaran'>('penjualan');
     const [salesSubTab, setSalesSubTab] = useState<'transaksi' | 'kategori' | 'terlaris' | 'pelanggan' | 'retur' | 'shift' | 'laba_rugi' | 'jam_sibuk'>('transaksi');
     const [showSubTabDropdown, setShowSubTabDropdown] = useState(false);
@@ -160,8 +157,8 @@ export default function ReportScreen({ navigation }: any) {
     const [chartData, setChartData] = useState<{ label: string; value: number }[]>([]);
     const [selectedTrx, setSelectedTrx] = useState<any | null>(null);
     const [trxItems, setTrxItems] = useState<any[]>([]);
-    const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
-    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(() => localDateKey());
+    const [endDate, setEndDate] = useState(() => localDateKey());
 
     // Category & bestseller stats
     const [categoryStats, setCategoryStats] = useState<{ name: string; total: number; count: number }[]>([]);
@@ -169,6 +166,7 @@ export default function ReportScreen({ navigation }: any) {
     const [customerStats, setCustomerStats] = useState<{ name: string; visitCount: number; totalSpent: number }[]>([]);
 
     const [showExportModal, setShowExportModal] = useState(false);
+    const [showDailyPrintPreview, setShowDailyPrintPreview] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [shiftReports, setShiftReports] = useState<any[]>([]);
 
@@ -183,6 +181,28 @@ export default function ReportScreen({ navigation }: any) {
     const [expenseSubTab, setExpenseSubTab] = useState<'PURCHASE' | 'EXPENSE'>('EXPENSE');
 
     const loadShiftReports = useCallback(async () => {
+        try {
+            const response = await api.get('/shifts');
+            const serverShifts = Array.isArray(response.data?.data) ? response.data.data : [];
+            const visibleServerShifts = isCashier
+                ? serverShifts.filter((shift: any) => Number(shift.userId) === Number(user?.id))
+                : serverShifts;
+            setShiftReports(visibleServerShifts.slice(0, 50).map((shift: any) => ({
+                ...shift,
+                openingCash: Number(shift.openingCash || 0),
+                closingCash: shift.closingCash == null ? null : Number(shift.closingCash),
+                txCount: Number(shift.transactionCount || 0),
+                txTotal: Number(shift.totalSales || 0),
+                cashSales: Number(shift.cashSales || 0),
+                qrisSales: Number(shift.qrisSales || 0),
+                transferSales: Number(shift.transferSales || 0),
+                expensesTotal: Number(shift.cashExpenses || 0),
+            })));
+            return;
+        } catch (error: any) {
+            console.warn('[SHIFT REPORT] Server tidak tersedia, memakai data lokal:', error?.message);
+        }
+
         try {
             const db = await getDBConnection();
             const [res] = await db.executeSql(
@@ -207,6 +227,33 @@ export default function ReportScreen({ navigation }: any) {
                         AND COALESCE(t.paymentStatus, 'PAID') = 'PAID'
                     ) as txTotal,
                     (
+                        SELECT COALESCE(SUM(CASE WHEN COALESCE(t.paidAmount, 0) > 0 THEN t.paidAmount ELSE t.grandTotal END),0)
+                        FROM transactions t
+                        WHERE COALESCE(t.paidAt, t.createdAt) >= s.openedAt
+                        AND (s.closedAt IS NULL OR COALESCE(t.paidAt, t.createdAt) <= s.closedAt)
+                        AND t.status = 'COMPLETED'
+                        AND COALESCE(t.paymentStatus, 'PAID') = 'PAID'
+                        AND UPPER(COALESCE(t.paymentMethod, '')) = 'CASH'
+                    ) as cashSales,
+                    (
+                        SELECT COALESCE(SUM(CASE WHEN COALESCE(t.paidAmount, 0) > 0 THEN t.paidAmount ELSE t.grandTotal END),0)
+                        FROM transactions t
+                        WHERE COALESCE(t.paidAt, t.createdAt) >= s.openedAt
+                        AND (s.closedAt IS NULL OR COALESCE(t.paidAt, t.createdAt) <= s.closedAt)
+                        AND t.status = 'COMPLETED'
+                        AND COALESCE(t.paymentStatus, 'PAID') = 'PAID'
+                        AND UPPER(COALESCE(t.paymentMethod, '')) IN ('QRIS', 'QRIS_MANUAL')
+                    ) as qrisSales,
+                    (
+                        SELECT COALESCE(SUM(CASE WHEN COALESCE(t.paidAmount, 0) > 0 THEN t.paidAmount ELSE t.grandTotal END),0)
+                        FROM transactions t
+                        WHERE COALESCE(t.paidAt, t.createdAt) >= s.openedAt
+                        AND (s.closedAt IS NULL OR COALESCE(t.paidAt, t.createdAt) <= s.closedAt)
+                        AND t.status = 'COMPLETED'
+                        AND COALESCE(t.paymentStatus, 'PAID') = 'PAID'
+                        AND UPPER(COALESCE(t.paymentMethod, '')) = 'TRANSFER'
+                    ) as transferSales,
+                    (
                         SELECT COALESCE(SUM(e.amount),0) FROM expenses e
                         WHERE e.createdAt >= s.openedAt
                         AND (s.closedAt IS NULL OR e.createdAt <= s.closedAt)
@@ -215,32 +262,46 @@ export default function ReportScreen({ navigation }: any) {
             );
             const arr: any[] = [];
             for (let i = 0; i < res.rows.length; i++) arr.push(res.rows.item(i));
-            setShiftReports(arr);
+            setShiftReports(isCashier ? arr.filter(shift => Number(shift.userId) === Number(user?.id)) : arr);
         } catch (e) { setShiftReports([]); }
-    }, []);
+    }, [isCashier, user?.id]);
+
+    useEffect(() => {
+        if (mainTab !== 'penjualan' || salesSubTab !== 'shift') return;
+        void loadShiftReports();
+        const interval = setInterval(loadShiftReports, 10000);
+        return () => clearInterval(interval);
+    }, [mainTab, salesSubTab, loadShiftReports]);
 
     const loadTransactions = useCallback(async (filter: string) => {
         try {
             const db = await getDBConnection();
             let dateCondition = '';
-            const today = new Date().toISOString().split('T')[0];
+            const today = localDateKey();
             const reportDateExpr = `COALESCE(paidAt, createdAt)`;
 
             if (filter === 'Hari Ini') {
-                dateCondition = `WHERE ${reportDateExpr} LIKE '${today}%'`;
+                dateCondition = `WHERE date(${reportDateExpr}, 'localtime') = '${today}'`;
             } else if (filter === 'Minggu Ini') {
                 const lastWeek = new Date();
                 lastWeek.setDate(lastWeek.getDate() - 7);
-                dateCondition = `WHERE ${reportDateExpr} >= '${lastWeek.toISOString().split('T')[0]}'`;
+                dateCondition = `WHERE date(${reportDateExpr}, 'localtime') >= '${localDateKey(lastWeek)}'`;
             } else if (filter === 'Bulan Ini') {
                 const monthStr = today.substring(0, 7); // YYYY-MM
-                dateCondition = `WHERE ${reportDateExpr} LIKE '${monthStr}%'`;
+                dateCondition = `WHERE strftime('%Y-%m', ${reportDateExpr}, 'localtime') = '${monthStr}'`;
             } else if (filter === 'Custom') {
-                dateCondition = `WHERE ${reportDateExpr} >= '${startDate}T00:00:00' AND ${reportDateExpr} <= '${endDate}T23:59:59'`;
+                dateCondition = `WHERE date(${reportDateExpr}, 'localtime') >= '${startDate}' AND date(${reportDateExpr}, 'localtime') <= '${endDate}'`;
             }
 
             const [results] = await db.executeSql(
-                `SELECT t.*, (SELECT SUM(quantity * costPrice) FROM transaction_items WHERE transactionId = t.id) as totalCogs FROM transactions t ${dateCondition} ORDER BY COALESCE(paidAt, createdAt) DESC`
+                `SELECT t.*,
+                    c.phone as customerPhone,
+                    c.points as customerPoints,
+                    (SELECT SUM(quantity * costPrice) FROM transaction_items WHERE transactionId = t.id) as totalCogs
+                 FROM transactions t
+                 LEFT JOIN customers c ON c.id = t.customerId
+                 ${dateCondition}
+                 ORDER BY COALESCE(t.paidAt, t.createdAt) DESC`
             );
 
             let bruto = 0, returns = 0, count = 0, cash = 0, qris = 0, transfer = 0, cashCount = 0, qrisCount = 0, transferCount = 0, discounts = 0, cogs = 0;
@@ -256,11 +317,11 @@ export default function ReportScreen({ navigation }: any) {
                     bruto += paidValue;
                     count++;
                     // Group for chart by date
-                    const day = (item.paidAt || item.createdAt).substring(0, 10);
+                    const day = localDateKey(new Date(item.paidAt || item.createdAt));
                     dailyMap[day] = (dailyMap[day] || 0) + paidValue;
                     // Payment Breakdown
                     if (item.paymentMethod === 'CASH') { cash += paidValue; cashCount++; }
-                    else if (item.paymentMethod === 'QRIS') { qris += paidValue; qrisCount++; }
+                    else if (item.paymentMethod === 'QRIS' || item.paymentMethod === 'QRIS_MANUAL') { qris += paidValue; qrisCount++; }
                     else if (item.paymentMethod === 'TRANSFER') { transfer += paidValue; transferCount++; }
 
                     if (item.discountAmount) {
@@ -311,12 +372,16 @@ export default function ReportScreen({ navigation }: any) {
 
             // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Bestseller ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
             const [bsRes] = await db.executeSql(`
-                SELECT p.name, SUM(ti.quantity) as qty, SUM(ti.quantity * ti.price) as revenue
+                SELECT COALESCE(NULLIF(TRIM(p.name), ''), 'Produk dihapus') as name,
+                    SUM(COALESCE(ti.quantity, 0)) as qty,
+                    SUM(COALESCE(ti.quantity, 0) * COALESCE(ti.price, 0)) as revenue
                 FROM transaction_items ti
                 LEFT JOIN products p ON p.id = ti.productId
                 LEFT JOIN transactions t ON t.id = ti.transactionId
-                ${dateCondition.replace('WHERE', 'WHERE t.status != \'RETURNED\' AND')}
-                GROUP BY p.name ORDER BY qty DESC LIMIT 15
+                ${dateCondition ? dateCondition.replace('WHERE', "WHERE UPPER(COALESCE(t.status, 'COMPLETED')) IN ('PAID', 'COMPLETED') AND COALESCE(t.paymentStatus, 'PAID') = 'PAID' AND") : "WHERE UPPER(COALESCE(t.status, 'COMPLETED')) IN ('PAID', 'COMPLETED') AND COALESCE(t.paymentStatus, 'PAID') = 'PAID'"}
+                GROUP BY ti.productId, p.name
+                HAVING SUM(COALESCE(ti.quantity, 0)) > 0
+                ORDER BY qty DESC, revenue DESC, name COLLATE NOCASE
             `);
             const bs: { name: string; qty: number; revenue: number }[] = [];
             for (let i = 0; i < bsRes.rows.length; i++) {
@@ -351,18 +416,18 @@ export default function ReportScreen({ navigation }: any) {
     const loadExpenses = useCallback(async (filter: string) => {
         try {
             const db = await getDBConnection();
-            const today = new Date().toISOString().split('T')[0];
+            const today = localDateKey();
             let dateCondition = '';
 
-            if (filter === 'Hari Ini') dateCondition = `WHERE createdAt LIKE '${today}%'`;
+            if (filter === 'Hari Ini') dateCondition = `WHERE date(createdAt, 'localtime') = '${today}'`;
             else if (filter === 'Minggu Ini') {
                 const lastWeek = new Date();
                 lastWeek.setDate(lastWeek.getDate() - 7);
-                dateCondition = `WHERE createdAt >= '${lastWeek.toISOString().split('T')[0]}'`;
+                dateCondition = `WHERE date(createdAt, 'localtime') >= '${localDateKey(lastWeek)}'`;
             } else if (filter === 'Bulan Ini') {
-                dateCondition = `WHERE createdAt LIKE '${today.substring(0, 7)}%'`;
+                dateCondition = `WHERE strftime('%Y-%m', createdAt, 'localtime') = '${today.substring(0, 7)}'`;
             } else if (filter === 'Custom') {
-                dateCondition = `WHERE createdAt >= '${startDate}T00:00:00' AND createdAt <= '${endDate}T23:59:59'`;
+                dateCondition = `WHERE date(createdAt, 'localtime') >= '${startDate}' AND date(createdAt, 'localtime') <= '${endDate}'`;
             }
 
             const [results] = await db.executeSql(
@@ -396,11 +461,12 @@ export default function ReportScreen({ navigation }: any) {
     // Navigation focus refresh
     useEffect(() => {
         const unsub = navigation?.addListener?.('focus', () => {
-            if (mainTab === 'penjualan') loadTransactions(activeFilter);
+            if (mainTab === 'penjualan' && salesSubTab === 'shift') loadShiftReports();
+            else if (mainTab === 'penjualan') loadTransactions(activeFilter);
             else loadExpenses(activeFilter);
         });
         return unsub;
-    }, [navigation, mainTab, activeFilter]);
+    }, [navigation, mainTab, salesSubTab, activeFilter, loadShiftReports, loadTransactions, loadExpenses]);
 
     // Reload expenses when sub-tab changes
     useEffect(() => {
@@ -413,7 +479,7 @@ export default function ReportScreen({ navigation }: any) {
         try {
             const db = await getDBConnection();
             const [results] = await db.executeSql(`
-                SELECT ti.quantity, ti.price, ti.notes, p.name, ti.productId
+                SELECT ti.quantity, ti.price, ti.originalPrice, ti.discountAmount, ti.notes, p.name, ti.productId
                 FROM transaction_items ti
                 LEFT JOIN products p ON ti.productId = p.id
                 WHERE ti.transactionId = '${transactionId}'
@@ -431,6 +497,10 @@ export default function ReportScreen({ navigation }: any) {
 
     const handleReturnTransaction = async () => {
         if (!selectedTrx) return;
+        if (!userCanReturn) {
+            Alert.alert('Akses Ditolak', 'Hanya Owner yang dapat melakukan retur transaksi.');
+            return;
+        }
         Alert.alert('Konfirmasi Retur', 'Yakin ingin meretur transaksi ini? Stok produk akan dikembalikan.', [
             { text: 'Batal', style: 'cancel' },
             {
@@ -439,6 +509,14 @@ export default function ReportScreen({ navigation }: any) {
                     try {
                         const db = await getDBConnection();
                         await db.executeSql(`UPDATE transactions SET status = 'RETURNED', isSynced = 0 WHERE id = ?`, [selectedTrx.id]);
+                        if (selectedTrx.customerId && (Number(selectedTrx.pointsEarned || 0) > 0 || Number(selectedTrx.pointsRedeemed || 0) > 0)) {
+                            const [customerResult] = await db.executeSql('SELECT points FROM customers WHERE id = ? LIMIT 1', [selectedTrx.customerId]);
+                            if (customerResult.rows.length > 0) {
+                                const currentPoints = Number(customerResult.rows.item(0).points || 0);
+                                const restoredPoints = Math.max(0, currentPoints - Number(selectedTrx.pointsEarned || 0) + Number(selectedTrx.pointsRedeemed || 0));
+                                await db.executeSql('UPDATE customers SET points = ?, isSynced = 0 WHERE id = ?', [restoredPoints, selectedTrx.customerId]);
+                            }
+                        }
                         for (const item of trxItems) {
                             if (item.productId) {
                                 await db.executeSql(`UPDATE products SET stock = stock + ? WHERE id = ?`, [item.quantity, item.productId]);
@@ -464,8 +542,8 @@ export default function ReportScreen({ navigation }: any) {
         try {
             const db = await getDBConnection();
             await db.executeSql(
-                `INSERT INTO expenses (description, amount, category, type, createdAt) VALUES (?, ?, ?, ?, ?)`,
-                [expenseDesc.trim(), amt, expenseCategory, expenseType, new Date().toISOString()]
+                `INSERT INTO expenses (description, amount, category, type, shiftId, createdAt) VALUES (?, ?, ?, ?, ?, ?)`,
+                [expenseDesc.trim(), amt, expenseCategory, expenseType, activeShift?.id || null, new Date().toISOString()]
             );
             setShowAddExpense(false);
             setExpenseDesc('');
@@ -498,15 +576,15 @@ export default function ReportScreen({ navigation }: any) {
 
     const fetchExportData = async () => {
         const db = await getDBConnection();
-        const today = new Date().toISOString().split('T')[0];
+        const today = localDateKey();
         let dateCondition = '';
         const reportDateExpr = `COALESCE(t.paidAt, t.createdAt)`;
-        if (activeFilter === 'Hari Ini') dateCondition = `WHERE ${reportDateExpr} LIKE '${today}%'`;
+        if (activeFilter === 'Hari Ini') dateCondition = `WHERE date(${reportDateExpr}, 'localtime') = '${today}'`;
         else if (activeFilter === 'Minggu Ini') {
             const w = new Date(); w.setDate(w.getDate() - 7);
-            dateCondition = `WHERE ${reportDateExpr} >= '${w.toISOString().split('T')[0]}'`;
-        } else if (activeFilter === 'Bulan Ini') dateCondition = `WHERE ${reportDateExpr} LIKE '${today.substring(0, 7)}%'`;
-        else if (activeFilter === 'Custom') dateCondition = `WHERE ${reportDateExpr} >= '${startDate}T00:00:00' AND ${reportDateExpr} <= '${endDate}T23:59:59'`;
+            dateCondition = `WHERE date(${reportDateExpr}, 'localtime') >= '${localDateKey(w)}'`;
+        } else if (activeFilter === 'Bulan Ini') dateCondition = `WHERE strftime('%Y-%m', ${reportDateExpr}, 'localtime') = '${today.substring(0, 7)}'`;
+        else if (activeFilter === 'Custom') dateCondition = `WHERE date(${reportDateExpr}, 'localtime') >= '${startDate}' AND date(${reportDateExpr}, 'localtime') <= '${endDate}'`;
 
         const [results] = await db.executeSql(`
             SELECT t.invoiceNumber, t.createdAt, t.grandTotal, t.discountAmount, t.paymentMethod, t.status,
@@ -525,58 +603,43 @@ export default function ReportScreen({ navigation }: any) {
         return rows;
     };
 
-    const saveExportDocument = async (
-        fileName: string,
-        mimeType: string,
-        content: string,
-        encoding: 'utf8' | 'ascii' = 'utf8',
-    ) => {
-        const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
-        await RNFS.writeFile(filePath, content, encoding);
-        const [result] = await saveDocuments({
-            sourceUris: [encodeURI(`file://${filePath}`)],
-            mimeType,
-            fileName,
-            copy: true,
-        });
-        if (result.error) throw new Error(result.error);
-        return result.name || fileName;
-    };
-
     const handleExportCSV = async () => {
         setIsExporting(true);
         try {
+            if (Platform.OS === 'android') {
+                await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+            }
             const rows = await fetchExportData();
             let csv = '\uFEFFInvoice,Tanggal,Pelanggan,Produk,Catatan,Harga,Qty,Subtotal,Diskon,Total Trx,Dibayar,Sisa,Metode,Status,Status Bayar,Pre-Order\n';
             for (const row of rows) {
+                const prod = `"${(row.productName || '').replace(/"/g, '""')}"`;
+                const notes = `"${(row.itemNotes || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
+                const cust = `"${(row.customerName || '').replace(/"/g, '""')}"`;
                 const po = row.preOrderDate ? row.preOrderDate.substring(0, 10) : '';
-                csv += [
-                    row.invoiceNumber, (row.paidAt || row.createdAt)?.substring(0, 16), row.customerName,
-                    row.productName, row.itemNotes, row.price, row.quantity,
-                    (row.price || 0) * (row.quantity || 0), row.discountAmount || 0, row.grandTotal,
-                    getPaidAmount(row), row.remainingAmount || 0, row.paymentMethod, row.status,
-                    getPaymentStatusLabel(row.paymentStatus), po,
-                ].map(csvCell).join(',') + '\n';
+                csv += `${row.invoiceNumber},${(row.paidAt || row.createdAt)?.substring(0, 16)},${cust},${prod},${notes},${row.price},${row.quantity},${(row.price || 0) * (row.quantity || 0)},${row.discountAmount || 0},${row.grandTotal},${getPaidAmount(row)},${row.remainingAmount || 0},${row.paymentMethod},${row.status},${getPaymentStatusLabel(row.paymentStatus)},${po}\n`;
             }
-            const dateLabel = sanitizeFilePart(buildDateLabel());
+            const dateStr = buildDateLabel() || 'All_Time';
+            const dateLabel = dateStr.replace(/[\s\/]/g, '-');
             const fileName = `Laporan_${dateLabel}.csv`;
-            const savedName = await saveExportDocument(fileName, 'text/csv', csv);
-            Alert.alert('CSV Tersimpan', `${savedName} berhasil disimpan di lokasi yang Anda pilih.`);
-            /* Pesan lama untuk penyimpanan langsung ke Download:
+            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+            await RNFS.writeFile(filePath, csv, 'utf8');
             Alert.alert(
                 'Tersimpan',
                 `File CSV berhasil disimpan ke:\nFolder Download ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ ${fileName}\n\nSilakan buka File Manager Anda untuk melihatnya.`
-            ); */
-        } catch (e: any) {
-            if (!isSaveCancelled(e)) Alert.alert('Export CSV Gagal', e?.message || 'File CSV tidak dapat disimpan.');
+            );
+        } catch (e) {
+            Alert.alert('Error', 'Gagal export CSV. Pastikan izin penyimpanan sudah disetujui.');
         } finally { setIsExporting(false); setShowExportModal(false); }
     };
 
     const handleExportAkuntansiCSV = async () => {
         setIsExporting(true);
         try {
+            if (Platform.OS === 'android') {
+                await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+            }
             const rows = await fetchExportData();
-            let csv = '\uFEFFTanggal,No. Bukti,Keterangan,Akun,Debit,Kredit\n';
+            let csv = 'Tanggal,No. Bukti,Keterangan,Akun,Debit,Kredit\n';
             for (const row of rows) {
                 if (row.status === 'RETURNED') continue;
                 if ((row.paymentStatus || 'PAID') !== 'PAID') continue;
@@ -585,26 +648,29 @@ export default function ReportScreen({ navigation }: any) {
                 const desc = `Penjualan ${inv} - ${row.paymentMethod}`;
                 const total = getPaidAmount(row);
                 if (total <= 0) continue;
-                csv += [date, inv, desc, 'Kas/Bank', total, 0].map(csvCell).join(',') + '\n';
-                csv += [date, inv, desc, 'Pendapatan Penjualan', 0, total].map(csvCell).join(',') + '\n';
+                csv += `${date},${inv},${desc},Kas/Bank,${total},0\n`;
+                csv += `${date},${inv},${desc},Pendapatan Penjualan,0,${total}\n`;
             }
-            const dateLabel = sanitizeFilePart(buildDateLabel());
+            const dateStr = buildDateLabel() || 'All_Time';
+            const dateLabel = dateStr.replace(/[\s\/]/g, '-');
             const fileName = `Jurnal_Akuntansi_${dateLabel}.csv`;
-            const savedName = await saveExportDocument(fileName, 'text/csv', csv);
-            Alert.alert('Jurnal Tersimpan', `${savedName} berhasil disimpan di lokasi yang Anda pilih.`);
-            /* Pesan lama untuk penyimpanan langsung ke Download:
+            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+            await RNFS.writeFile(filePath, csv, 'utf8');
             Alert.alert(
                 'Tersimpan',
                 `File Jurnal CSV (Accurate/Jurnal) berhasil disimpan ke:\nFolder Download ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ ${fileName}\n\nSilakan buka File Manager Anda untuk melihatnya.`
-            ); */
-        } catch (e: any) {
-            if (!isSaveCancelled(e)) Alert.alert('Export Jurnal Gagal', e?.message || 'File jurnal tidak dapat disimpan.');
+            );
+        } catch (e) {
+            Alert.alert('Error', 'Gagal export CSV Akuntansi.');
         } finally { setIsExporting(false); setShowExportModal(false); }
     };
 
-    const handleExportPDF = async () => {
+    const handleExportHTML = async () => {
         setIsExporting(true);
         try {
+            if (Platform.OS === 'android' && (Platform.Version as number) < 33) {
+                await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+            }
             const rows = await fetchExportData();
             // Group by invoice
             const trxMap: Record<string, any> = {};
@@ -623,36 +689,59 @@ export default function ReportScreen({ navigation }: any) {
             const totalBruto = entries.filter(t => t.status !== 'RETURNED' && (t.paymentStatus || 'PAID') === 'PAID').reduce((s, t) => s + getPaidAmount(t), 0);
             const totalRetur = entries.filter(t => t.status === 'RETURNED').reduce((s, t) => s + Number(t.grandTotal || 0), 0);
 
-            const pdfLines = [
-                String(settings.storeName || 'WARNA WARNI').toUpperCase(),
-                'LAPORAN PENJUALAN',
-                `Periode : ${buildDateLabel()}`,
-                `Dibuat  : ${new Date().toLocaleString('id-ID')}`,
-                '',
-                `Total transaksi : ${entries.filter(t => t.status !== 'RETURNED').length}`,
-                `Penjualan bruto : ${formatRp(totalBruto)}`,
-                `Total retur      : ${formatRp(totalRetur)}`,
-                `Penjualan neto  : ${formatRp(totalBruto - totalRetur)}`,
-                '',
-                'Tanggal          | Invoice              | Pelanggan        | Dibayar        | Status',
-                '-'.repeat(94),
-                ...entries.flatMap((transaction: any) => {
-                    const header = [
-                        String(transaction.paidAt || transaction.createdAt || '').substring(0, 16).replace('T', ' ').padEnd(16),
-                        String(transaction.invoiceNumber || '-').substring(0, 20).padEnd(20),
-                        String(transaction.customerName || '-').substring(0, 16).padEnd(16),
-                        String(getPaidAmount(transaction)).padStart(14),
-                        String(transaction.status || '-'),
-                    ].join(' | ');
-                    const itemLines = transaction.items.map((item: any) => `  - ${item.name || 'Produk'} x${item.qty} @ ${formatRp(item.price)}`);
-                    return [header, ...itemLines];
-                }),
-            ];
-            const fileName = `Laporan_${sanitizeFilePart(buildDateLabel())}.pdf`;
-            const savedName = await saveExportDocument(fileName, 'application/pdf', buildSimplePdf(pdfLines), 'ascii');
-            Alert.alert('PDF Tersimpan', `${savedName} berhasil disimpan di lokasi yang Anda pilih.`);
+            const toRp = (n: number) => 'Rp ' + (n || 0).toLocaleString('id-ID');
+            const rowsHtml = entries.map(t => `
+                <tr class="${t.status === 'RETURNED' ? 'ret' : ''}">
+                    <td>${t.invoiceNumber}</td>
+                    <td>${(t.paidAt || t.createdAt)?.substring(0, 16).replace('T', ' ')}</td>
+                    <td>${t.customerName || '-'}</td>
+                    <td>${t.items.map((i: any) => `${i.name} x${i.qty}`).join('<br>')}</td>
+                    <td style="text-align:right">${toRp(t.discountAmount || 0)}</td>
+                    <td style="text-align:right;font-weight:bold">${toRp(getPaidAmount(t))}</td>
+                    <td>${t.paymentMethod}</td>
+                    <td><span class="badge ${t.status === 'RETURNED' ? 'ret-badge' : t.status === 'COMPLETED' ? 'ok-badge' : ''}">${t.status}</span></td>
+                    <td>${getPaymentStatusLabel(t.paymentStatus)}</td>
+                </tr>`).join('');
+
+            const html = `<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Laporan ${buildDateLabel()}</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;padding:16px;color:#222}
+h1{font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#555;margin-bottom:12px;font-weight:normal}
+table{width:100%;border-collapse:collapse;margin-bottom:20px}
+th{background:#2563eb;color:white;padding:6px 8px;text-align:left;font-size:11px}
+td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px}
+tr.ret td{color:#dc2626;background:#fef2f2}
+.badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px}
+.ok-badge{background:#d1fae5;color:#065f46}.ret-badge{background:#fee2e2;color:#991b1b}
+.summary{display:flex;gap:20px;margin-bottom:20px}
+.card{padding:12px 20px;border-radius:8px;flex:1;text-align:center}
+.card-blue{background:#eff6ff;border:1px solid #bfdbfe}.card-red{background:#fef2f2;border:1px solid #fecaca}.card-green{background:#f0fdf4;border:1px solid #bbf7d0}
+.card .label{font-size:10px;color:#6b7280;text-transform:uppercase}.card .value{font-size:18px;font-weight:bold;margin-top:4px}
+@media print{button,nav{display:none}}
+</style></head>
+<body>
+<h1>Laporan Penjualan - LitePOS</h1>
+<h2>Periode: ${buildDateLabel()} | Dibuat: ${new Date().toLocaleString('id-ID')}</h2>
+<div class="summary">
+  <div class="card card-blue"><div class="label">Total Transaksi</div><div class="value">${entries.filter(t => t.status !== 'RETURNED').length}</div></div>
+  <div class="card card-green"><div class="label">Bruto</div><div class="value">${toRp(totalBruto)}</div></div>
+  <div class="card card-red"><div class="label">Retur</div><div class="value">${toRp(totalRetur)}</div></div>
+  <div class="card card-green"><div class="label">Neto</div><div class="value">${toRp(totalBruto - totalRetur)}</div></div>
+</div>
+<table><thead><tr><th>Invoice</th><th>Tanggal</th><th>Pelanggan</th><th>Produk</th><th>Diskon</th><th>Dibayar</th><th>Metode</th><th>Status</th><th>Status Bayar</th></tr></thead>
+<tbody>${rowsHtml}</tbody></table>
+</body></html>`;
+
+            const dateLabel = buildDateLabel().replace(/[\s\/]/g, '-');
+            const fileName = `Laporan_${dateLabel}.html`;
+            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+            await RNFS.writeFile(filePath, html, 'utf8');
+            Alert.alert(
+                'Tersimpan',
+                `File HTML berhasil disimpan ke:\nFolder Download -> ${fileName}\n\nSilakan buka File Manager Anda untuk melihatnya.`
+            );
         } catch (e: any) {
-            if (!isSaveCancelled(e)) Alert.alert('Export PDF Gagal', e?.message || 'File PDF tidak dapat disimpan.');
+            Alert.alert('Error', `Gagal export laporan HTML.\n${e.message || ''}`);
         } finally { setIsExporting(false); setShowExportModal(false); }
     };
 
@@ -678,8 +767,8 @@ export default function ReportScreen({ navigation }: any) {
                 tanggalBayar: (row.paidAt || row.createdAt)?.substring(0, 16) || '',
                 pelanggan: row.customerName || '',
                 noHp: row.customerPhone || '',
-                tipeOrder: row.preOrderDate ? 'PRE-ORDER' : 'PENJUALAN TOKO',
-                meja: '',
+                tipeOrder: row.orderType === 'DINE_IN' ? 'DINE IN' : 'TAKE AWAY',
+                meja: row.tableName || '',
                 produk: row.productName || '',
                 catatan: row.itemNotes || '',
                 hargaSatuan: row.price || 0,
@@ -779,35 +868,79 @@ export default function ReportScreen({ navigation }: any) {
     };
 
     // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Print daily report ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
-    const printDailyReport = async () => {
-        try {
-            const storeName = settings.storeName || 'LitePOS';
-            const LINE = '--------------------------------\n';
-            const W = 32;
-            const center = (s: string) => { const p = Math.max(0, Math.floor((W - s.length) / 2)); return ' '.repeat(p) + s; };
-            const padEnd = (s: string, l: number) => (s + ' '.repeat(l)).substring(0, l);
-            const padStart = (s: string, l: number) => (' '.repeat(l) + s).slice(-l);
-            let text = center(storeName) + '\n';
-            text += center(`LAPORAN ${activeFilter.toUpperCase()}`) + '\n';
-            text += center(new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })) + '\n';
-            text += LINE;
-            text += padEnd('Penjualan Bruto', W - 14) + padStart(formatRp(summary.bruto), 14) + '\n';
-            text += padEnd('Jumlah Transaksi', W - 14) + padStart(String(summary.count), 14) + '\n';
-            text += padEnd('Retur', W - 14) + padStart(formatRp(summary.returns), 14) + '\n';
-            text += LINE;
-            text += padEnd('METODE BAYAR', W) + '\n';
-            text += padEnd(`- Tunai (${summary.cashCount || 0}x)`, W - 14) + padStart(formatRp(summary.cash || 0), 14) + '\n';
-            text += padEnd(`- QRIS (${summary.qrisCount || 0}x)`, W - 14) + padStart(formatRp(summary.qris || 0), 14) + '\n';
-            text += padEnd(`- Transfer (${summary.transferCount || 0}x)`, W - 14) + padStart(formatRp(summary.transfer || 0), 14) + '\n';
-            text += LINE;
-            text += padEnd('NETO', W - 14) + padStart(formatRp(summary.neto), 14) + '\n';
-            text += padEnd('Pengeluaran', W - 14) + padStart(formatRp(expenseTotal), 14) + '\n';
-            text += LINE;
-            text += padEnd('SALDO BERSIH', W - 14) + padStart(formatRp(summary.neto - expenseTotal), 14) + '\n';
-            text += LINE;
-            text += center(`Dicetak: ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`) + '\n\n\n';
+    const buildReceiptPeriodLabel = () => {
+        const formatDate = (date: Date) => date.toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        });
+        const formatIsoDate = (value: string) => {
+            const [year, month, day] = value.split('-');
+            return day && month && year ? `${day}/${month}/${year}` : value;
+        };
 
-            await printReportText(text);
+        if (activeFilter === 'Custom') return `${formatIsoDate(startDate)} - ${formatIsoDate(endDate)}`;
+        if (activeFilter === 'Minggu Ini') {
+            const firstDay = new Date();
+            firstDay.setDate(firstDay.getDate() - 7);
+            return `${formatDate(firstDay)} - ${formatDate(new Date())}`;
+        }
+        if (activeFilter === 'Bulan Ini') {
+            const now = new Date();
+            return `${formatDate(new Date(now.getFullYear(), now.getMonth(), 1))} - ${formatDate(now)}`;
+        }
+        return `${formatDate(new Date())} 00:00 - 23:59`;
+    };
+
+    const buildDailyReportText = () => {
+        const storeName = settings.storeName || 'LitePOS';
+        const LINE = '--------------------------------\n';
+        const W = 32;
+        const center = (s: string) => { const p = Math.max(0, Math.floor((W - s.length) / 2)); return ' '.repeat(p) + s.substring(0, W); };
+        const padEnd = (s: string, l: number) => (s + ' '.repeat(l)).substring(0, l);
+        const padStart = (s: string, l: number) => (' '.repeat(l) + s).slice(-l);
+        const row = (label: string, value: string) => padEnd(label, W - 14) + padStart(value, 14) + '\n';
+        const totalItems = bestsellerData.reduce((total, item) => total + Number(item.qty || 0), 0);
+        let text = center(storeName) + '\n';
+        if (settings.storeAddress) text += center(String(settings.storeAddress)) + '\n';
+        text += LINE;
+        text += center('LAPORAN PENJUALAN') + '\n';
+        text += center(activeFilter.toUpperCase()) + '\n';
+        text += LINE;
+        text += 'Periode:\n';
+        text += `${buildReceiptPeriodLabel()}\n`;
+        text += row('Jumlah Transaksi', String(summary.count));
+        text += row('Jumlah Item', String(totalItems));
+        text += LINE;
+        text += 'PENJUALAN\n';
+        text += row('Penjualan Bruto', formatRp(summary.bruto));
+        if (summary.returns > 0) text += row('Retur', `-${formatRp(summary.returns)}`);
+        text += row('Penjualan Neto', formatRp(summary.neto));
+        if (expenseTotal > 0) text += row('Pengeluaran', `-${formatRp(expenseTotal)}`);
+        text += LINE;
+        text += 'PEMBAYARAN\n';
+        text += row('Tunai', formatRp(summary.cash || 0));
+        text += row('QRIS', formatRp(summary.qris || 0));
+        if (summary.transfer > 0) text += row('Transfer', formatRp(summary.transfer || 0));
+        text += LINE;
+        text += 'PRODUK TERLARIS\n';
+        bestsellerData.slice(0, 6).forEach((item, index) => {
+            text += row(`${index + 1}. ${item.name}`, String(item.qty));
+        });
+        if (bestsellerData.length === 0) text += 'Belum ada produk terjual\n';
+        text += LINE;
+        text += center('AKHIR LAPORAN') + '\n';
+        text += center(`Dicetak oleh: ${user?.name || 'Kasir'}`) + '\n';
+        if (showLitePosBranding) text += center('Powered by LitePOS') + '\n';
+        text += '\n\n';
+        return text;
+    };
+
+    const printDailyReport = () => setShowDailyPrintPreview(true);
+
+    const handleConfirmDailyReportPrint = async () => {
+        try {
+            await printReportText(buildDailyReportText());
         } catch (e: any) {
             Alert.alert('Error', e?.message || 'Gagal mencetak. Pastikan printer tersambung.');
         }
@@ -820,8 +953,6 @@ export default function ReportScreen({ navigation }: any) {
         const durationMs = closeTime ? closeTime.getTime() - openTime.getTime() : Date.now() - openTime.getTime();
         const dH = Math.floor(durationMs / 3600000);
         const dM = Math.floor((durationMs % 3600000) / 60000);
-        const diff = shift.closingCash != null ? shift.closingCash - (shift.openingCash + (shift.txTotal || 0) - (shift.expensesTotal || 0)) : null;
-
         let text = `*${storeName}*\n`;
         text += `*LAPORAN SHIFT*\n\n`;
         text += `Kasir: ${shift.userName || 'Kasir'}\n`;
@@ -829,11 +960,12 @@ export default function ReportScreen({ navigation }: any) {
         if (closeTime) text += `Tutup: ${closeTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}\n`;
         text += `Durasi: ${dH}j ${dM}m\n\n`;
         text += `Kas Awal: ${formatRp(shift.openingCash || 0)}\n`;
-        text += `Total Penjualan: ${formatRp(shift.txTotal || 0)}\n`;
+        text += `Tunai: ${formatRp(shift.cashSales || 0)}\n`;
+        text += `QRIS: ${formatRp(shift.qrisSales || 0)}\n`;
+        text += `Transfer: ${formatRp(shift.transferSales || 0)}\n`;
+        text += `*Total Penjualan: ${formatRp(shift.txTotal || 0)}*\n`;
         text += `Pengeluaran: ${formatRp(shift.expensesTotal || 0)}\n`;
         text += `Jml Transaksi: ${shift.txCount || 0}\n`;
-        if (shift.closingCash != null) text += `*Kas Akhir: ${formatRp(shift.closingCash)}*\n`;
-        if (diff !== null) text += `*Selisih Kas: ${diff >= 0 ? '+' : ''}${formatRp(diff)}*\n`;
         await shareTextToWhatsApp('Laporan Shift', text);
     };
 
@@ -851,8 +983,6 @@ export default function ReportScreen({ navigation }: any) {
             const durationMs = closeTime ? closeTime.getTime() - openTime.getTime() : Date.now() - openTime.getTime();
             const dH = Math.floor(durationMs / 3600000);
             const dM = Math.floor((durationMs % 3600000) / 60000);
-            const diff = shift.closingCash != null ? shift.closingCash - (shift.openingCash + (shift.txTotal || 0) - (shift.expensesTotal || 0)) : null;
-
             let text = center(storeName) + '\n';
             text += center('LAPORAN SHIFT') + '\n';
             text += LINE;
@@ -862,11 +992,12 @@ export default function ReportScreen({ navigation }: any) {
             text += padEnd('Durasi', W - 14) + padStart(`${dH}j ${dM}m`, 14) + '\n';
             text += LINE;
             text += padEnd('Kas Awal', W - 14) + padStart(formatRp(shift.openingCash || 0), 14) + '\n';
+            text += padEnd('Tunai', W - 14) + padStart(formatRp(shift.cashSales || 0), 14) + '\n';
+            text += padEnd('QRIS', W - 14) + padStart(formatRp(shift.qrisSales || 0), 14) + '\n';
+            text += padEnd('Transfer', W - 14) + padStart(formatRp(shift.transferSales || 0), 14) + '\n';
             text += padEnd('Total Penjualan', W - 14) + padStart(formatRp(shift.txTotal || 0), 14) + '\n';
             text += padEnd('Pengeluaran', W - 14) + padStart(formatRp(shift.expensesTotal || 0), 14) + '\n';
             text += padEnd('Jml Transaksi', W - 14) + padStart(String(shift.txCount || 0), 14) + '\n';
-            if (shift.closingCash != null) text += padEnd('Kas Akhir', W - 14) + padStart(formatRp(shift.closingCash), 14) + '\n';
-            if (diff !== null) text += padEnd('Selisih Kas', W - 14) + padStart(`${diff >= 0 ? '+' : ''}${formatRp(diff)}`, 14) + '\n';
             text += LINE;
             text += center(`Dicetak: ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`) + '\n\n\n';
 
@@ -1070,7 +1201,7 @@ export default function ReportScreen({ navigation }: any) {
                     </View>
                     <View style={tw`flex-1`}>
                         <Text style={tw`text-gray-900 dark:text-white font-black text-base`}>Laporan per shift</Text>
-                        <Text style={tw`text-gray-500 dark:text-gray-400 text-xs mt-0.5`}>Rekap kasir dan pergerakan uang</Text>
+                        <Text style={tw`text-gray-500 dark:text-gray-400 text-xs mt-0.5`}>Rekap kasir dan metode pembayaran</Text>
                     </View>
                     <View style={tw`bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full`}>
                         <Text style={tw`text-gray-700 dark:text-gray-200 font-black text-xs`}>{shiftReports.length} shift</Text>
@@ -1092,7 +1223,6 @@ export default function ReportScreen({ navigation }: any) {
                 const durationMs = closeTime ? closeTime.getTime() - openTime.getTime() : Date.now() - openTime.getTime();
                 const durationH = Math.floor(durationMs / 3600000);
                 const durationM = Math.floor((durationMs % 3600000) / 60000);
-                const diff = item.closingCash != null ? item.closingCash - (item.openingCash + (item.txTotal || 0) - (item.expensesTotal || 0)) : null;
                 return (
                     <View style={tw`bg-white dark:bg-gray-800 rounded-lg p-4 mb-3 border border-gray-200 dark:border-gray-700`}>
                         <View style={tw`flex-row justify-between items-center mb-2`}>
@@ -1104,20 +1234,6 @@ export default function ReportScreen({ navigation }: any) {
                                 <Text style={tw`font-bold text-gray-800 dark:text-gray-100 text-sm`}>{item.userName || 'Kasir'}</Text>
                             </View>
                             <Text style={tw`text-xs text-gray-400`}>{`${durationH}j ${durationM}m`}</Text>
-                        </View>
-                        <View style={tw`hidden`}>
-                            <View>
-                                <Text style={tw`text-[10px] text-gray-400 uppercase font-bold`}>Buka</Text>
-                                <Text style={tw`text-xs font-bold text-gray-700 dark:text-gray-200`}>{openTime.toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
-                            </View>
-                            <View>
-                                <Text style={tw`text-[10px] text-gray-400 uppercase font-bold`}>Kas Awal</Text>
-                                <Text style={tw`text-xs font-bold text-gray-700 dark:text-gray-200`}>{formatRp(item.openingCash || 0)}</Text>
-                            </View>
-                            <View>
-                                <Text style={tw`text-[10px] text-gray-400 uppercase font-bold`}>Kas Akhir</Text>
-                                <Text style={tw`text-xs font-bold ${item.closingCash != null ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300'}`}>{item.closingCash != null ? formatRp(item.closingCash) : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â'}</Text>
-                            </View>
                         </View>
                         <View style={tw`flex-row items-center mt-1 mb-3`}>
                             <Icon name="clock-outline" size={14} color={tw.color('gray-400')} style={tw`mr-2`} />
@@ -1132,26 +1248,26 @@ export default function ReportScreen({ navigation }: any) {
                                 <Text style={tw`text-xs font-black text-gray-800 dark:text-gray-100`}>{formatRp(item.openingCash || 0)}</Text>
                             </View>
                             <View style={tw`flex-row justify-between mb-1.5`}>
-                                <Text style={tw`text-xs text-gray-500`}>Penjualan ({item.txCount || 0} transaksi)</Text>
-                                <Text style={tw`text-xs font-black text-green-600`}>+{formatRp(item.txTotal || 0)}</Text>
+                                <Text style={tw`text-xs text-gray-500`}>Tunai</Text>
+                                <Text style={tw`text-xs font-black text-green-600`}>{formatRp(item.cashSales || 0)}</Text>
+                            </View>
+                            <View style={tw`flex-row justify-between mb-1.5`}>
+                                <Text style={tw`text-xs text-gray-500`}>QRIS</Text>
+                                <Text style={tw`text-xs font-black text-blue-600`}>{formatRp(item.qrisSales || 0)}</Text>
+                            </View>
+                            <View style={tw`flex-row justify-between mb-1.5`}>
+                                <Text style={tw`text-xs text-gray-500`}>Transfer</Text>
+                                <Text style={tw`text-xs font-black text-purple-600`}>{formatRp(item.transferSales || 0)}</Text>
                             </View>
                             <View style={tw`flex-row justify-between mb-1.5`}>
                                 <Text style={tw`text-xs text-gray-500`}>Pengeluaran</Text>
                                 <Text style={tw`text-xs font-black text-red-500`}>-{formatRp(item.expensesTotal || 0)}</Text>
                             </View>
                             <View style={tw`flex-row justify-between pt-2 mt-1 border-t border-gray-100 dark:border-gray-700`}>
-                                <Text style={tw`text-xs font-bold text-gray-700 dark:text-gray-200`}>Kas akhir</Text>
-                                <Text style={tw`text-sm font-black ${item.closingCash != null ? 'text-blue-600' : 'text-gray-300'}`}>
-                                    {item.closingCash != null ? formatRp(item.closingCash) : 'Belum ditutup'}
-                                </Text>
+                                <Text style={tw`text-xs font-bold text-gray-700 dark:text-gray-200`}>Total ({item.txCount || 0} transaksi)</Text>
+                                <Text style={tw`text-sm font-black text-gray-900 dark:text-white`}>{formatRp(item.txTotal || 0)}</Text>
                             </View>
                         </View>
-                        {diff !== null && (
-                            <View style={tw`mt-2 flex-row items-center`}>
-                                <Text style={tw`text-[10px] text-gray-400 uppercase font-bold mr-2`}>Selisih Kas</Text>
-                                <Text style={[tw`text-sm font-black`, diff >= 0 ? tw`text-green-600` : tw`text-red-500`]}>{diff >= 0 ? '+' : ''}{formatRp(diff)}</Text>
-                            </View>
-                        )}
                         <View style={tw`mt-3 border-t border-gray-100 dark:border-gray-700 pt-3 flex-row items-center justify-end`}>
                             <View style={tw`flex-row`}>
                                 <TouchableOpacity
@@ -1532,11 +1648,25 @@ export default function ReportScreen({ navigation }: any) {
 
     return (
         <View style={tw`flex-1 bg-gray-50 dark:bg-gray-900`}>
+            <ClosingReportPreviewModal
+                visible={showDailyPrintPreview}
+                onClose={() => setShowDailyPrintPreview(false)}
+                onPrint={handleConfirmDailyReportPrint}
+                storeName={settings.storeName || 'LitePOS'}
+                storeAddress={settings.storeAddress}
+                periodLabel={buildReceiptPeriodLabel()}
+                printedBy={user?.name || 'Kasir'}
+                summary={summary}
+                bestsellers={bestsellerData}
+                expenseTotal={expenseTotal}
+                showLitePosBranding={showLitePosBranding}
+            />
+
             {/* Header */}
             <View style={tw`bg-white dark:bg-gray-800 px-4 py-3 flex-row items-center border-b border-gray-200 dark:border-gray-700`}>
                 <Text style={tw`text-xl font-black text-gray-800 dark:text-gray-100 flex-1`}>Laporan</Text>
                 {/* Print daily report button (only on sales tab) */}
-                {mainTab === 'penjualan' && salesSubTab === 'transaksi' && (
+                {!isCashier && mainTab === 'penjualan' && salesSubTab === 'transaksi' && (
                     <TouchableOpacity
                         style={tw`p-2 mr-1 bg-indigo-50 rounded-xl border border-indigo-200`}
                         onPress={printDailyReport}
@@ -1544,15 +1674,16 @@ export default function ReportScreen({ navigation }: any) {
                         <Icon name="printer" size={18} color={tw.color('indigo-600')} />
                     </TouchableOpacity>
                 )}
-                <TouchableOpacity
+                {!isCashier && <TouchableOpacity
                     style={tw`p-2 mr-1 bg-green-50 rounded-xl border border-green-200`}
                     onPress={() => mainTab === 'penjualan' && setShowExportModal(true)}
                 >
                     <Icon name="download" size={18} color={tw.color('green-600')} />
-                </TouchableOpacity>
+                </TouchableOpacity>}
                 <TouchableOpacity
                     onPress={() => {
-                        if (mainTab === 'penjualan') loadTransactions(activeFilter);
+                        if (mainTab === 'penjualan' && salesSubTab === 'shift') loadShiftReports();
+                        else if (mainTab === 'penjualan') loadTransactions(activeFilter);
                         else loadExpenses(activeFilter);
                     }}
                     style={tw`p-2`}
@@ -1564,7 +1695,7 @@ export default function ReportScreen({ navigation }: any) {
             {/* Export Modal */}
             <Modal visible={showExportModal} transparent animationType="slide">
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
-                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`, tabletModalStyle]}>
+                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
                             <View>
                                 <Text style={tw`text-xl font-black text-gray-800 dark:text-gray-100`}>Export Laporan</Text>
@@ -1587,7 +1718,7 @@ export default function ReportScreen({ navigation }: any) {
                             </View>
                             <View style={tw`flex-1`}>
                                 <Text style={tw`font-black text-green-800`}>Simpan ke CSV (.csv)</Text>
-                                <Text style={tw`text-xs text-green-600 mt-0.5`}>Pilih folder tujuan, lalu buka di Excel / Google Sheets</Text>
+                                <Text style={tw`text-xs text-green-600 mt-0.5`}>Disimpan ke Folder Download, buka di Excel / Google Sheets</Text>
                             </View>
                         </TouchableOpacity>
 
@@ -1621,15 +1752,15 @@ export default function ReportScreen({ navigation }: any) {
 
                         <TouchableOpacity
                             style={tw`bg-blue-50 border border-blue-200 p-4 rounded-xl mb-3 flex-row items-center ${isExporting ? 'opacity-50' : ''}`}
-                            onPress={handleExportPDF}
+                            onPress={handleExportHTML}
                             disabled={isExporting}
                         >
                             <View style={tw`w-10 h-10 bg-blue-100 rounded-xl items-center justify-center mr-4`}>
                                 <Icon name="file-document-outline" size={20} color={tw.color('blue-600')} />
                             </View>
                             <View style={tw`flex-1`}>
-                                <Text style={tw`font-black text-blue-800`}>Simpan ke PDF (.pdf)</Text>
-                                <Text style={tw`text-xs text-blue-600 mt-0.5`}>Pilih sendiri folder dan nama file tujuan</Text>
+                                <Text style={tw`font-black text-blue-800`}>Simpan ke PDF (.html)</Text>
+                                <Text style={tw`text-xs text-blue-600 mt-0.5`}>File HTML tersimpan di Download, buka di browser -{">"} Print -{">"} PDF</Text>
                             </View>
                         </TouchableOpacity>
 
@@ -1641,10 +1772,9 @@ export default function ReportScreen({ navigation }: any) {
             </Modal>
 
 
-            <View style={[tw`flex-1 w-full`, isTablet && { maxWidth: 1100, alignSelf: 'center' }]}>
     {/* Main Sub-Tabs */}
             <View style={tw`bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-800 flex-row`}>
-                {(['penjualan', 'pengeluaran'] as const).map(tab => (
+                {(isCashier ? (['penjualan'] as const) : (['penjualan', 'pengeluaran'] as const)).map(tab => (
                     <TouchableOpacity
                         key={tab}
                         style={tw`flex-1 py-3 items-center border-b-2 ${mainTab === tab ? 'border-blue-600' : 'border-transparent'}`}
@@ -1689,7 +1819,10 @@ export default function ReportScreen({ navigation }: any) {
                     
                     {showSubTabDropdown && (
                         <View style={tw`absolute top-full left-0 right-0 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm z-50`}>
-                            {(['transaksi', 'laba_rugi', 'jam_sibuk', 'kategori', 'terlaris', 'pelanggan', 'retur', 'shift'] as const).map(sub => (
+                            {(isCashier
+                                ? (['transaksi', 'kategori', 'terlaris', 'jam_sibuk', 'shift'] as const)
+                                : (['transaksi', 'laba_rugi', 'jam_sibuk', 'kategori', 'terlaris', 'pelanggan', 'retur', 'shift'] as const)
+                            ).filter(sub => userCanReturn || sub !== 'retur').map(sub => (
                                 <TouchableOpacity
                                     key={sub}
                                     style={tw`px-4 py-3.5 border-b border-gray-50 dark:border-gray-700 flex-row items-center ${salesSubTab === sub ? 'bg-blue-50/50 dark:bg-gray-700/50' : ''}`}
@@ -1729,21 +1862,20 @@ export default function ReportScreen({ navigation }: any) {
             {FilterBar()}
 
             {/* Content */}
-            {mainTab === 'pengeluaran' && ExpensesContent()}
+            {!isCashier && mainTab === 'pengeluaran' && ExpensesContent()}
             {mainTab === 'penjualan' && salesSubTab === 'transaksi' && SalesContent()}
             {mainTab === 'penjualan' && salesSubTab === 'kategori' && CategoryContent()}
             {mainTab === 'penjualan' && salesSubTab === 'terlaris' && BestsellerContent()}
-            {mainTab === 'penjualan' && salesSubTab === 'pelanggan' && CustomerCRMContent()}
-            {mainTab === 'penjualan' && salesSubTab === 'retur' && ReturContent()}
+            {!isCashier && mainTab === 'penjualan' && salesSubTab === 'pelanggan' && CustomerCRMContent()}
+            {userCanReturn && mainTab === 'penjualan' && salesSubTab === 'retur' && ReturContent()}
             {mainTab === 'penjualan' && salesSubTab === 'shift' && ShiftReportContent()}
-            {mainTab === 'penjualan' && salesSubTab === 'laba_rugi' && ProfitContent()}
+            {!isCashier && mainTab === 'penjualan' && salesSubTab === 'laba_rugi' && ProfitContent()}
             {mainTab === 'penjualan' && salesSubTab === 'jam_sibuk' && PeakHoursContent()}
-            </View>
 
             {/* Transaction Detail Modal */}
             <Modal visible={!!selectedTrx} animationType="slide" transparent>
                 <View style={tw`flex-1 bg-black/50 justify-end`}>
-                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl max-h-[80%] p-6`, tabletModalStyle]}>
+                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl max-h-[80%] p-6`}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
                             <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Detail Transaksi</Text>
                             <TouchableOpacity onPress={() => setSelectedTrx(null)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}>
@@ -1829,7 +1961,7 @@ export default function ReportScreen({ navigation }: any) {
                                         <Text style={tw`text-gray-700 dark:text-gray-200 font-bold text-sm`}>Cetak Struk</Text>
                                     </TouchableOpacity>
 
-                                    {selectedTrx.status !== 'RETURNED' && (
+                                    {userCanReturn && selectedTrx.status !== 'RETURNED' && (
                                         <TouchableOpacity
                                             style={tw`flex-1 bg-red-50 dark:bg-red-900/40 border border-red-200 py-3 rounded-xl flex-row items-center justify-center`}
                                             onPress={handleReturnTransaction}
@@ -1851,7 +1983,7 @@ export default function ReportScreen({ navigation }: any) {
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
                     style={tw`flex-1 bg-black/50 justify-end`}
                 >
-                    <View style={[tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`, tabletModalStyle]}>
+                    <View style={tw`bg-white dark:bg-gray-800 rounded-t-3xl p-6`}>
                         <View style={tw`flex-row justify-between items-center mb-5`}>
                             <Text style={tw`text-xl font-bold text-gray-800 dark:text-gray-100`}>Tambah Pengeluaran</Text>
                             <TouchableOpacity onPress={() => setShowAddExpense(false)} style={tw`p-2 bg-gray-100 dark:bg-gray-700 rounded-full`}>

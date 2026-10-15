@@ -65,18 +65,83 @@ export const normalizeServerSettings = async (settings: any, loyalty: any = {}, 
     };
 };
 
+const getActiveStoreName = (user: any) => {
+    const activeStoreId = Number(user?.activeStoreId);
+    const activeStore = Array.isArray(user?.stores)
+        ? user.stores.find((store: any) => Number(store?.id) === activeStoreId)
+        : null;
+    return activeStore?.name || 'LitePOS';
+};
+
+export const createCachedSaasBootstrap = async (user: any) => ({
+    user,
+    settings: {
+        ...await normalizeServerSettings({
+            storeName: getActiveStoreName(user),
+            // Jangan memblokir POS dengan dialog buka shift sebelum konfigurasi
+            // server selesai diperbarui di belakang layar.
+            enableShift: false,
+        }),
+        license_status: 'ACTIVE' as const,
+    },
+    license: { isActive: true, status: 'ACTIVE' },
+    shiftEnabled: false,
+    activeShift: null,
+});
+
 export const fetchSaasBootstrap = async () => {
-    const [me, settings, loyalty, license, currentShift] = await Promise.all([
-        api.get('/auth/me'),
-        api.get('/settings'),
-        api.get('/settings/loyalty'),
-        api.get('/license/status'),
-        api.get('/shifts/current'),
-    ]);
-    const normalizedSettings = await normalizeServerSettings(settings.data?.data, loyalty.data?.data);
-    const licenseData = license.data?.data;
+    let bootstrap: any;
+
+    try {
+        // Jalur cepat. Batasi tujuh detik karena sesudah login instance Vercel
+        // semestinya sudah hangat. Jika endpoint khusus ini bermasalah, Android
+        // otomatis memakai endpoint stabil yang juga digunakan website.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 7000);
+        try {
+            const response = await api.get('/auth/mobile-bootstrap', { signal: controller.signal });
+            bootstrap = response.data?.data || {};
+        } finally {
+            clearTimeout(timer);
+        }
+    } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) throw error;
+
+        // /auth/me berada di jalur autentikasi ringan dan menjadi satu-satunya
+        // data wajib. Endpoint konfigurasi bersifat opsional: kegagalan salah
+        // satunya tidak boleh mengunci pengguna di layar pemuatan.
+        const me = await api.get('/auth/me');
+        const [settings, loyalty, license, currentShift] = await Promise.allSettled([
+            api.get('/settings'),
+            api.get('/settings/loyalty'),
+            api.get('/license/status'),
+            api.get('/shifts/current'),
+        ]);
+        const responseData = (result: PromiseSettledResult<any>) => result.status === 'fulfilled'
+            ? result.value.data
+            : undefined;
+        const settingsData = responseData(settings);
+        const loyaltyData = responseData(loyalty);
+        const licenseResponse = responseData(license);
+        const shiftData = responseData(currentShift);
+        bootstrap = {
+            user: me.data?.user,
+            settings: settingsData?.data || { storeName: getActiveStoreName(me.data?.user), enableShift: false },
+            loyalty: loyaltyData?.data,
+            // Otorisasi lisensi tetap dilakukan backend untuk setiap endpoint
+            // bisnis. Nilai sementara ini hanya mencegah UI terkunci bila endpoint
+            // status sedang lambat.
+            license: licenseResponse?.data || { isActive: true, status: 'UNKNOWN', plan: 'TRIAL' },
+            shiftEnabled: shiftData?.enabled === true,
+            activeShift: shiftData?.data || null,
+        };
+    }
+
+    const normalizedSettings = await normalizeServerSettings(bootstrap.settings, bootstrap.loyalty);
+    const licenseData = bootstrap.license;
     return {
-        user: me.data?.user,
+        user: bootstrap.user,
         settings: {
             ...normalizedSettings,
             license_number: licenseData?.licenseNumber || '',
@@ -86,8 +151,8 @@ export const fetchSaasBootstrap = async () => {
             license_offline: false,
         },
         license: licenseData,
-        shiftEnabled: currentShift.data?.enabled !== false,
-        activeShift: currentShift.data?.data || null,
+        shiftEnabled: bootstrap.shiftEnabled !== false,
+        activeShift: bootstrap.activeShift || null,
     };
 };
 
@@ -116,14 +181,19 @@ export const fetchTransactions = async (page = 1, limit = 50) => {
     return response.data || { data: [], meta: {} };
 };
 
-export const createTransaction = async (payload: any) => {
-    const response = await api.post('/transactions', payload);
+export const createTransaction = async (payload: any, idempotencyKey?: string) => {
+    const response = await api.post('/transactions', payload, {
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    });
     return response.data?.data;
 };
 
 export const logoutSaas = async () => {
     try {
         await api.post('/auth/logout');
+    } catch {
+        // Token yang kedaluwarsa memang dapat membuat endpoint logout menolak.
+        // Sesi perangkat tetap wajib dibersihkan agar navigasi kembali ke login.
     } finally {
         await clearAuthSession();
     }

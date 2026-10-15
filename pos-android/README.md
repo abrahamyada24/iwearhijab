@@ -2,6 +2,23 @@ This is a new [**React Native**](https://reactnative.dev) project, bootstrapped 
 
 # Getting Started
 
+## Build APK release LitePOS Demo
+
+APK yang dibagikan kepada pengguna harus ditandatangani dengan release keystore privat, bukan `debug.keystore`.
+
+1. Simpan release keystore di `android/app/litepos-demo-release.keystore`.
+2. Salin `android/keystore.properties.example` menjadi `android/keystore.properties`.
+3. Isi password dan alias yang benar. Kedua file tersebut diabaikan Git.
+4. Jalankan dari folder `pos-android/android`:
+
+```sh
+gradlew.bat assembleRelease --no-daemon
+```
+
+Hasilnya berada di `android/app/build/outputs/apk/release/app-release.apk`.
+
+Simpan backup keystore dan password di tempat aman. Semua pembaruan aplikasi berikutnya harus menggunakan keystore yang sama. Jika kunci hilang atau berubah, pengguna harus menghapus aplikasi lama sebelum memasang versi baru.
+
 > **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
 
 ## Step 1: Start Metro

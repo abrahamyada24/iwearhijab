@@ -34,8 +34,8 @@ const hashActivationCode = (code) => crypto
   .update(normalizeActivationCode(code))
   .digest('hex');
 
-const invalidateLicenseCache = () => {
-  const storeId = getActiveStoreId();
+const invalidateLicenseCache = (requestedStoreId = null) => {
+  const storeId = Number(requestedStoreId) || getActiveStoreId();
   if (storeId) licenseCache.delete(storeId);
   else licenseCache.clear();
 };

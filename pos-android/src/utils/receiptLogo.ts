@@ -1,7 +1,8 @@
 import { resolveApiAssetUrl } from '../services/api';
 
-// Library printer thermal menskalakan lebar dan tinggi secara terpisah.
-// Kedua dimensi harus dikirim dengan rasio yang sama seperti kanvas hasil capture.
+// Thermal printer library scales width and height independently. Always send
+// both dimensions with the same ratio as the captured canvas to avoid a
+// stretched or flattened logo.
 export const RECEIPT_LOGO_CAPTURE_WIDTH = 240;
 export const RECEIPT_LOGO_CAPTURE_HEIGHT = 120;
 export const RECEIPT_LOGO_INNER_WIDTH = 220;
