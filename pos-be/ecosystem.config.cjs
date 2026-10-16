@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'litepos-api',
+      name: 'kasirpos-api',
       script: 'src/app.js',
       cwd: __dirname,
       instances: 1,

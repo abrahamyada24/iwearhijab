@@ -6,7 +6,7 @@ import { showAlert } from '@/utils/swal';
 import { useStore } from '@/store/useStore';
 import SupplierModal from '@/components/SupplierModal';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function SuppliersPage() {
     const { token } = useStore();

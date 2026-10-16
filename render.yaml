@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: litepos-demo-api
+    name: kasirpos-demo-api
     runtime: node
     plan: free
     rootDir: pos-be

@@ -1,6 +1,6 @@
 import * as Keychain from 'react-native-keychain';
 
-const LICENSE_CACHE_SERVICE = 'com.litepos.license.cache';
+const LICENSE_CACHE_SERVICE = 'com.kasirpos.license.cache';
 
 export type LicenseStatus = {
     licenseNumber: string | null;
@@ -20,7 +20,7 @@ export type LicenseStatus = {
 
 export const cacheLicenseStatus = async (license: LicenseStatus) => {
     const payload = JSON.stringify({ ...license, cachedAt: new Date().toISOString() });
-    await Keychain.setGenericPassword('litepos-license', payload, {
+    await Keychain.setGenericPassword('kasirpos-license', payload, {
         service: LICENSE_CACHE_SERVICE,
         accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });

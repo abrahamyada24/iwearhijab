@@ -6,7 +6,7 @@ import { showAlert } from '@/utils/swal';
 import { getPosPendingTransactions } from '@/utils/savedTransactions';
 import { getCartItemLineTotal } from '@/utils/cartPricing';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function SavedTransactionModal({ isOpen, onClose, onResume, onChanged, formatNumber }) {
     const [savedTransactions, setSavedTransactions] = useState([]);

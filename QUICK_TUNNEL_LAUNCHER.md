@@ -1,3 +1,5 @@
+> ARSIP KONFIGURASI LAMA. Dokumen ini menyebut repo/domain/database sebelumnya. Untuk KasirPOS gunakan [PANDUAN_DEPLOYMENT.md](PANDUAN_DEPLOYMENT.md); jangan jalankan perintah deployment dari arsip ini.
+
 # Launcher demo Cloudflare
 
 Launcher ini menjalankan backend LitePOS dan Cloudflare Quick Tunnel sebagai proses Windows tersembunyi. Secret tetap dibaca dari `pos-be/.env` dan tidak disimpan di script.

@@ -28,7 +28,7 @@ export default function SaasSettingsScreen() {
 
             if (isManager) {
                 const serverForm = new FormData();
-                serverForm.append('storeName', form.storeName || 'LitePOS');
+                serverForm.append('storeName', form.storeName || 'KasirPOS');
                 serverForm.append('address', form.storeAddress || '');
                 serverForm.append('phone', form.storePhone || '');
                 serverForm.append('enableShift', String(Boolean(form.enableShift)));

@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const API_URL = RAW_API_URL.replace(/\/api\/?$/i, '').replace(/\/+$/, '');
-const TOKEN_KEY = 'litepos_platform_token';
+const TOKEN_KEY = 'kasirpos_platform_token';
 
 export default function PlatformLoginPage() {
   const router = useRouter();
@@ -33,7 +33,7 @@ export default function PlatformLoginPage() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.token) throw new Error(payload.message || 'Login gagal.');
       localStorage.setItem(TOKEN_KEY, payload.token);
-      localStorage.setItem('litepos_platform_admin', JSON.stringify(payload.admin));
+      localStorage.setItem('kasirpos_platform_admin', JSON.stringify(payload.admin));
       router.replace('/super-admin');
     } catch (loginError) {
       setError(loginError.message === 'Failed to fetch'
@@ -51,7 +51,7 @@ export default function PlatformLoginPage() {
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 shadow-2xl shadow-blue-900/50">
             <ShieldCheck size={34} />
           </div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-blue-400">LitePOS Platform</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-blue-400">KasirPOS Platform</p>
           <h1 className="text-3xl font-black">Super Admin</h1>
           <p className="mt-2 text-sm text-slate-400">Kelola usaha dan lisensi dari satu dashboard.</p>
         </div>

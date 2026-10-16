@@ -7,7 +7,7 @@ import TransactionDetailModal from '../../../components/TransactionDetailModal';
 import { showAlert } from '../../../utils/swal';
 import { useStore } from '../../../store/useStore';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function TransactionsPage() {
     const user = useStore((state) => state.user);

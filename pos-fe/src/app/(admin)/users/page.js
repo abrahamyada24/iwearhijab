@@ -7,7 +7,7 @@ import UserModal from '@/components/UserModal';
 import { showAlert } from '@/utils/swal';
 import { useStore } from '@/store/useStore';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function UsersPage() {
     const router = useRouter();

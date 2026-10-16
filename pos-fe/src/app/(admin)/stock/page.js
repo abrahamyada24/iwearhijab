@@ -8,7 +8,7 @@ import {
 import StockModal from '@/components/StockModal';
 import { showAlert } from '@/utils/swal';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function InventoryPage() {
   const [logs, setLogs] = useState([]);

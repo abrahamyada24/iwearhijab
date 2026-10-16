@@ -1,3 +1,5 @@
+> Panduan KasirPOS: [deployment](../PANDUAN_DEPLOYMENT.md) dan [penggunaan](../PANDUAN_PENGGUNA.md).
+
 # 🍽️ Savoria POS — Enterprise Point of Sale System
 
 Savoria POS adalah **sistem kasir modern berbasis Web** yang dirancang khusus untuk operasional **restoran, kafe, dan bistro**. Proyek ini mengedepankan perpaduan **Clean & Luxury UI**, **manajemen stok real-time**, **integrasi pembayaran digital (QRIS)**, serta **keamanan tingkat enterprise** melalui verifikasi **OTP (One-Time Password)**.

@@ -24,7 +24,7 @@ import { useStore } from "@/store/useStore";
 import { showAlert } from "@/utils/swal";
 import { createReceiptImageBlob, downloadReceiptImage, getReceiptImageFilename, shareReceiptImage } from "@/utils/receiptImage";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export default function TransactionDetailModal({
   isOpen,
@@ -103,7 +103,7 @@ export default function TransactionDetailModal({
   const changeAmount = Math.max(0, paymentAmount - Number(transaction.grandTotal || 0));
   const isReturned = transaction.status === "RETURNED";
   const orderLabel = transaction.orderType === "PRE_ORDER" ? "Pre-order" : "Penjualan toko";
-  const showLitePosBranding = !(license?.isActive && license?.plan === "PREMIUM");
+  const showKasirPosBranding = !(license?.isActive && license?.plan === "PREMIUM");
 
   const createHistoryReceiptImage = async () => {
     if (!receiptRef.current) throw new Error("Nota belum siap dibuat menjadi gambar.");
@@ -367,9 +367,9 @@ export default function TransactionDetailModal({
 
           <div style={{ borderTop: "1px dashed #000", margin: "8px 0" }} />
           <div style={{ whiteSpace: "pre-wrap", textAlign: "center" }}>{receiptFooter}</div>
-          {showLitePosBranding && (
+          {showKasirPosBranding && (
             <div style={{ marginTop: "6px", textAlign: "center", fontSize: "8px" }}>
-              Powered by LitePOS
+              Powered by KasirPOS
             </div>
           )}
         </div>

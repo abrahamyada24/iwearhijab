@@ -71,7 +71,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
     });
     const paperWidthMm = getPaperWidthMm(devicePreferences);
     const logoMaxWidthMm = paperWidthMm === 80 ? 58 : 42;
-    const showLitePosBranding = !(license?.isActive && license?.plan === 'PREMIUM');
+    const showKasirPosBranding = !(license?.isActive && license?.plan === 'PREMIUM');
     const receiptImageFilename = getReceiptImageFilename(transaction.invoiceNumber);
 
     const handleDownloadImage = async () => {
@@ -184,7 +184,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                         <div className="mb-3 text-center">
                             {store?.logoUrl && (
                                 <img
-                                    src={store.logoUrl.startsWith('http') ? store.logoUrl : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}${store.logoUrl}`}
+                                    src={store.logoUrl.startsWith('http') ? store.logoUrl : `${process.env.NEXT_PUBLIC_API_URL || ''}${store.logoUrl}`}
                                     alt="Logo toko"
                                     className="receipt-logo grayscale"
                                     style={{
@@ -198,7 +198,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                                     }}
                                 />
                             )}
-                            <div className="text-[14px] font-black uppercase">{store?.storeName || 'LITEPOS'}</div>
+                            <div className="text-[14px] font-black uppercase">{store?.storeName || 'KASIRPOS'}</div>
                             {store?.address && <div className="mt-1 whitespace-pre-wrap">{store.address}</div>}
                             {store?.phone && <div>Telp: {store.phone}</div>}
                         </div>
@@ -248,8 +248,8 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                         <div className="whitespace-pre-wrap text-center">
                             {store?.receiptFooter || 'Terima kasih atas kunjungan Anda'}
                         </div>
-                        {showLitePosBranding && (
-                            <div className="mt-2 text-center text-[8px]">Powered by LitePOS</div>
+                        {showKasirPosBranding && (
+                            <div className="mt-2 text-center text-[8px]">Powered by KasirPOS</div>
                         )}
                     </div>
                 </div>

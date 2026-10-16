@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ClipboardCheck, Save, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { showAlert } from '@/utils/swal';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function StockOpnamePage() {
     const [products, setProducts] = useState([]);

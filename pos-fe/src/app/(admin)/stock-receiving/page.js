@@ -4,7 +4,7 @@ import { PackageCheck, Plus, Minus, Trash2, Save, Loader2, Search } from 'lucide
 import { showAlert } from '@/utils/swal';
 import CurrencyInput from '@/components/CurrencyInput';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function StockReceivingPage() {
     const [products, setProducts] = useState([]);

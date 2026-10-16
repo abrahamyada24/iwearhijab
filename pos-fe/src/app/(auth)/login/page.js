@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { showAlert } from '@/utils/swal';
 import { useStore } from '@/store/useStore';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -51,9 +51,7 @@ export default function LoginPage() {
     return (
         <div className="animate-in fade-in slide-in-from-right-8 duration-500">
             <div className="text-center space-y-2">
-                <div className="inline-flex items-center justify-center w-20 h-20 mb-4">
-                    <img src="/icon.png" alt="Logo LitePOS" className="w-full h-full object-contain" />
-                </div>
+                <p className="mb-4 text-3xl font-black tracking-tight text-gray-900">KasirPOS</p>
                 <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Login POS</h1>
                 <p className="text-gray-500 text-sm">Masuk sebagai Admin atau Kasir</p>
             </div>

@@ -4,7 +4,7 @@ import { Wallet, Plus, Trash2, Loader2, Calendar, Filter, ShoppingBag, Receipt, 
 import { showAlert } from '@/utils/swal';
 import CurrencyInput from '@/components/CurrencyInput';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const EXPENSE_CATEGORIES = ['Umum', 'Operasional', 'Gaji', 'Bahan Baku', 'Utilitas', 'Lainnya'];
 const EXPENSE_TYPES = [

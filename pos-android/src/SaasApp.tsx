@@ -158,9 +158,9 @@ function OnlineMain({ navigation }: any) {
                 {status === 'loading' ? <ActivityIndicator size="large" color={tw.color('blue-400')} /> : <Icon name={status === 'license' ? 'shield-lock' : 'cloud-off-outline'} size={52} color={tw.color(status === 'license' ? 'amber-400' : 'red-400')} />}
                 <Text style={tw`text-white text-xl font-black mt-5 text-center`}>{status === 'loading' ? 'Menyiapkan data usaha...' : status === 'license' ? 'Lisensi usaha tidak aktif' : 'Tidak dapat terhubung ke server'}</Text>
                 {status === 'loading' && isTakingLong && <Text style={tw`text-gray-400 text-sm text-center mt-2`}>Server demo sedang diaktifkan. Aplikasi akan mencoba jalur cadangan secara otomatis.</Text>}
-                {status !== 'loading' && <Text style={tw`text-gray-400 text-sm text-center mt-2`}>{status === 'license' ? 'Aktifkan lisensi melalui halaman web atau hubungi pengelola LitePOS.' : 'Mode SaaS memerlukan internet dan tidak menggunakan database transaksi lokal.'}</Text>}
+                {status !== 'loading' && <Text style={tw`text-gray-400 text-sm text-center mt-2`}>{status === 'license' ? 'Aktifkan lisensi melalui halaman web atau hubungi pengelola KasirPOS.' : 'Mode SaaS memerlukan internet dan tidak menggunakan database transaksi lokal.'}</Text>}
                 {status === 'offline' && Boolean(errorDetail) && <Text style={tw`text-red-300 text-xs text-center mt-3`}>{errorDetail}</Text>}
-                <Text style={tw`text-gray-600 text-[10px] text-center mt-2`}>LitePOS Demo v1.4.0</Text>
+                <Text style={tw`text-gray-600 text-[10px] text-center mt-2`}>KasirPOS v1.4.2</Text>
                 {status !== 'loading' && <TouchableOpacity onPress={bootstrap} style={tw`bg-blue-600 rounded-xl px-6 py-3 mt-6`}><Text style={tw`text-white font-black`}>Coba Lagi</Text></TouchableOpacity>}
             </View>
         );

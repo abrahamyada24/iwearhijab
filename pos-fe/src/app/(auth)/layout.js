@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Masuk ke LitePOS',
-  description: 'Masuk atau daftarkan usaha retail dan F&B di LitePOS',
+  title: 'Masuk ke KasirPOS',
+  description: 'Masuk atau daftarkan usaha retail dan F&B di KasirPOS',
 };
 
 export default function AuthLayout({ children }) {

@@ -11,7 +11,7 @@ exports.requireActiveLicense = async (req, res, next) => {
       success: false,
       code: license.status === 'SUSPENDED' ? 'LICENSE_SUSPENDED' : 'LICENSE_EXPIRED',
       message: license.status === 'SUSPENDED'
-        ? 'Lisensi outlet sedang ditangguhkan. Hubungi pengelola LitePOS.'
+        ? 'Lisensi outlet sedang ditangguhkan. Hubungi pengelola KasirPOS.'
         : 'Masa aktif lisensi outlet telah berakhir. Owner perlu memperpanjang lisensi.',
       license,
     });

@@ -7,7 +7,7 @@ import { useStore } from '../../../store/useStore';
 import ProductModal from '../../../components/ProductModal';
 import { showAlert } from '../../../utils/swal';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function ProductsPage() {
     const { products, categories, fetchDataMaster } = useStore();

@@ -1,6 +1,6 @@
 # Login visual photo credits
 
-The current LitePOS login visuals are original AI-generated assets stored locally so the login page does not depend on a third-party image host at runtime:
+The current KasirPOS login visuals are original AI-generated assets stored locally so the login page does not depend on a third-party image host at runtime:
 
 - `retail-boutique.webp`
 - `retail-shop.webp`

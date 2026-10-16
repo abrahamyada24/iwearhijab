@@ -1,3 +1,5 @@
+> ARSIP KONFIGURASI LAMA. Dokumen ini menyebut repo/domain/database sebelumnya. Untuk KasirPOS gunakan [PANDUAN_DEPLOYMENT.md](PANDUAN_DEPLOYMENT.md); jangan jalankan perintah deployment dari arsip ini.
+
 # Deploy Pembaruan LitePOS Demo
 
 Panduan ini ditulis untuk susunan layanan yang sedang dipakai:

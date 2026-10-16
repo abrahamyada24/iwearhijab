@@ -2,9 +2,10 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearAuthSession, getAuthToken, OFFLINE_SESSION_TOKEN } from './secureAuthStorage';
 import { clearLicenseCache } from './secureLicenseStorage';
+import { KASIRPOS_API_ORIGIN } from '../config/deployment';
 
-export const DEFAULT_API_URL = 'https://litepos-demo-api.vercel.app';
-export const API_BASE_URL_STORAGE_KEY = '@litepos_api_base_url';
+export const DEFAULT_API_URL = KASIRPOS_API_ORIGIN;
+export const API_BASE_URL_STORAGE_KEY = '@kasirpos_api_base_url';
 export const API_URL = DEFAULT_API_URL;
 
 const LEGACY_API_URLS = new Set([

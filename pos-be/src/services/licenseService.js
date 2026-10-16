@@ -25,7 +25,7 @@ const normalizeActivationCode = (code) => String(code || '')
 const getLicenseCodeSecret = () => {
   const secret = process.env.LICENSE_CODE_SECRET || process.env.JWT_SECRET;
   if (secret) return secret;
-  if (process.env.NODE_ENV !== 'production') return 'litepos-development-only-secret';
+  if (process.env.NODE_ENV !== 'production') return 'kasirpos-development-only-secret';
   throw new Error('LICENSE_CODE_SECRET atau JWT_SECRET wajib tersedia.');
 };
 

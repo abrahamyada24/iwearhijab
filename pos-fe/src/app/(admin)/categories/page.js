@@ -6,7 +6,7 @@ import { useStore } from '@/store/useStore';
 import CategoryModal from '@/components/CategoryModal';
 import { showAlert } from '@/utils/swal';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function CategoriesPage() {
     const { categories, fetchDataMaster } = useStore();

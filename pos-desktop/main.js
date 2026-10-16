@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 
-const APP_URL = process.env.LITEPOS_APP_URL || 'https://lite-pos-warnawarni.vercel.app';
+const APP_URL = process.env.KASIRPOS_APP_URL || 'https://kasirpos.example';
 
 ipcMain.handle('print-receipt', async (_event, receiptHTML) => {
   const printWindow = new BrowserWindow({
@@ -47,7 +47,7 @@ function createWindow() {
     height: 800,
     minWidth: 1024,
     minHeight: 700,
-    title: 'LitePOS Warna Warni',
+    title: 'KasirPOS',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

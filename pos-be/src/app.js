@@ -11,7 +11,7 @@ const { isCloudinaryConfigured, uploadDir } = require('./config/storage');
 
 const isProduction = process.env.NODE_ENV === 'production';
 if (!isProduction && !process.env.JWT_SECRET) {
-  process.env.JWT_SECRET = 'litepos-development-only-secret';
+  process.env.JWT_SECRET = 'kasirpos-development-only-secret';
   console.warn('[ENV] JWT_SECRET kosong; memakai secret khusus development.');
 }
 
@@ -53,7 +53,7 @@ const platformAdminRoutes = require('./routes/platformAdminRoutes');
 
 const app = express();
 const HOST = process.env.HOST || '0.0.0.0';
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5100;
 
 app.disable('x-powered-by');
 if (isProduction) app.set('trust proxy', 1);
@@ -146,7 +146,7 @@ app.use('/api/suppliers', supplierRoutes);
 app.use('/api/sync', syncRoutes);
 
 app.get('/', (req, res) => {
-  res.json({ message: "LitePOS Backend Service is Running!", timestamp: new Date() });
+  res.json({ message: "KasirPOS Backend Service is Running!", timestamp: new Date() });
 });
 
 // Vercel mengimpor dan menjalankan instance Express sebagai satu Function.

@@ -51,6 +51,13 @@ releases/
 *.p12
 key.txt
 key-vercel-tidb.txt
+key-superadmin.txt
+pos-be/key-superadmin.txt
+*.jks
+*.pfx
+.env.*
+!.env.example
+!**/.env.example
 *.sql
 !pos-be/prisma/migrations/**/*.sql
 pos-android/generator.html

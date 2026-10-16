@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, UploadCloud, Save, Edit3, Grid2X2, Maximize, AppWindow } from 'lucide-react';
 
 export default function CategoryModal({ isOpen, onClose, onSave, initialData }) {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
   const [name, setName] = useState('');
   const [size, setSize] = useState('normal');

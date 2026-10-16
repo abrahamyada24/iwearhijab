@@ -12,9 +12,9 @@ const requireStoreId = (model) => {
   return storeId;
 };
 
-const basePrisma = globalThis.__liteposBasePrisma || new PrismaClient();
+const basePrisma = globalThis.__kasirposBasePrisma || new PrismaClient();
 
-const prisma = globalThis.__liteposScopedPrisma || basePrisma.$extends({
+const prisma = globalThis.__kasirposScopedPrisma || basePrisma.$extends({
   name: 'store-isolation',
   query: {
     $allModels: {
@@ -29,8 +29,8 @@ const prisma = globalThis.__liteposScopedPrisma || basePrisma.$extends({
 
 // Gunakan kembali client pada instance serverless yang masih hangat agar setiap
 // request tidak membuat connection pool baru ke TiDB.
-globalThis.__liteposBasePrisma = basePrisma;
-globalThis.__liteposScopedPrisma = prisma;
+globalThis.__kasirposBasePrisma = basePrisma;
+globalThis.__kasirposScopedPrisma = prisma;
 
 module.exports = {
   basePrisma,

@@ -1,16 +1,16 @@
 {
   "name": "pos-desktop",
   "version": "1.3.0",
-  "description": "LitePOS desktop client for Warna Warni",
+  "description": "KasirPOS desktop client",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win"
   },
   "build": {
-    "appId": "com.warnawarni.litepos",
-    "productName": "LitePOS Warna Warni",
-    "artifactName": "LitePOS-Warna-Warni-Setup-${version}.${ext}",
+    "appId": "com.kasirpos.desktop",
+    "productName": "KasirPOS",
+    "artifactName": "KasirPOS-Setup-${version}.${ext}",
     "win": {
       "target": "nsis",
       "icon": "icon.png"

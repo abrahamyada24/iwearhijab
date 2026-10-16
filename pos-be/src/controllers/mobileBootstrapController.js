@@ -53,7 +53,7 @@ exports.getBootstrap = async (req, res) => {
       success: true,
       data: {
         user: serializeUser(user, memberships, req.storeId),
-        settings: settings || { storeName: req.store?.name || 'LitePOS', enableShift: true },
+        settings: settings || { storeName: req.store?.name || 'KasirPOS', enableShift: true },
         loyalty: loyalty || null,
         license,
         shiftEnabled: settings?.enableShift !== false,

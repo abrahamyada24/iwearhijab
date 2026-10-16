@@ -18,7 +18,7 @@ import {
   saveDevicePreferences,
 } from '../../../utils/devicePreferences';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function SettingsPage() {
   const { settings, fetchDataMaster, fetchSettings, user } = useStore();
@@ -299,7 +299,7 @@ export default function SettingsPage() {
         {printableLogoUrl && (
           <img className="receipt-logo" src={printableLogoUrl} alt="Logo toko" />
         )}
-        <div className="text-center text-sm font-bold">{settings?.storeName || 'LITEPOS'}</div>
+        <div className="text-center text-sm font-bold">{settings?.storeName || 'KASIRPOS'}</div>
         <div className="my-2 border-t border-dashed border-black" />
         <div>TEST PRINT — {paperWidthMm} MM</div>
         <div>Rasio logo dipertahankan otomatis</div>
@@ -826,8 +826,7 @@ export default function SettingsPage() {
       {activeTab === 'about' && (
         <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="card-base p-8 text-center">
-            <img src="/icon.png" alt="LitePOS Warna Warni" className="mx-auto mb-4 h-20 w-20 object-contain" />
-            <h3 className="text-2xl font-black text-gray-800">LitePOS</h3>
+            <h3 className="text-2xl font-black text-gray-800">KasirPOS</h3>
             <p className="mt-1 text-sm text-gray-500">Point of Sale untuk operasional outlet</p>
             <p className="mt-5 text-xs text-gray-400">Pengaturan tema dan printer disimpan per perangkat.</p>
           </div>

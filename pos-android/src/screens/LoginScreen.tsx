@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import tw, { useAppColorScheme } from 'twrnc';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -39,7 +39,7 @@ export default function LoginScreen({ navigation }: any) {
         useStore.getState().clearPendingOrderContext();
         setSettings({
             ...useStore.getState().settings,
-            storeName: activeStore?.name || 'LitePOS',
+            storeName: activeStore?.name || 'KasirPOS',
             storeAddress: '',
             storePhone: '',
             storeLogo: null,
@@ -138,7 +138,7 @@ export default function LoginScreen({ navigation }: any) {
                     await clearAuthSession();
                     Alert.alert(
                         'Ganti Password Diperlukan',
-                        'Masuk ke website LitePOS dan buat password baru terlebih dahulu, lalu login kembali di Android.'
+                        'Masuk ke website KasirPOS dan buat password baru terlebih dahulu, lalu login kembali di Android.'
                     );
                     return;
                 }
@@ -155,7 +155,7 @@ export default function LoginScreen({ navigation }: any) {
                 return;
             }
 
-            Alert.alert('Tidak Ada Koneksi', 'LitePOS Demo memerlukan internet untuk memvalidasi akun dan data usaha. Periksa koneksi lalu coba lagi.');
+            Alert.alert('Tidak Ada Koneksi', 'KasirPOS memerlukan internet untuk memvalidasi akun dan data usaha. Periksa koneksi lalu coba lagi.');
         } finally {
             setIsLoading(false);
         }
@@ -164,7 +164,7 @@ export default function LoginScreen({ navigation }: any) {
     if (isAutoLogging) {
         return (
             <SafeAreaView style={tw`flex-1 justify-center items-center bg-gray-100 dark:bg-gray-800`}>
-                <Image source={require('../assets/logo.png')} style={tw`w-24 h-24 mb-6`} resizeMode="contain" />
+                <Text style={tw`text-4xl font-black text-gray-900 dark:text-white tracking-tight mb-6`}>KasirPOS</Text>
                 <ActivityIndicator size="large" color={tw.color('blue-600')} />
                 <Text style={tw`text-gray-500 dark:text-gray-400 mt-4 font-bold text-sm`}>Memuat sesi...</Text>
             </SafeAreaView>
@@ -174,8 +174,7 @@ export default function LoginScreen({ navigation }: any) {
     return (
         <SafeAreaView style={tw`flex-1 justify-center items-center bg-gray-100 dark:bg-gray-800 p-6`}>
             <View style={tw`items-center mb-8`}>
-                <Image source={require('../assets/logo.png')} style={tw`w-24 h-24 mb-4`} resizeMode="contain" />
-                <Text style={tw`text-4xl font-black text-center text-gray-900 dark:text-white tracking-tight`}>LitePOS</Text>
+                <Text style={tw`text-4xl font-black text-center text-gray-900 dark:text-white tracking-tight`}>KasirPOS</Text>
                 <Text style={tw`text-sm font-bold text-center text-gray-500 dark:text-gray-400 mt-1`}>Sistem Point of Sale</Text>
             </View>
 

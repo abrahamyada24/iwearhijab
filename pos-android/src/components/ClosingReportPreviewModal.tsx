@@ -41,7 +41,7 @@ type Props = {
     summary: ReportSummary;
     bestsellers: Bestseller[];
     expenseTotal: number;
-    showLitePosBranding?: boolean;
+    showKasirPosBranding?: boolean;
 };
 
 const formatRp = (value: number) => `Rp ${(Math.round(value) || 0).toLocaleString('id-ID')}`;
@@ -89,7 +89,7 @@ export default function ClosingReportPreviewModal({
     summary,
     bestsellers,
     expenseTotal,
-    showLitePosBranding = true,
+    showKasirPosBranding = true,
 }: Props) {
     const receiptRef = useRef<any>(null);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -193,9 +193,9 @@ export default function ClosingReportPreviewModal({
 
                                 <Text style={tw`text-center font-mono text-[9px] text-gray-500`}>AKHIR LAPORAN</Text>
                                 <Text style={tw`mt-1 text-center font-mono text-[9px] text-gray-500`}>Dicetak oleh: {printedBy}</Text>
-                                {showLitePosBranding && (
+                                {showKasirPosBranding && (
                                     <View style={tw`mt-4 border-t border-gray-100 pt-3`}>
-                                        <Text style={tw`text-center font-mono text-[8px] text-gray-400`}>Powered by LitePOS</Text>
+                                        <Text style={tw`text-center font-mono text-[8px] text-gray-400`}>Powered by KasirPOS</Text>
                                     </View>
                                 )}
                             </View>

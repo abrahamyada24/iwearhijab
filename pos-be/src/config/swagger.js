@@ -4,7 +4,7 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'LitePOS API Documentation',
+      title: 'KasirPOS API Documentation',
       version: '1.0.0',
       description: 'Dokumentasi lengkap API untuk Backend POS System (Node.js, Express, Prisma)',
       contact: {
@@ -13,7 +13,7 @@ const options = {
     },
     servers: [
       {
-        url: 'http://localhost:5000',
+        url: 'http://localhost:5100',
         description: 'Development Server',
       },
     ],

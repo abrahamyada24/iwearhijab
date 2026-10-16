@@ -1,0 +1,9 @@
+{
+  "name": "kasirpos",
+  "private": true,
+  "scripts": {
+    "setup:local": "node scripts/setup-kasirpos-local.cjs",
+    "check:branding": "node scripts/check-kasirpos-branding.cjs",
+    "check:deployment": "node scripts/check-kasirpos-deployment.cjs"
+  }
+}

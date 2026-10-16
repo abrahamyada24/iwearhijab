@@ -13,7 +13,7 @@ import { useStore } from '../store/useStore';
 import { showAlert } from '../utils/swal';
 import { getPosPendingTransactions } from '../utils/savedTransactions';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, badge, onNavigate }) => {
   const pathname = usePathname();
@@ -153,12 +153,9 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
         <div className="h-full flex flex-col">
           {/* Brand Header - Identik dengan Header Kasir */}
           <Link href="/" className="h-16 lg:h-20 flex items-center px-6 border-b border-gray-100 flex-shrink-0" title="Kembali ke dashboard">
-            <div className="w-8 h-8 lg:w-10 lg:h-10 flex items-center justify-center flex-shrink-0 mr-3">
-              <img src="/icon.png" alt="Logo Warna Warni" className="w-full h-full object-contain" />
-            </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">{settings?.storeName || 'Warna Warni'}</h1>
-              <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">Retail Suite</p>
+              <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">{settings?.storeName || 'KasirPOS'}</h1>
+              <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">KasirPOS · Retail Suite</p>
             </div>
           </Link>
 

@@ -4,7 +4,6 @@ import { View, Text, TouchableOpacity, ScrollView, Alert, Image, PermissionsAndr
 import tw, { useAppColorScheme } from 'twrnc';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useStore } from '../store/useStore';
-import { RECEIPT_LOGO_BASE64 } from '../assets/receiptLogoBase64';
 import RNFS from 'react-native-fs';
 import { getPaidAmount, getPaymentStatusLabel, getRemainingAmount } from '../utils/preOrderPayment';
 import { connectConfiguredPrinter } from '../utils/printerConnection';
@@ -17,13 +16,11 @@ import {
     RECEIPT_LOGO_INNER_WIDTH,
     resolveReceiptLogoUri,
 } from '../utils/receiptLogo';
-import { shouldShowLitePosBranding } from '../utils/receiptBranding';
+import { shouldShowKasirPosBranding } from '../utils/receiptBranding';
 import { getPaymentTypeLabel } from '../utils/paymentLabels';
 import { getCartItemEffectiveOriginalUnitPrice, getCartItemEffectiveUnitPrice } from '../utils/cartPricing';
 import { getDBConnection } from '../database/db';
 
-// Logo LitePOS permanen - tidak perlu setting
-const LITEPOS_LOGO = require('../assets/logo.png');
 const { WhatsAppReceiptShare } = NativeModules;
 
 export default function ReceiptPreviewScreen({ route, navigation }: any) {
@@ -37,7 +34,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
     const viewShotRef = useRef<any>(null);
     const logoShotRef = useRef<any>(null);
     const receiptLogoUri = resolveReceiptLogoUri(settings.storeLogo, settings.apiBaseUrl);
-    const showLitePosBranding = shouldShowLitePosBranding(settings);
+    const showKasirPosBranding = shouldShowKasirPosBranding(settings);
     const kitchenPrintEnabled = settings.enableKitchenPrint === true || String(settings.enableKitchenPrint) === 'true';
 
     const paymentStatusLabel = getPaymentStatusLabel(receiptData.paymentStatus);
@@ -128,7 +125,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
         let text = '';
 
         // Header â€” store name and contact
-        const storeName = settings.storeName || 'LitePOS';
+        const storeName = settings.storeName || 'KasirPOS';
         text += center(storeName, WIDTH) + '\n';
         if (settings.storeAddress) {
             const addressLines = wrapText(settings.storeAddress, WIDTH);
@@ -239,25 +236,25 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
         } else {
             text += center('Terima kasih atas kunjungan Anda', WIDTH) + '\n';
         }
-        if (showLitePosBranding) {
-            text += center('Powered by LitePOS', WIDTH) + '\n';
+        if (showKasirPosBranding) {
+            text += center('Powered by KasirPOS', WIDTH) + '\n';
         }
         text += '\n\n\n';
 
         return text;
     };
 
-    const getPrintableLogoBase64 = async (): Promise<string> => {
+    const getPrintableLogoBase64 = async (): Promise<string | null> => {
         if (settings.storeLogo && logoShotRef.current?.capture) {
             try {
                 const uri = await logoShotRef.current.capture();
                 return await RNFS.readFile(uri.replace('file://', ''), 'base64');
             } catch (logoErr) {
-                console.log('Logo capture failed, using default logo:', logoErr);
+                console.log('Logo toko gagal dimuat; lanjut cetak teks:', logoErr);
             }
         }
 
-        return RECEIPT_LOGO_BASE64;
+        return null;
     };
 
     const normalizeWhatsAppPhone = (input: string) => {
@@ -279,7 +276,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
         });
         const pointsBalance = Math.max(0, Number(receiptData.customerPoints ?? receiptData.pointsBalanceAfter ?? 0));
         return [
-            `Struk Transaksi ${settings.storeName || 'Cozi Koffi'}`,
+            `Struk Transaksi ${settings.storeName || 'KasirPOS'}`,
             `No: ${receiptData.invoiceNumber}`,
             `Status pembayaran: ${String(receiptData.paymentStatus || 'PAID').toUpperCase() === 'PAID' ? 'LUNAS' : paymentStatusLabel}.`,
             `Tanggal Transaksi : ${transactionDate}`,
@@ -351,8 +348,10 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
             if (settings.showLogoOnReceipt === true || String(settings.showLogoOnReceipt) === 'true') {
                 try {
                     const logoToPrint = await getPrintableLogoBase64();
-                    await printerClass.printImageBase64(logoToPrint, getReceiptLogoPrintOptions());
-                    await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+                    if (logoToPrint) {
+                        await printerClass.printImageBase64(logoToPrint, getReceiptLogoPrintOptions());
+                        await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+                    }
                 } catch (logoErr) {
                     console.log('Logo print failed:', logoErr);
                 }
@@ -454,7 +453,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
                             </View>
                         ) : null}
                         
-                        <Text style={tw`text-center font-mono text-xs font-bold text-black mb-1`}>{settings.storeName || 'LitePOS'}</Text>
+                        <Text style={tw`text-center font-mono text-xs font-bold text-black mb-1`}>{settings.storeName || 'KasirPOS'}</Text>
                         {settings.storeAddress ? <Text style={tw`text-center font-mono text-[10px] text-black`}>{settings.storeAddress}</Text> : null}
                         {settings.storePhone ? <Text style={tw`text-center font-mono text-[10px] text-black mb-2`}>Telp: {settings.storePhone}</Text> : null}
                         
@@ -610,8 +609,8 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
                         <Text style={tw`text-center font-mono text-[10px] text-black`}>
                             {settings.receiptFooter || 'Terima kasih atas kunjungan Anda'}
                         </Text>
-                        {showLitePosBranding && (
-                            <Text style={tw`text-center font-mono text-[10px] text-black mt-1`}>Powered by LitePOS</Text>
+                        {showKasirPosBranding && (
+                            <Text style={tw`text-center font-mono text-[10px] text-black mt-1`}>Powered by KasirPOS</Text>
                         )}
                         
                     </View>

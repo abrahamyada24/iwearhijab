@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { getCartItemLineTotal } from '../utils/cartPricing';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export const useStore = create(
   persist(
@@ -40,7 +40,7 @@ export const useStore = create(
           if (data.success) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            localStorage.setItem('litepos_last_activity', String(Date.now()));
+            localStorage.setItem('kasirpos_last_activity', String(Date.now()));
             set({
               user: data.user,
               stores: data.user?.stores || [],
@@ -76,7 +76,7 @@ export const useStore = create(
           const stores = data.user?.stores || [];
           localStorage.removeItem('token');
           localStorage.removeItem('user');
-          localStorage.setItem('litepos_last_activity', String(Date.now()));
+          localStorage.setItem('kasirpos_last_activity', String(Date.now()));
           set({
             user: data.user,
             stores,
@@ -106,7 +106,7 @@ export const useStore = create(
         localStorage.removeItem('pos-storage');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        localStorage.removeItem('litepos_last_activity');
+        localStorage.removeItem('kasirpos_last_activity');
       },
 
       hydrateSession: async () => {
@@ -398,7 +398,7 @@ export const useStore = create(
 
     }),
     {
-      name: 'pos-storage',
+      name: 'kasirpos-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user: state.user,

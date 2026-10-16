@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const rawBackendUrl = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const rawBackendUrl = process.env.API_PROXY_TARGET || 'http://127.0.0.1:5100';
 const backendUrl = rawBackendUrl.replace(/\/api\/?$/i, '').replace(/\/+$/, '');
 const backendOrigin = (() => {
   try {

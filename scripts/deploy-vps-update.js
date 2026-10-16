@@ -10,7 +10,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const repoRoot = path.resolve(__dirname, '..');
 const backendDir = path.join(repoRoot, 'pos-be');
 const envPath = path.join(backendDir, '.env');
-const requiredOrigin = 'https://lite-pos-warnawarni.vercel.app';
+const requiredOrigin = 'https://kasirpos.example';
 
 function fail(message) {
   console.error(`\nDEPLOY GAGAL: ${message}`);
@@ -216,7 +216,7 @@ async function waitForHealth() {
   let lastError = 'belum merespons';
   for (let attempt = 1; attempt <= 15; attempt += 1) {
     try {
-      const response = await requestStatus('http://127.0.0.1:5000/api/health');
+      const response = await requestStatus('http://127.0.0.1:5100/api/health');
       if (response.status === 200) {
         console.log(`Health check backend berhasil: HTTP ${response.status}`);
         return;
@@ -231,7 +231,7 @@ async function waitForHealth() {
 }
 
 async function verifyLicenseRoute() {
-  const response = await requestStatus('http://127.0.0.1:5000/api/license/status');
+  const response = await requestStatus('http://127.0.0.1:5100/api/license/status');
   if (response.status === 404 || response.status >= 500) {
     fail(`Endpoint lisensi bermasalah: HTTP ${response.status}`);
   }
@@ -239,7 +239,7 @@ async function verifyLicenseRoute() {
 }
 
 async function main() {
-  console.log('=== LitePOS Warna Warni: deployment backend ===');
+  console.log('=== KasirPOS: deployment backend ===');
   if (!commandSucceeds('node', ['--version'])) fail('Node.js tidak tersedia.');
   if (!commandSucceeds('npm', ['--version'])) fail('npm tidak tersedia.');
   if (!commandSucceeds('pm2', ['--version'])) fail('PM2 tidak tersedia.');
@@ -252,7 +252,7 @@ async function main() {
   if (!databaseUrl) fail('DATABASE_URL kosong; backup tidak dapat dibuat.');
 
   const stamp = timestamp();
-  const backupDir = path.join(os.homedir(), 'litepos-backup');
+  const backupDir = path.join(os.homedir(), 'kasirpos-backup');
   fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
 
   const databaseBackup = await createDatabaseBackup(databaseUrl, backupDir, stamp);
@@ -267,15 +267,15 @@ async function main() {
   let processName = null;
   if (commandSucceeds('pm2', ['describe', 'pos-backend'], backendDir)) {
     processName = 'pos-backend';
-  } else if (commandSucceeds('pm2', ['describe', 'litepos-api'], backendDir)) {
-    processName = 'litepos-api';
+  } else if (commandSucceeds('pm2', ['describe', 'kasirpos-api'], backendDir)) {
+    processName = 'kasirpos-api';
   }
 
   if (processName) {
     run('pm2', ['reload', processName, '--update-env'], { cwd: backendDir });
   } else {
     run('pm2', ['start', 'ecosystem.config.cjs'], { cwd: backendDir });
-    processName = 'litepos-api';
+    processName = 'kasirpos-api';
   }
   run('pm2', ['save'], { cwd: backendDir });
 

@@ -89,7 +89,7 @@ android {
         // Identitas baru untuk rilis demo publik. Versi uji lama memakai
         // com.posandroid dengan debug key sehingga tidak dapat diperbarui
         // menggunakan release key resmi.
-        applicationId "com.litepos.demo"
+        applicationId "com.kasirpos.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 11

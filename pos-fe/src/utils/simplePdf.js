@@ -47,7 +47,7 @@ export const buildSimplePdf = (inputLines) => {
     objects[contentId] = `<< /Length ${commands.length} >>\nstream\n${commands}\nendstream`;
   });
 
-  let pdf = '%PDF-1.4\n% LitePOS Warna Warni\n';
+  let pdf = '%PDF-1.4\n% KasirPOS\n';
   const offsets = [0];
   for (let id = 1; id < objects.length; id += 1) {
     offsets[id] = pdf.length;

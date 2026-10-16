@@ -15,7 +15,6 @@ const { BLEPrinter, USBPrinter } = PrinterModule as any;
 import RNFS from 'react-native-fs';
 import { pick, types } from '@react-native-documents/picker';
 import { requestPrinterPermissions } from '../utils/permissions';
-import { RECEIPT_LOGO_BASE64 } from '../assets/receiptLogoBase64';
 import ViewShot from 'react-native-view-shot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -113,7 +112,7 @@ export default function SettingsScreen({ navigation }: any) {
         Clipboard.setString(licenseNumber);
         Alert.alert('Nomor Lisensi Disalin', `${licenseNumber} sudah disalin.`);
     };
-    const [storeName, setStoreName] = useState<string>(settings?.storeName || 'LitePOS');
+    const [storeName, setStoreName] = useState<string>(settings?.storeName || 'KasirPOS');
     const [storeAddress, setStoreAddress] = useState<string>(settings?.storeAddress || '');
     const [storePhone, setStorePhone] = useState<string>(settings?.storePhone || '');
     const [showImages, setShowImages] = useState<boolean>(settings?.showImages ?? true);
@@ -330,7 +329,7 @@ export default function SettingsScreen({ navigation }: any) {
             const normalizedApiBaseUrl = await persistApiBaseUrl(rawSettings.apiBaseUrl || await getApiBaseUrl());
             const finalSettings = {
                 ...settings,
-                storeName: rawSettings.storeName || 'LitePOS',
+                storeName: rawSettings.storeName || 'KasirPOS',
                 storeAddress: rawSettings.storeAddress || '',
                 storePhone: rawSettings.storePhone || '',
                 storeLogo: rawSettings.storeLogo || null,
@@ -591,17 +590,17 @@ export default function SettingsScreen({ navigation }: any) {
     };
 
     // ── Test Print ───────────────────────────────────────────────────────────
-    const getPrintableLogoBase64 = async (): Promise<string> => {
+    const getPrintableLogoBase64 = async (): Promise<string | null> => {
         if (storeLogo && logoShotRef.current?.capture) {
             try {
                 const uri = await logoShotRef.current.capture();
                 return await RNFS.readFile(uri.replace('file://', ''), 'base64');
             } catch (logoErr) {
-                console.warn('Logo capture failed, using default logo:', logoErr);
+                console.warn('Logo toko gagal dimuat; lanjut cetak teks:', logoErr);
             }
         }
 
-        return RECEIPT_LOGO_BASE64;
+        return null;
     };
 
     const handleTestPrint = async () => {
@@ -620,8 +619,10 @@ export default function SettingsScreen({ navigation }: any) {
             if (showLogoOnReceipt === true || String(showLogoOnReceipt) === 'true') {
                 try {
                     const logoToPrint = await getPrintableLogoBase64();
-                    await printerClass.printImageBase64(logoToPrint, getReceiptLogoPrintOptions());
-                    await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+                    if (logoToPrint) {
+                        await printerClass.printImageBase64(logoToPrint, getReceiptLogoPrintOptions());
+                        await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+                    }
                 } catch (logoErr) {
                     console.warn('Logo print failed (lanjut cetak teks):', logoErr);
                 }
@@ -630,7 +631,7 @@ export default function SettingsScreen({ navigation }: any) {
             // Print test receipt text
             const LINE = '--------------------------------\n';
             const WIDTH = 32;
-            const storeNameForPrint = settings.storeName || 'LitePOS';
+            const storeNameForPrint = settings.storeName || 'KasirPOS';
             let text = '';
             text += center(storeNameForPrint, WIDTH) + '\n';
             if (settings.storeAddress) {
@@ -754,7 +755,7 @@ export default function SettingsScreen({ navigation }: any) {
                 return arr;
             };
             const backupData = {
-                version: 1, createdAt: new Date().toISOString(), appName: 'LitePOS',
+                version: 1, createdAt: new Date().toISOString(), appName: 'KasirPOS',
                 data: {
                     settings: await fetchAll('SELECT * FROM settings'),
                     categories: await fetchAll('SELECT * FROM categories'),
@@ -771,7 +772,7 @@ export default function SettingsScreen({ navigation }: any) {
             };
             const jsonStr = JSON.stringify(backupData, null, 2);
             const dateStr = new Date().toISOString().split('T')[0];
-            const fileName = `Backup_LitePOS_${dateStr}.json`;
+            const fileName = `Backup_KasirPOS_${dateStr}.json`;
             const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
             await RNFS.writeFile(filePath, jsonStr, 'utf8');
             Alert.alert('Backup Berhasil', `File backup tersimpan di:\nFolder Download → ${fileName}`);
@@ -1604,11 +1605,11 @@ export default function SettingsScreen({ navigation }: any) {
                 {/* ── TENTANG APLIKASI ──────────────────────────────────────────── */}
                 <SectionItem
                     icon="information-outline" iconColor={tw.color('gray-500')}
-                    label="Tentang Aplikasi" sublabel="LitePOS v3.1.0"
+                    label="Tentang Aplikasi" sublabel="KasirPOS v3.1.0"
                     isOpen={openSection === 'about'} onPress={() => toggleSection('about')}
                 >
                     <View style={tw`pt-4 items-center`}>
-                        <Text style={tw`text-2xl font-black text-gray-800 dark:text-gray-100 mb-1`}>LitePOS</Text>
+                        <Text style={tw`text-2xl font-black text-gray-800 dark:text-gray-100 mb-1`}>KasirPOS</Text>
                         <Text style={tw`text-gray-500 text-sm mb-3`}>Versi 3.1.0</Text>
                         <Text style={tw`text-gray-400 text-xs text-center mb-5`}>
                             Aplikasi kasir & manajemen bisnis untuk UMKM Indonesia.
@@ -1616,7 +1617,7 @@ export default function SettingsScreen({ navigation }: any) {
 
                         <TouchableOpacity
                             style={tw`bg-green-500 w-full py-3.5 rounded-2xl flex-row items-center justify-center mb-3`}
-                            onPress={() => Linking.openURL('https://wa.me/6285156492409?text=Halo%20LitePOS!%20Saya%20ingin%20memberikan%20kritik%20%26%20saran%20untuk%20aplikasi%20ini.')}
+                            onPress={() => Linking.openURL('https://wa.me/6285156492409?text=Halo%20KasirPOS!%20Saya%20ingin%20memberikan%20kritik%20%26%20saran%20untuk%20aplikasi%20ini.')}
                         >
                             <Icon name="message-outline" size={18} color="white" style={tw`mr-2`} />
                             <Text style={tw`text-white font-bold text-sm`}>Kritik & Saran</Text>
@@ -1624,7 +1625,7 @@ export default function SettingsScreen({ navigation }: any) {
 
                         <TouchableOpacity
                             style={tw`bg-green-600 w-full py-3.5 rounded-2xl flex-row items-center justify-center mb-3`}
-                            onPress={() => Linking.openURL('https://wa.me/6285156492409?text=Halo%20LitePOS!%20Saya%20tertarik%20untuk%20request%20tambah%20fitur%20baru.')}
+                            onPress={() => Linking.openURL('https://wa.me/6285156492409?text=Halo%20KasirPOS!%20Saya%20tertarik%20untuk%20request%20tambah%20fitur%20baru.')}
                         >
                             <Icon name="rocket-launch-outline" size={18} color="white" style={tw`mr-2`} />
                             <Text style={tw`text-white font-bold text-sm`}>Request Tambah Fitur</Text>

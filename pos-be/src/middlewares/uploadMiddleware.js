@@ -36,7 +36,7 @@ const cloudinaryStorage = {
     _handleFile(req, file, cb) {
         const publicId = `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1E9)}`;
         const uploadStream = cloudinary.uploader.upload_stream({
-            folder: `litepos-demo/store-${req.storeId || 'public'}`,
+            folder: `${process.env.CLOUDINARY_FOLDER || 'kasirpos'}/store-${req.storeId || 'public'}`,
             public_id: publicId,
             resource_type: 'image',
             allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],

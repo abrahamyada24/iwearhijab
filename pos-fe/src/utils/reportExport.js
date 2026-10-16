@@ -324,8 +324,8 @@ export async function createReportPdf(report, { storeName, periodLabel }) {
 
   pdf.setTitle(`Laporan ${pdfSafeText(report.title)} - ${safeStoreName}`);
   pdf.setSubject(pdfSafeText(periodLabel));
-  pdf.setCreator("LitePOS Warna Warni");
-  pdf.setProducer("LitePOS Warna Warni");
+  pdf.setCreator("KasirPOS");
+  pdf.setProducer("KasirPOS");
   pdf.setCreationDate(new Date());
 
   const columnWidths = getColumnWidths(report, tableWidth);

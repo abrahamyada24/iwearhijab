@@ -4,9 +4,9 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 const requiredSeedPasswords = [
-  ['SEED_OWNER_PASSWORD', 'owner.demo@litepos.local', 'Owner Demo', 'owner-demo', 'OWNER'],
-  ['SEED_ADMIN_PASSWORD', 'admin.demo@litepos.local', 'Admin Demo', 'admin-demo', 'ADMIN'],
-  ['SEED_CASHIER_PASSWORD', 'kasir.demo@litepos.local', 'Kasir Demo', 'kasir-demo', 'CASHIER'],
+  ['SEED_OWNER_PASSWORD', 'owner.demo@kasirpos.local', 'Owner Demo', 'owner-demo', 'OWNER'],
+  ['SEED_ADMIN_PASSWORD', 'admin.demo@kasirpos.local', 'Admin Demo', 'admin-demo', 'ADMIN'],
+  ['SEED_CASHIER_PASSWORD', 'kasir.demo@kasirpos.local', 'Kasir Demo', 'kasir-demo', 'CASHIER'],
 ];
 
 const addDays = (date, days) => new Date(date.getTime() + days * 86400000);

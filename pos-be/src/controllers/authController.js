@@ -27,7 +27,7 @@ const { createTrialLicenseData } = require('../services/licenseService');
 const { getUploadedFileUrl } = require('../utils/uploadedFileUrl');
 
 const PASSWORD_HASH_ROUNDS = 12;
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync('litepos-invalid-password-placeholder', PASSWORD_HASH_ROUNDS);
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('kasirpos-invalid-password-placeholder', PASSWORD_HASH_ROUNDS);
 
 const clearSessionCookie = (res) => res.clearCookie(SESSION_COOKIE_NAME, {
   httpOnly: true,

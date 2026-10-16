@@ -5,7 +5,7 @@ import { useStore } from '@/store/useStore';
 import CurrencyInput from '@/components/CurrencyInput';
 import { formatNumberId } from '@/utils/currency';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function PackageModal({ isOpen, onClose, onSave, initialData }) {
     const { token } = useStore();

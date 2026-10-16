@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { showAlert } from "@/utils/swal";
 
-const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const API_URL = RAW_API_URL.replace(/\/api$/, "").replace(/\/$/, "");
 const ALL_CATEGORIES = "ALL";
 

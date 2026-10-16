@@ -21,7 +21,7 @@ export const hasActivePremiumLicense = (
     return Number.isFinite(expiresAt) && expiresAt > now;
 };
 
-export const shouldShowLitePosBranding = (
+export const shouldShowKasirPosBranding = (
     settings: ReceiptBrandingSettings,
     now = Date.now(),
 ) => !hasActivePremiumLicense(settings, now);

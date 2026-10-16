@@ -50,7 +50,7 @@ export default function LockScreen({ navigation }: any) {
 
     const handleActivate = async () => {
         if (!activationCode.trim()) {
-            Alert.alert('Kode Belum Diisi', 'Masukkan kode aktivasi dari pengelola LitePOS.');
+            Alert.alert('Kode Belum Diisi', 'Masukkan kode aktivasi dari pengelola KasirPOS.');
             return;
         }
         setIsLoading(true);

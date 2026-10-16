@@ -19,10 +19,10 @@ export default function AdminLayout({ children }) {
 
     applySavedTheme();
     systemTheme.addEventListener('change', applySavedTheme);
-    window.addEventListener('litepos-device-preferences', applySavedTheme);
+    window.addEventListener('kasirpos-device-preferences', applySavedTheme);
     return () => {
       systemTheme.removeEventListener('change', applySavedTheme);
-      window.removeEventListener('litepos-device-preferences', applySavedTheme);
+      window.removeEventListener('kasirpos-device-preferences', applySavedTheme);
     };
   }, []);
 
@@ -57,8 +57,7 @@ export default function AdminLayout({ children }) {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="lg:hidden p-4 bg-white border-b border-gray-200 flex items-center justify-between">
              <Link href="/" className="flex items-center gap-2 font-bold text-gray-800">
-               <img src="/icon.png" alt="LitePOS Warna Warni" className="w-8 h-8 object-contain" />
-               LitePOS
+               KasirPOS
              </Link>
              <button 
                 onClick={() => setIsMobileOpen(true)}

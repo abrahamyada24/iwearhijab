@@ -5,7 +5,7 @@ import { AlertTriangle, BadgeCheck, CalendarDays, CheckCircle2, Clock3, Copy, Ke
 import { useStore } from '@/store/useStore';
 import { showAlert } from '@/utils/swal';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const baseUrl = API_URL.endsWith('/api') ? API_URL.replace(/\/api$/, '') : API_URL;
 
 const formatDate = (value) => value
@@ -34,7 +34,7 @@ export default function LicensePage() {
   useEffect(() => { refresh(); }, []);
 
   const activate = async () => {
-    if (!activationCode.trim()) return showAlert.warning('Kode belum diisi', 'Masukkan kode aktivasi dari pengelola LitePOS.');
+    if (!activationCode.trim()) return showAlert.warning('Kode belum diisi', 'Masukkan kode aktivasi dari pengelola KasirPOS.');
     setActivating(true);
     try {
       const response = await fetch(`${baseUrl}/api/license/activate`, {

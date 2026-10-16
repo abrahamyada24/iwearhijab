@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "LitePOS Dashboard",
+  title: "KasirPOS Dashboard",
   description: "Point of Sales Application",
 };
 
