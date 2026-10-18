@@ -347,7 +347,7 @@ export default function SettingsPage() {
         }
       `}</style>
 
-      <div id="settings-printer-test" className="hidden text-[10px] leading-tight">
+      <div id="settings-printer-test" data-print-surface className="hidden text-[10px] leading-tight">
         {printableLogoUrl && (
           <img className="receipt-logo" src={printableLogoUrl} alt="Logo toko" />
         )}

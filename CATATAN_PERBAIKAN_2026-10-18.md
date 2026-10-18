@@ -11,6 +11,13 @@
 - Transaksi member menyimpan snapshot poin didapat, poin ditukar, dan saldo setelah transaksi. Snapshot dipakai untuk struk/cetak ulang dan sinkronisasi Android. Retry/webhook tidak boleh menambah poin dua kali. Retur membalik perubahan poin satu kali. Transaksi lama tanpa snapshot tidak direkonstruksi menggunakan aturan poin saat ini.
 - Email owner bertitik diterima tanpa membuang titik atau bagian `+...`. Pendaftaran dan sesi pertama berada dalam satu transaksi database. Timeout, konfigurasi login tidak lengkap, dan schema yang belum sesuai mendapatkan pesan/kode error yang lebih jelas. Benturan username dibedakan dari email terdaftar.
 - Android diarahkan ke backend KasirPOS baru: `https://kasirpos-api.vercel.app`.
+- Dark mode web: kartu Pengaturan memakai permukaan gelap dengan label/form yang terbaca; badge, grafik, dan bayangan tombol mengikuti palet gelap. Menu pintas dashboard tersusun 2×2 pada tablet dan empat kolom pada desktop lebar. Tema perangkat diterapkan juga ketika kasir dibuka langsung, setelah reload, serta saat preferensi berubah di tab lain. Kertas preview/cetak struk tetap putih dengan teks hitam, termasuk cetak ulang dari riwayat.
+
+### Pemeriksaan tambahan dark mode
+
+- Build static export frontend berhasil untuk 26 halaman; 3 tes frontend lulus.
+- Browser fixture lokal diperiksa pada lebar 390, 944, dan 1280 piksel: formulir Pengaturan, dashboard/grafik, mode terang, kasir setelah reload, pembayaran, dan preview struk. Tidak ada error console pada sesi pemeriksaan akhir.
+- Seluruh transaksi pemeriksaan tampilan memakai fixture dalam memori lokal; database produksi tidak diubah. Perbaikan tema ini belum di-commit atau di-push. Setelah commit, push ke repo KasirPOS dan tunggu deployment Cloudflare Pages berhasil, lalu hard refresh.
 
 ## Database
 

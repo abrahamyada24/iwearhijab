@@ -172,6 +172,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                 <div className="flex-1 overflow-y-auto bg-gray-100 p-5">
                     <div
                         id="pos-receipt-print"
+                        data-print-surface
                         ref={receiptRef}
                         className="mx-auto bg-white font-mono text-[10px] leading-tight text-black shadow-md"
                         style={{
