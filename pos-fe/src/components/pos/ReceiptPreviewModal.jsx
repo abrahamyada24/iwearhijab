@@ -246,6 +246,14 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
 
                         <div className="my-2 border-t border-dashed border-black" />
                         <div className="whitespace-pre-wrap text-center">
+                            {transaction.customerId && transaction.pointsBalanceAfter != null && (
+                                <div className="mb-2 space-y-0.5 text-left">
+                                    <div className="flex justify-between"><span>Poin didapat</span><span>+{numberFormat(transaction.pointsEarned)}</span></div>
+                                    <div className="flex justify-between"><span>Poin ditukar</span><span>{numberFormat(transaction.pointsRedeemed)}</span></div>
+                                    <div className="flex justify-between font-bold"><span>Saldo poin setelah transaksi</span><span>{numberFormat(transaction.pointsBalanceAfter)}</span></div>
+                                    {transaction.loyaltyReversed && <div>Poin transaksi sudah dibatalkan/ diretur.</div>}
+                                </div>
+                            )}
                             {store?.receiptFooter || 'Terima kasih atas kunjungan Anda'}
                         </div>
                         {showKasirPosBranding && (

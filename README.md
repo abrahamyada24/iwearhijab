@@ -7,6 +7,7 @@ Aplikasi kasir web dan Android dengan fitur yang sama seperti versi asal: produk
 - [Panduan deployment lengkap](PANDUAN_DEPLOYMENT.md): database TiDB baru, Vercel, Cloudflare Pages, dan build APK.
 - [Panduan pengguna](PANDUAN_PENGGUNA.md): pendaftaran usaha, login, pemasangan Android, dan penggunaan.
 - [Hasil pengujian](HASIL_PENGUJIAN.md): pemeriksaan yang lulus dan bagian yang masih menunggu deployment/build native.
+- [Perbaikan 18 Oktober 2026](CATATAN_PERBAIKAN_2026-10-18.md): perbaikan kasir, poin, pendaftaran, langkah commit/deploy, dan konfigurasi super admin.
 
 Repository tujuan: **abrahamyada24/webandroid-pos**. Semua project hosting dan database KasirPOS harus terpisah dari LitePOS Demo.
 
@@ -37,7 +38,7 @@ Script setup menyimpan cadangan konfigurasi lama di `.demo-runtime`, yang diabai
 
 ## Sebelum membagikan Android
 
-Alamat backend di `pos-android/src/config/deployment.ts` masih berupa domain `.example` sampai diganti dengan origin Vercel KasirPOS yang sebenarnya. Jalankan `npm run check:deployment` setelah mengisinya. APK memerlukan kunci rilis KasirPOS dan pengujian perangkat.
+Alamat backend di `pos-android/src/config/deployment.ts` sudah mengarah ke `https://kasirpos-api.vercel.app`. Jalankan `npm run check:deployment` sebelum distribusi. APK memerlukan kunci rilis KasirPOS, build baru, dan pengujian perangkat.
 
 Frontend menggunakan `/api` pada domainnya sendiri. Cloudflare harus memiliki `API_PROXY_TARGET` yang mengarah ke Vercel **KasirPOS**. Ketiga kredensial Cloudinary diperlukan untuk upload pada Vercel.
 

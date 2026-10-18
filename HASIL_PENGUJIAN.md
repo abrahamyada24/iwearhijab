@@ -1,5 +1,7 @@
 # Hasil pemeriksaan perubahan KasirPOS
 
+Hasil terbaru tersedia di [catatan perbaikan 18 Oktober 2026](CATATAN_PERBAIKAN_2026-10-18.md). Catatan di bawah merupakan hasil tahap awal sebelum layanan KasirPOS baru selesai disiapkan.
+
 Pemeriksaan lokal pada 17 Oktober 2026 (Asia/Jakarta):
 
 | Pemeriksaan | Hasil |

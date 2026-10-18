@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import AuthGuard from "@/components/AuthGuard";
-import Link from "next/link";
+import Link, { NavigationGuardProvider } from "@/components/NavigationGuard";
 import { useStore } from "@/store/useStore";
 import { applyWebTheme, getDevicePreferences } from "@/utils/devicePreferences";
 
@@ -48,6 +48,7 @@ export default function AdminLayout({ children }) {
 
   return (
     <AuthGuard>
+      <NavigationGuardProvider>
       <div className="flex h-screen bg-gray-50">
         <Sidebar 
           isMobileOpen={isMobileOpen} 
@@ -72,6 +73,7 @@ export default function AdminLayout({ children }) {
           </main>
         </div>
       </div>
+      </NavigationGuardProvider>
     </AuthGuard>
   );
 }
