@@ -40,7 +40,7 @@ export const useStore = create(
           if (data.success) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            localStorage.setItem('kasirpos_last_activity', String(Date.now()));
+            localStorage.setItem('iwear_last_activity', String(Date.now()));
             set({
               user: data.user,
               stores: data.user?.stores || [],
@@ -76,7 +76,7 @@ export const useStore = create(
           const stores = data.user?.stores || [];
           localStorage.removeItem('token');
           localStorage.removeItem('user');
-          localStorage.setItem('kasirpos_last_activity', String(Date.now()));
+          localStorage.setItem('iwear_last_activity', String(Date.now()));
           set({
             user: data.user,
             stores,
@@ -106,7 +106,7 @@ export const useStore = create(
         localStorage.removeItem('pos-storage');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        localStorage.removeItem('kasirpos_last_activity');
+        localStorage.removeItem('iwear_last_activity');
       },
 
       hydrateSession: async () => {
@@ -398,7 +398,7 @@ export const useStore = create(
 
     }),
     {
-      name: 'kasirpos-storage',
+      name: 'iwear-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user: state.user,

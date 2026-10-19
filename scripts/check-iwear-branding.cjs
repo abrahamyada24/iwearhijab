@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const problems = [];
 const roots = ['pos-fe/src', 'pos-be/src', 'pos-android/src', 'pos-android/__tests__'];
-const oldBrand = /lite\s?pos/i;
+const oldBrand = /lite\s?pos|kasirpos|warna warni|savoria bistro/i;
 function inspect(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
@@ -23,11 +23,11 @@ for (const removed of ['pos-fe/public/icon.png', 'pos-fe/public/logo.png', 'pos-
   if (fs.existsSync(path.join(root, removed))) problems.push(`Aset lama masih ada: ${removed}`);
 }
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
-assert.match(read('pos-android/android/app/build.gradle'), /applicationId "com\.kasirpos\.app"/);
-assert.match(read('pos-android/android/app/src/main/java/com/posandroid/MainActivity.kt'), /getMainComponentName\(\): String = "KasirPOS"/);
-assert.equal(JSON.parse(read('pos-android/app.json')).name, 'KasirPOS');
-assert.match(read('pos-be/src/config/auth.js'), /SESSION_COOKIE_NAME = 'kasirpos_session'/);
+assert.match(read('pos-android/android/app/build.gradle'), /applicationId "com\.iwear\.app"/);
+assert.match(read('pos-android/android/app/src/main/java/com/posandroid/MainActivity.kt'), /getMainComponentName\(\): String = "IwearHijab"/);
+assert.equal(JSON.parse(read('pos-android/app.json')).name, 'IwearHijab');
+assert.match(read('pos-be/src/config/auth.js'), /SESSION_COOKIE_NAME = 'iwear_session'/);
 if (problems.length) {
   console.error('Branding perlu diperbaiki:\n' + problems.join('\n'));
   process.exitCode = 1;
-} else console.log('Branding, aset, identitas Android, dan namespace sesi KasirPOS: OK.');
+} else console.log('Branding, aset, identitas Android, dan namespace sesi Iwearing Hijab: OK.');

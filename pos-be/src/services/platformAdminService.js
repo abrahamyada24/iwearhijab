@@ -2,8 +2,8 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { addDays, hashActivationCode } = require('./licenseService');
 
-const PLATFORM_ADMIN_AUDIENCE = 'kasirpos-platform-admin';
-const PLATFORM_ADMIN_ISSUER = 'kasirpos-api';
+const PLATFORM_ADMIN_AUDIENCE = 'iwear-platform-admin';
+const PLATFORM_ADMIN_ISSUER = 'iwear-api';
 const PLATFORM_SESSION_MS = 12 * 60 * 60 * 1000;
 const PLATFORM_IDLE_MS = 2 * 60 * 60 * 1000;
 

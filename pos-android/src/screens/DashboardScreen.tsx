@@ -486,7 +486,7 @@ export default function DashboardScreen({ navigation, route }: any) {
             );
             return;
         }
-        const storeName = settings?.storeName || 'KasirPOS';
+        const storeName = settings?.storeName || 'Iwearing Hijab';
         const dateDisplay = formatDateDisplay(selectedDate);
         const paymentMessage = getPaymentStatusMessage(order, formatRp);
         const message = encodeURIComponent(

@@ -1,0 +1,35 @@
+.iwear-auth {
+  --iwear-brand: #a8747a;
+  display: grid;
+  grid-template-columns: 53% 47%;
+  min-height: 100svh;
+  background: var(--iwear-brand);
+  color: #19283f;
+  font-family: var(--font-geist), sans-serif;
+  color-scheme: light;
+}
+.iwear-auth-brand { display: flex; align-items: center; justify-content: center; padding: 56px; background: linear-gradient(135deg, #bd9499 0%, #a8747a 100%); }
+.iwear-auth-logo { width: min(100%, 460px); height: auto; filter: brightness(0) invert(1); }
+.iwear-auth-panel { display: flex; align-items: center; justify-content: center; border-radius: 32px 0 0 32px; background: #fff; padding: 56px 40px; }
+.iwear-auth-content { width: 100%; max-width: 360px; }
+.iwear-login { width: 100%; max-width: 320px; margin: 0 auto; }
+.iwear-login h1 { text-align: center; font-size: 32px; font-weight: 750; letter-spacing: -1px; line-height: 1.2; margin: 0 0 34px; }
+.iwear-login form { display: grid; gap: 16px; }
+.iwear-login-field { display: grid; gap: 7px; }
+.iwear-login label { font-size: 13px; font-weight: 500; color: #20252e; }
+.iwear-login input { width: 100%; min-width: 0; border: 1px solid transparent; border-radius: 12px; background: #edf0fc; padding: 11px 14px; font: inherit; font-size: 14px; line-height: 20px; color: #263244; outline: none; }
+.iwear-login input:focus { border-color: #a8747a; box-shadow: 0 0 0 3px #a8747a20; }
+.iwear-password { position: relative; }
+.iwear-password input { padding-right: 48px; }
+.iwear-password button { position: absolute; right: 0; top: 0; bottom: 0; width: 44px; display: grid; place-items: center; color: #7d8595; cursor: pointer; }
+.iwear-login-submit { display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; border-radius: 10px; background: var(--iwear-brand); color: white; font-size: 14px; font-weight: 600; box-shadow: 0 5px 12px #a8747a30; cursor: pointer; transition: background 150ms; }
+.iwear-login-submit:hover { background: #96656b; }
+.iwear-login-submit:disabled { opacity: .7; cursor: wait; }
+.iwear-login button:focus-visible { outline: 3px solid #a8747a; outline-offset: 4px; }
+@media (max-width: 767px) {
+  .iwear-auth { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .iwear-auth-brand { padding: 42px 32px; }
+  .iwear-auth-logo { width: min(72vw, 300px); }
+  .iwear-auth-panel { border-radius: 28px 28px 0 0; padding: 48px 28px; }
+  .iwear-login h1 { font-size: 28px; margin-bottom: 30px; }
+}

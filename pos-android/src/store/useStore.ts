@@ -113,7 +113,7 @@ export const useStore = create<StoreState>((set, get) => ({
     tableOrderNotificationCount: 0,
     pendingOrderContext: null,
     settings: {
-        storeName: 'KasirPOS',
+        storeName: 'Iwearing Hijab',
         storeAddress: '',
         storePhone: '',
         storeLogo: null,

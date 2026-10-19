@@ -1,4 +1,4 @@
-export const DEVICE_PREFERENCES_KEY = 'kasirpos_device_preferences';
+export const DEVICE_PREFERENCES_KEY = 'iwear_device_preferences';
 
 export const DEFAULT_DEVICE_PREFERENCES = Object.freeze({
   theme: 'light',
@@ -59,7 +59,7 @@ export const saveDevicePreferences = (nextValue) => {
   });
   window.localStorage.setItem(DEVICE_PREFERENCES_KEY, JSON.stringify(preferences));
   applyWebTheme(preferences.theme);
-  window.dispatchEvent(new CustomEvent('kasirpos-device-preferences', { detail: preferences }));
+  window.dispatchEvent(new CustomEvent('iwear-device-preferences', { detail: preferences }));
   return preferences;
 };
 

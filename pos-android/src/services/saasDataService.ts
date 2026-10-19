@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { getApiBaseUrl } from './api';
 import { clearAuthSession } from './secureAuthStorage';
 
-const DEVICE_SETTINGS_KEY = '@kasirpos_saas_device_settings';
+const DEVICE_SETTINGS_KEY = '@iwear_saas_device_settings';
 
 export type SaasDeviceSettings = {
     printerAddress: string | null;
@@ -34,7 +34,7 @@ export const saveDeviceSettings = async (settings: SaasDeviceSettings) => {
 export const normalizeServerSettings = async (settings: any, loyalty: any = {}, device?: SaasDeviceSettings) => {
     const local = device || await loadDeviceSettings();
     return {
-        storeName: settings?.storeName || 'KasirPOS',
+        storeName: settings?.storeName || 'Iwearing Hijab',
         storeAddress: settings?.address || '',
         storePhone: settings?.phone || '',
         storeLogo: settings?.logoUrl || null,
@@ -70,7 +70,7 @@ const getActiveStoreName = (user: any) => {
     const activeStore = Array.isArray(user?.stores)
         ? user.stores.find((store: any) => Number(store?.id) === activeStoreId)
         : null;
-    return activeStore?.name || 'KasirPOS';
+    return activeStore?.name || 'Iwearing Hijab';
 };
 
 export const createCachedSaasBootstrap = async (user: any) => ({

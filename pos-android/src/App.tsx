@@ -328,7 +328,7 @@ function App(): React.JSX.Element {
                 const [settingsRes] = await db.executeSql('SELECT * FROM settings');
                 const rowCount = settingsRes.rows.length;
                 let loadedSettings: any = {
-                    storeName: 'KasirPOS', storeAddress: '', storePhone: '',
+                    storeName: 'Iwearing Hijab', storeAddress: '', storePhone: '',
                     storeLogo: null, enablePreOrder: false, enableShift: true, enableShiftReminder: true,
                     shiftDurationMinutes: 480, shiftReminderMinutes: 15, shiftDayCutoff: '23:50',
                     enableDineTable: false, enableTableOrder: false, enableKitchenPrint: false,
@@ -471,7 +471,7 @@ function App(): React.JSX.Element {
                         const [settingsRes] = await db.executeSql('SELECT * FROM settings');
                         const rowCount = settingsRes.rows.length;
                         let reloadedSettings: any = {
-                            storeName: 'KasirPOS', storeAddress: '', storePhone: '',
+                            storeName: 'Iwearing Hijab', storeAddress: '', storePhone: '',
                             storeLogo: null, enablePreOrder: false, enableShift: true, enableShiftReminder: true,
                             shiftDurationMinutes: 480, shiftReminderMinutes: 15, shiftDayCutoff: '23:50',
                             enableDineTable: false, enableTableOrder: false, enableKitchenPrint: false,
@@ -600,8 +600,3 @@ function App(): React.JSX.Element {
 }
 
 export default App;
-
-
-
-
-

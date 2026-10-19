@@ -34,7 +34,7 @@ export default function LicensePage() {
   useEffect(() => { refresh(); }, []);
 
   const activate = async () => {
-    if (!activationCode.trim()) return showAlert.warning('Kode belum diisi', 'Masukkan kode aktivasi dari pengelola KasirPOS.');
+    if (!activationCode.trim()) return showAlert.warning('Kode belum diisi', 'Masukkan kode aktivasi dari pengelola Iwearing Hijab.');
     setActivating(true);
     try {
       const response = await fetch(`${baseUrl}/api/license/activate`, {
@@ -111,7 +111,7 @@ export default function LicensePage() {
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-black text-gray-900">Lisensi Outlet</h1>
-        <p className="text-sm text-gray-500 mt-1">Satu lisensi Warna Warni untuk web, desktop, dan seluruh Android yang login ke outlet ini.</p>
+        <p className="text-sm text-gray-500 mt-1">Satu lisensi Iwearing Hijab untuk web, desktop, dan seluruh Android yang login ke outlet ini.</p>
       </div>
 
       <div className={`rounded-3xl border p-6 ${active ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>

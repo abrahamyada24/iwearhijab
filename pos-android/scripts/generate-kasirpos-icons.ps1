@@ -1,4 +1,4 @@
-# Ikon KasirPOS: huruf K putih pada kotak biru. Tidak memakai gambar merek lama.
+# Ikon Iwearing Hijab: huruf K putih pada kotak biru. Tidak memakai gambar merek lama.
 Add-Type -AssemblyName System.Drawing
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -45,4 +45,4 @@ foreach ($density in $densities) {
 Write-KasirPosIcon -Path (Join-Path $projectRoot 'icon.png') -Size 512
 Write-KasirPosIcon -Path (Join-Path $projectRoot 'src\assets\icon.png') -Size 512
 Write-KasirPosIcon -Path (Join-Path $projectRoot '..\pos-desktop\icon.png') -Size 512
-Write-Host 'Ikon huruf K KasirPOS selesai dibuat.'
+Write-Host 'Ikon huruf K Iwearing Hijab selesai dibuat.'

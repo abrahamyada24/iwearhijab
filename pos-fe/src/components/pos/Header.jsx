@@ -27,7 +27,7 @@ export default function Header({ search, setSearch, currentUser, shiftEnabled, a
         <header className="h-16 lg:h-20 px-4 lg:px-6 flex items-center justify-between flex-shrink-0 bg-white border-b border-gray-100 shadow-sm z-20">
             <div className="flex items-center gap-3 lg:gap-4 w-full">
                 <Link href="/" className="flex-shrink-0" title="Kembali ke dashboard">
-                    <h1 className="text-base lg:text-xl font-bold leading-none tracking-tight">KasirPOS</h1>
+                    <h1 className="text-base lg:text-xl font-bold leading-none tracking-tight">Iwearing Hijab</h1>
                     <p className="hidden lg:block text-xs text-gray-400 font-medium mt-1">POS System</p>
                 </Link>
 

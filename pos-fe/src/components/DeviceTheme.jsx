@@ -13,11 +13,11 @@ export default function DeviceTheme() {
 
     applySavedTheme();
     systemTheme.addEventListener('change', applySavedTheme);
-    window.addEventListener('kasirpos-device-preferences', applySavedTheme);
+    window.addEventListener('iwear-device-preferences', applySavedTheme);
     window.addEventListener('storage', handleStorage);
     return () => {
       systemTheme.removeEventListener('change', applySavedTheme);
-      window.removeEventListener('kasirpos-device-preferences', applySavedTheme);
+      window.removeEventListener('iwear-device-preferences', applySavedTheme);
       window.removeEventListener('storage', handleStorage);
     };
   }, []);

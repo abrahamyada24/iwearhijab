@@ -351,7 +351,7 @@ export default function SettingsPage() {
         {printableLogoUrl && (
           <img className="receipt-logo" src={printableLogoUrl} alt="Logo toko" />
         )}
-        <div className="text-center text-sm font-bold">{settings?.storeName || 'KASIRPOS'}</div>
+        <div className="text-center text-sm font-bold">{settings?.storeName || 'IWEAR'}</div>
         <div className="my-2 border-t border-dashed border-black" />
         <div>TEST PRINT — {paperWidthMm} MM</div>
         <div>Rasio logo dipertahankan otomatis</div>
@@ -660,7 +660,7 @@ export default function SettingsPage() {
                     onChange={handleChange}
                     maxLength={500}
                     rows={4}
-                    placeholder="Contoh: Terima kasih sudah berbelanja di Warna Warni Boneka"
+                    placeholder="Contoh: Terima kasih sudah berbelanja di Iwearing Hijab"
                     className="w-full resize-y rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
                 />
                 <p className="mt-1 text-right text-[10px] text-gray-400">{form.receiptFooter.length}/500</p>
@@ -879,7 +879,7 @@ export default function SettingsPage() {
       {activeTab === 'about' && (
         <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="card-base p-8 text-center">
-            <h3 className="text-2xl font-black text-gray-800">KasirPOS</h3>
+            <h3 className="text-2xl font-black text-gray-800">Iwearing Hijab</h3>
             <p className="mt-1 text-sm text-gray-500">Point of Sale untuk operasional outlet</p>
             <p className="mt-5 text-xs text-gray-400">Pengaturan tema dan printer disimpan per perangkat.</p>
           </div>

@@ -230,8 +230,8 @@ export default function KatalogPage() {
     if (phone.startsWith("0")) phone = `62${phone.slice(1)}`;
     phone = phone.replace(/\D/g, "");
     const message = product
-      ? `Halo ${settings?.storeName || "Warna Warni"}, saya tertarik dengan *${product.name}* (${formatRupiah(product.price)}). Apakah masih tersedia?`
-      : `Halo ${settings?.storeName || "Warna Warni"}, saya ingin bertanya tentang koleksi boneka yang tersedia.`;
+      ? `Halo ${settings?.storeName || "Iwearing Hijab"}, saya tertarik dengan *${product.name}* (${formatRupiah(product.price)}). Apakah masih tersedia?`
+      : `Halo ${settings?.storeName || "Iwearing Hijab"}, saya ingin bertanya tentang koleksi boneka yang tersedia.`;
 
     window.open(
       `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
@@ -282,7 +282,7 @@ export default function KatalogPage() {
     );
   }
 
-  const storeName = settings?.storeName || "Warna Warni Boneka";
+  const storeName = settings?.storeName || "Iwearing Hijab";
   const logoUrl = getImageUrl(settings?.logoUrl);
 
   return (

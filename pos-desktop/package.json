@@ -1,16 +1,16 @@
 {
   "name": "pos-desktop",
   "version": "1.3.0",
-  "description": "KasirPOS desktop client",
+  "description": "Iwearing Hijab desktop client",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win"
   },
   "build": {
-    "appId": "com.kasirpos.desktop",
-    "productName": "KasirPOS",
-    "artifactName": "KasirPOS-Setup-${version}.${ext}",
+    "appId": "com.iwear.desktop",
+    "productName": "Iwearing Hijab",
+    "artifactName": "Iwearing Hijab-Setup-${version}.${ext}",
     "win": {
       "target": "nsis",
       "icon": "icon.png"

@@ -1,13 +1,21 @@
 import "./globals.css";
+import localFont from 'next/font/local';
+
+const geist = localFont({
+  src: './fonts/Geist-Variable.woff2',
+  variable: '--font-geist',
+  weight: '100 900',
+  display: 'swap',
+});
 
 export const metadata = {
-  title: "KasirPOS Dashboard",
+  title: "Iwearing Hijab Dashboard",
   description: "Point of Sales Application",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="id">
+    <html lang="id" className={geist.variable}>
       {/* Kita biarkan body bersih (hanya antialiased).
         suppressHydrationWarning tetap dipasang untuk jaga-jaga.
       */}

@@ -266,7 +266,7 @@ exports.pushLocalData = async (req, res) => {
             if (firstSetting) {
                 await prisma.storeSetting.update({ where: { id: firstSetting.id }, data: storeSettingData });
             } else {
-                await prisma.storeSetting.create({ data: { storeName: storeSettingData.storeName || 'KasirPOS Store', ...storeSettingData } });
+                await prisma.storeSetting.create({ data: { storeName: storeSettingData.storeName || 'Iwearing Hijab Store', ...storeSettingData } });
             }
         }
 
@@ -1024,7 +1024,7 @@ exports.pushLocalData = async (req, res) => {
         }
     }
 
-    const supportsPartialSync = req.get('X-KasirPOS-Sync-Version') === '2';
+    const supportsPartialSync = req.get('X-Iwear-Sync-Version') === '2';
     if (syncWarnings.length > 0 && !supportsPartialSync) {
       return res.status(409).json({
         success: false,

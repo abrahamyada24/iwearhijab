@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const API_URL = RAW_API_URL.replace(/\/api\/?$/i, '').replace(/\/+$/, '');
-const TOKEN_KEY = 'kasirpos_platform_token';
+const TOKEN_KEY = 'iwear_platform_token';
 const rupiah = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 const dateTime = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -84,7 +84,7 @@ export default function PlatformDashboard() {
     const payload = await response.json().catch(() => ({}));
     if (response.status === 401) {
       localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem('kasirpos_platform_admin');
+      localStorage.removeItem('iwear_platform_admin');
       router.replace('/super-admin/login');
       throw new Error('Sesi berakhir. Silakan login kembali.');
     }
@@ -121,7 +121,7 @@ export default function PlatformDashboard() {
   const logout = async () => {
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* token tetap dibersihkan */ }
     localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem('kasirpos_platform_admin');
+    localStorage.removeItem('iwear_platform_admin');
     router.replace('/super-admin/login');
   };
 
@@ -197,7 +197,7 @@ export default function PlatformDashboard() {
     <Notice notice={notice} clear={() => setNotice(null)} />
     <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950 text-white">
       <div className="mx-auto flex max-w-[1500px] items-center justify-between px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-3"><div className="rounded-xl bg-blue-600 p-2"><ShieldCheck size={22} /></div><div><p className="font-black">KasirPOS Platform</p><p className="text-xs text-slate-400">Super Admin</p></div></div>
+        <div className="flex items-center gap-3"><div className="rounded-xl bg-blue-600 p-2"><ShieldCheck size={22} /></div><div><p className="font-black">Iwearing Hijab Platform</p><p className="text-xs text-slate-400">Super Admin</p></div></div>
         <div className="flex items-center gap-3"><div className="hidden text-right sm:block"><p className="text-sm font-semibold">{admin?.name}</p><p className="text-xs text-slate-400">{admin?.email}</p></div><button onClick={logout} className="rounded-xl border border-slate-700 p-2.5 hover:bg-slate-800" title="Keluar"><LogOut size={19} /></button></div>
       </div>
     </header>

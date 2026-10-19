@@ -15,11 +15,11 @@ const transporter = nodemailer.createTransport({
 });
 
 exports.sendOTP = async (email, otp) => {
-  if (!smtpConfigured) throw new Error('SMTP KasirPOS belum dikonfigurasi.');
+  if (!smtpConfigured) throw new Error('SMTP Iwearing Hijab belum dikonfigurasi.');
   const mailOptions = {
     from: process.env.SMTP_FROM,
     to: email,
-    subject: `${otp} - Autentikasi Keamanan KasirPOS`,
+    subject: `${otp} - Autentikasi Keamanan Iwearing Hijab`,
     html: `
       <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #ffffff; margin: 0; padding: 0;">
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse;">
@@ -29,7 +29,7 @@ exports.sendOTP = async (email, otp) => {
                 
                 <tr>
                   <td style="background-color: #000000; padding: 30px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 20px; letter-spacing: 4px; font-weight: 900; text-transform: uppercase;">KASIRPOS</h1>
+                    <h1 style="color: #ffffff; margin: 0; font-size: 20px; letter-spacing: 4px; font-weight: 900; text-transform: uppercase;">IWEAR</h1>
                     <p style="color: #f97316; margin: 5px 0 0 0; font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;">Enterprise Security</p>
                   </td>
                 </tr>
@@ -38,7 +38,7 @@ exports.sendOTP = async (email, otp) => {
                   <td style="padding: 50px 40px; background-color: #ffffff;">
                     <div style="text-align: center; margin-bottom: 40px;">
                       <h2 style="color: #111111; font-size: 24px; font-weight: 800; margin: 0; letter-spacing: -0.5px;">Verifikasi Identitas</h2>
-                      <p style="color: #666666; font-size: 14px; margin-top: 10px; line-height: 1.5;">Gunakan kode otentikasi di bawah ini untuk mengakses dashboard KasirPOS Anda.</p>
+                      <p style="color: #666666; font-size: 14px; margin-top: 10px; line-height: 1.5;">Gunakan kode otentikasi di bawah ini untuk mengakses dashboard Iwearing Hijab Anda.</p>
                     </div>
 
                     <div style="background-color: #f9fafb; border-radius: 20px; padding: 40px 20px; text-align: center; border: 1px solid #f3f4f6;">
@@ -60,7 +60,7 @@ exports.sendOTP = async (email, otp) => {
                 <tr>
                   <td style="padding: 30px 40px; background-color: #fafafa; border-top: 1px solid #f3f4f6; text-align: center;">
                     <p style="color: #9ca3af; font-size: 11px; margin: 0; line-height: 1.6;">
-                      &copy; 2026 KasirPOS System. All Rights Reserved.<br/>
+                      &copy; 2026 Iwearing Hijab System. All Rights Reserved.<br/>
                       Email ini dikirim secara otomatis oleh sistem keamanan internal.
                     </p>
                   </td>

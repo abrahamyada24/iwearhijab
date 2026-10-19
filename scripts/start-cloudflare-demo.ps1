@@ -6,14 +6,14 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendDirectory = Join-Path $repoRoot 'pos-be'
 $backendEnvFile = Join-Path $backendDirectory '.env'
-$runtimeDirectory = Join-Path $repoRoot '.demo-runtime\kasirpos'
+$runtimeDirectory = Join-Path $repoRoot '.demo-runtime\iwear'
 $backendPidFile = Join-Path $runtimeDirectory 'backend.pid'
 $tunnelPidFile = Join-Path $runtimeDirectory 'cloudflared.pid'
 $backendOutputLog = Join-Path $runtimeDirectory 'backend.log'
 $backendErrorLog = Join-Path $runtimeDirectory 'backend-error.log'
 $tunnelOutputLog = Join-Path $runtimeDirectory 'cloudflared.log'
 $tunnelErrorLog = Join-Path $runtimeDirectory 'cloudflared-error.log'
-$healthUrl = 'http://127.0.0.1:5100/api/health'
+$healthUrl = 'http://127.0.0.1:5200/api/health'
 
 function Get-ManagedProcess {
     param(
@@ -93,7 +93,7 @@ function Wait-ForTunnelUrl {
 }
 
 Write-Host ''
-Write-Host '=== KasirPOS Cloudflare Demo Launcher ===' -ForegroundColor Cyan
+Write-Host '=== Iwearing Hijab Cloudflare Demo Launcher ===' -ForegroundColor Cyan
 Write-Host ''
 
 if (-not (Test-Path -LiteralPath $backendEnvFile)) {
@@ -175,7 +175,7 @@ if ($tunnelProcess) {
     Set-Content -LiteralPath $tunnelErrorLog -Value ''
     $tunnelStartParameters = @{
         FilePath = $cloudflaredExecutable
-        ArgumentList = @('tunnel', '--url', 'http://127.0.0.1:5100')
+        ArgumentList = @('tunnel', '--url', 'http://127.0.0.1:5200')
         WorkingDirectory = $repoRoot
         WindowStyle = 'Hidden'
         RedirectStandardOutput = $tunnelOutputLog
@@ -212,4 +212,4 @@ Write-Host '1. Ubah API_PROXY_TARGET ke URL di atas.'
 Write-Host '2. Simpan dan buat deployment Pages baru.'
 Write-Host ''
 Write-Host 'Jendela launcher ini boleh ditutup. Jangan sleep/matikan laptop selama demo.'
-Write-Host 'Untuk mematikan demo, klik STOP_KASIRPOS_DEMO.cmd.'
+Write-Host 'Untuk mematikan demo, klik STOP_IWEAR_DEMO.cmd.'

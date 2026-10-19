@@ -235,7 +235,7 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
               <h3 className="font-black text-lg sm:text-2xl tracking-tight leading-tight sm:leading-none uppercase">
                 {initialData ? 'Edit Inventory Item' : 'New Product Record'}
               </h3>
-              <p className="hidden sm:block text-gray-500 text-[10px] uppercase font-bold tracking-[0.4em] mt-2">KasirPOS Enterprise System v1.0</p>
+              <p className="hidden sm:block text-gray-500 text-[10px] uppercase font-bold tracking-[0.4em] mt-2">Iwearing Hijab Enterprise System v1.0</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-500 hover:text-white">
@@ -622,4 +622,3 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
     </div>
   );
 }
-

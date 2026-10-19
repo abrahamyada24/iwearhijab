@@ -6,7 +6,7 @@ SQLite.enablePromise(true);
 // Mode demo SaaS memakai backend sebagai sumber data utama. Database ini hanya
 // cache sesi agar seluruh UI AndroidPos-web dapat dipakai tanpa membuat pos.db
 // permanen di perangkat. Cache dihapus setiap proses aplikasi dimulai ulang.
-const SESSION_DATABASE = 'kasirpos-session-cache.db';
+const SESSION_DATABASE = 'iwear-session-cache.db';
 let sessionDatabasePromise: Promise<any> | null = null;
 
 const TENANT_CACHE_TABLES = [
@@ -493,7 +493,7 @@ export const seedInitialData = async (db: any) => {
 
   const [setResults] = await db.executeSql('SELECT count(*) as count FROM settings');
   if (setResults.rows.item(0).count === 0) {
-    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeName', 'KasirPOS')`);
+    await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeName', 'Iwearing Hijab')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storeAddress', '')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('storePhone', '')`);
     await db.executeSql(`INSERT INTO settings (key, value) VALUES ('showImages', 'true')`);

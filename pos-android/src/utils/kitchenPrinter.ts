@@ -40,7 +40,7 @@ const buildKitchenTicket = (settings: KitchenPrinterSettings, cart: any[], conte
     const totalItems = cart.reduce((total, item) => total + Number(item.quantity || 0), 0);
     const lines = [
         '          CETAK DAPUR',
-        settings.storeName || 'KasirPOS',
+        settings.storeName || 'Iwearing Hijab',
         new Date().toLocaleString('id-ID'),
     ];
 

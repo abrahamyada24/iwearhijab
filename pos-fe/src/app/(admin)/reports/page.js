@@ -257,7 +257,7 @@ export default function ReportsPage() {
             const report = getExportReport();
             await exportReportPdf(report, {
                 filename: getExportFilename('pdf'),
-                storeName: settings?.storeName || 'Warna Warni Boneka',
+                storeName: settings?.storeName || 'Iwearing Hijab',
                 periodLabel: getPeriodLabel(),
             });
         } catch (error) {

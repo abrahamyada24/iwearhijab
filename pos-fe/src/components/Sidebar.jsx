@@ -157,8 +157,8 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
           {/* Brand Header - Identik dengan Header Kasir */}
           <Link href="/" className="h-16 lg:h-20 flex items-center px-6 border-b border-gray-100 flex-shrink-0" title="Kembali ke dashboard">
             <div className="min-w-0">
-              <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">{settings?.storeName || 'KasirPOS'}</h1>
-              <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">KasirPOS · Retail Suite</p>
+              <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">{settings?.storeName || 'Iwearing Hijab'}</h1>
+              <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">Iwearing Hijab · Retail Suite</p>
             </div>
           </Link>
 

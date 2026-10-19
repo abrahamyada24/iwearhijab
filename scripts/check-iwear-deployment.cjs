@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const config = fs.readFileSync(path.join(root, 'pos-android/src/config/deployment.ts'), 'utf8');
-const origin = config.match(/KASIRPOS_API_ORIGIN\s*=\s*['"]([^'"]+)['"]/)?.[1];
+const origin = config.match(/IWEAR_API_ORIGIN\s*=\s*['"]([^'"]+)['"]/)?.[1];
 try {
   const url = new URL(origin);
   if (url.protocol !== 'https:' || url.pathname !== '/' || url.search || url.hash || url.username || url.password) {
@@ -15,6 +15,6 @@ try {
   console.log('Konfigurasi URL siap. Jalankan health check dan login pada deployment BARU sebelum membagikan APK.');
 } catch (error) {
   console.error(`Belum siap distribusi: ${error.message}`);
-  console.error('Edit pos-android/src/config/deployment.ts setelah backend KasirPOS selesai deploy.');
+  console.error('Edit pos-android/src/config/deployment.ts setelah backend Iwearing Hijab selesai deploy.');
   process.exitCode = 1;
 }

@@ -7,7 +7,7 @@ import { useStore } from '@/store/useStore';
 
 const INACTIVITY_TIMEOUT_HOURS = 16;
 const INACTIVITY_TIMEOUT_MS = INACTIVITY_TIMEOUT_HOURS * 60 * 60 * 1000;
-const LAST_ACTIVITY_KEY = 'kasirpos_last_activity';
+const LAST_ACTIVITY_KEY = 'iwear_last_activity';
 const INACTIVITY_NOTICE = `Sesi berakhir karena tidak aktif selama ${INACTIVITY_TIMEOUT_HOURS} jam.`;
 
 export default function AuthGuard({ children }) {

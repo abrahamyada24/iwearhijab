@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: kasirpos-demo-api
+    name: iwear-demo-api
     runtime: node
     plan: free
     rootDir: pos-be

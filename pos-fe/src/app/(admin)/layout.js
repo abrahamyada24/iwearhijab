@@ -46,7 +46,7 @@ export default function AdminLayout({ children }) {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="lg:hidden p-4 bg-white border-b border-gray-200 flex items-center justify-between">
              <Link href="/" className="flex items-center gap-2 font-bold text-gray-800">
-               KasirPOS
+               Iwearing Hijab
              </Link>
              <button 
                 onClick={() => setIsMobileOpen(true)}

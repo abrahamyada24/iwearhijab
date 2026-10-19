@@ -16,7 +16,7 @@ import {
     RECEIPT_LOGO_INNER_WIDTH,
     resolveReceiptLogoUri,
 } from '../utils/receiptLogo';
-import { shouldShowKasirPosBranding } from '../utils/receiptBranding';
+import { shouldShowIwearBranding } from '../utils/receiptBranding';
 import { getPaymentTypeLabel } from '../utils/paymentLabels';
 import { getCartItemEffectiveOriginalUnitPrice, getCartItemEffectiveUnitPrice } from '../utils/cartPricing';
 import { getDBConnection } from '../database/db';
@@ -34,7 +34,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
     const viewShotRef = useRef<any>(null);
     const logoShotRef = useRef<any>(null);
     const receiptLogoUri = resolveReceiptLogoUri(settings.storeLogo, settings.apiBaseUrl);
-    const showKasirPosBranding = shouldShowKasirPosBranding(settings);
+    const showIwearBranding = shouldShowIwearBranding(settings);
     const kitchenPrintEnabled = settings.enableKitchenPrint === true || String(settings.enableKitchenPrint) === 'true';
 
     const paymentStatusLabel = getPaymentStatusLabel(receiptData.paymentStatus);
@@ -125,7 +125,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
         let text = '';
 
         // Header â€” store name and contact
-        const storeName = settings.storeName || 'KasirPOS';
+        const storeName = settings.storeName || 'Iwearing Hijab';
         text += center(storeName, WIDTH) + '\n';
         if (settings.storeAddress) {
             const addressLines = wrapText(settings.storeAddress, WIDTH);
@@ -236,8 +236,8 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
         } else {
             text += center('Terima kasih atas kunjungan Anda', WIDTH) + '\n';
         }
-        if (showKasirPosBranding) {
-            text += center('Powered by KasirPOS', WIDTH) + '\n';
+        if (showIwearBranding) {
+            text += center('Powered by Iwearing Hijab', WIDTH) + '\n';
         }
         text += '\n\n\n';
 
@@ -276,7 +276,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
         });
         const pointsBalance = Math.max(0, Number(receiptData.customerPoints ?? receiptData.pointsBalanceAfter ?? 0));
         return [
-            `Struk Transaksi ${settings.storeName || 'KasirPOS'}`,
+            `Struk Transaksi ${settings.storeName || 'Iwearing Hijab'}`,
             `No: ${receiptData.invoiceNumber}`,
             `Status pembayaran: ${String(receiptData.paymentStatus || 'PAID').toUpperCase() === 'PAID' ? 'LUNAS' : paymentStatusLabel}.`,
             `Tanggal Transaksi : ${transactionDate}`,
@@ -453,7 +453,7 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
                             </View>
                         ) : null}
                         
-                        <Text style={tw`text-center font-mono text-xs font-bold text-black mb-1`}>{settings.storeName || 'KasirPOS'}</Text>
+                        <Text style={tw`text-center font-mono text-xs font-bold text-black mb-1`}>{settings.storeName || 'Iwearing Hijab'}</Text>
                         {settings.storeAddress ? <Text style={tw`text-center font-mono text-[10px] text-black`}>{settings.storeAddress}</Text> : null}
                         {settings.storePhone ? <Text style={tw`text-center font-mono text-[10px] text-black mb-2`}>Telp: {settings.storePhone}</Text> : null}
                         
@@ -609,8 +609,8 @@ export default function ReceiptPreviewScreen({ route, navigation }: any) {
                         <Text style={tw`text-center font-mono text-[10px] text-black`}>
                             {settings.receiptFooter || 'Terima kasih atas kunjungan Anda'}
                         </Text>
-                        {showKasirPosBranding && (
-                            <Text style={tw`text-center font-mono text-[10px] text-black mt-1`}>Powered by KasirPOS</Text>
+                        {showIwearBranding && (
+                            <Text style={tw`text-center font-mono text-[10px] text-black mt-1`}>Powered by Iwearing Hijab</Text>
                         )}
                         
                     </View>

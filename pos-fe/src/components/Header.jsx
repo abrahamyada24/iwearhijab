@@ -39,7 +39,7 @@ export default function Header({ toggleSidebar }) {
             {currentDate || 'Memuat tanggal...'}
           </p>
           <p className="text-sm font-bold text-gray-800 tracking-wide">
-            KasirPOS
+            Iwearing Hijab
           </p>
         </div>
       </div>

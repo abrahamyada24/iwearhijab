@@ -932,7 +932,7 @@ export const syncService = {
             });
             const payload = { transactions, expenses, shifts, categories, products: productsForPush, customers: customersForPush, settings, stockReceipts, suppliers, packages, dineTables, addons, dataResetVersion };
             const res = await api.post('/sync/push', payload, {
-                headers: { 'X-KasirPOS-Sync-Version': '2' },
+                headers: { 'X-Iwear-Sync-Version': '2' },
             });
             assertTenantResponse(
                 useStore.getState().user?.activeStoreId,

@@ -15,8 +15,8 @@ exports.getSettings = async (req, res) => {
       // Buat pengaturan awal jika database masih kosong
       setting = await prisma.storeSetting.create({
         data: {
-          storeName: "Warna Warni",
-          taxRate: 11,
+          storeName: "Iwearing Hijab",
+          taxRate: 0,
           serviceCharge: 0,
           enableCash: true,
           enableQris: false,
@@ -128,7 +128,7 @@ exports.updateSettings = async (req, res) => {
       where: { id: id },
       update: dataToUpdate,
       create: {
-        storeName: storeName || "Savoria Bistro",
+        storeName: storeName || "Iwearing Hijab",
         ...dataToUpdate
       }
     });

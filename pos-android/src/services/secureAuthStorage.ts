@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 
-const AUTH_TOKEN_SERVICE = 'com.kasirpos.auth.token';
+const AUTH_TOKEN_SERVICE = 'com.iwear.auth.token';
 const AUTH_USER_KEY = '@auth_user';
 const AUTH_OFFLINE_KEY = '@auth_offline_session';
 const AUTH_REMEMBER_KEY = '@auth_remember_me';
@@ -13,7 +13,7 @@ export const AUTH_INACTIVITY_TIMEOUT_MS = AUTH_INACTIVITY_TIMEOUT_HOURS * 60 * 6
 export const OFFLINE_SESSION_TOKEN = 'offline-session';
 
 export const setAuthToken = async (token: string) => {
-    await Keychain.setGenericPassword('kasirpos', token, {
+    await Keychain.setGenericPassword('iwear', token, {
         service: AUTH_TOKEN_SERVICE,
         accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });

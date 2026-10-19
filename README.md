@@ -1,45 +1,73 @@
-# KasirPOS
+# Iwearing Hijab — Sistem Kasir
 
-Aplikasi kasir web dan Android dengan fitur yang sama seperti versi asal: produk, stok, pelanggan, pegawai, transaksi, shift, laporan, dan pengelolaan usaha. Nama aplikasi menjadi **KasirPOS**, logo bawaan dihapus, dan ikon launcher Android memakai huruf **K**. Logo toko milik pengguna tetap didukung.
+Proyek dedicated di `D:\iwear`, bersumber dari [webandroid-pos](https://github.com/abrahamyada24/webandroid-pos) commit `89edde0bcc364213641a78f2acd7c1562f727925` (diambil 19 Oktober 2026). Proyek `D:\AndroidPos-web` tidak diubah.
 
-## Mulai di sini
+![Login Iwearing Hijab](artifacts/login-desktop.jpg)
 
-- [Panduan deployment lengkap](PANDUAN_DEPLOYMENT.md): database TiDB baru, Vercel, Cloudflare Pages, dan build APK.
-- [Panduan pengguna](PANDUAN_PENGGUNA.md): pendaftaran usaha, login, pemasangan Android, dan penggunaan.
-- [Hasil pengujian](HASIL_PENGUJIAN.md): pemeriksaan yang lulus dan bagian yang masih menunggu deployment/build native.
-- [Perbaikan 18 Oktober 2026](CATATAN_PERBAIKAN_2026-10-18.md): perbaikan kasir, poin, pendaftaran, langkah commit/deploy, dan konfigurasi super admin.
+## Penyesuaian toko
 
-Repository tujuan: **abrahamyada24/webandroid-pos**. Semua project hosting dan database KasirPOS harus terpisah dari LitePOS Demo.
+- Login mengikuti revisi: logo asli `logo_3.png` berwarna putih di panel merah muda, judul **Sistem Kasir**, label Username/Password, tombol masuk `#A8747A`, dan font **Geist Variable** yang disimpan lokal.
+- Desktop menampilkan dua panel; ponsel menampilkan logo di atas form. Tautan pendaftaran usaha dihapus dari login.
+- Nama aplikasi, cookie, JWT issuer/audience, penyimpanan perangkat, package Android `com.iwear.app`, dan app ID desktop `com.iwear.desktop` dipisahkan.
+- Pendaftaran usaha publik API dinonaktifkan secara default. Penambahan pegawai tetap melalui pengelola toko.
+- Seed khusus satu toko retail dan satu pemilik; tanpa laundry, produk, pelanggan, atau transaksi contoh. Seed tidak menimpa password, lisensi, atau pengaturan yang sudah ada.
 
-## Struktur
+Fitur upstream tetap tersedia: kasir, diskon nominal/persen, pajak, pembayaran manual/gateway opsional, member dan poin, retur, produk/paket/opsi tambahan, supplier, stok/opname/penerimaan, laporan, pengeluaran, shift, katalog, serta sinkronisasi Android. Aturan lisensi trial/premium upstream tetap berlaku.
 
-| Folder | Isi |
-| --- | --- |
-| `pos-fe` | Next.js, static export, Pages Functions sebagai proxy API |
-| `pos-be` | Express, Prisma/MySQL, konfigurasi Vercel |
-| `pos-android` | React Native, package `com.kasirpos.app` |
-| `pos-desktop` | Klien desktop yang disertakan dari versi asal |
+## Menjalankan lokal
 
-## Persiapan lokal
-
-Jalankan dari root proyek menggunakan Node.js 22:
+Gunakan Node.js 22 sesuai engine backend. Environment lokal sudah dibuat dan diabaikan Git; belum terhubung ke database.
 
 ```powershell
 npm run setup:local
-npm run check:branding
+npm --prefix pos-fe ci
+npm --prefix pos-be ci
 ```
 
-Isi koneksi **database KasirPOS baru** pada `pos-be/.env`. Install dependency dengan `npm ci` di masing-masing folder aplikasi. Jalankan `npm run dev` backend dan frontend pada terminal terpisah.
+Isi `pos-be/.env` dengan **database MySQL/TiDB khusus Iwearing**, `SEED_OWNER_EMAIL`, dan `SEED_OWNER_PASSWORD` minimal 12 karakter. Jangan memakai database atau credential toko lain.
 
-- Website lokal: `http://localhost:3100`
-- Backend lokal: `http://127.0.0.1:5100`
+Untuk database baru yang masih kosong:
 
-Script setup menyimpan cadangan konfigurasi lama di `.demo-runtime`, yang diabaikan Git. Script tidak membuat atau mengubah database/hosting.
+```powershell
+cd pos-be
+npm run prisma:generate
+npm run prisma:push
+npm run seed
+npm run dev
+```
 
-## Sebelum membagikan Android
+Di terminal kedua dari root:
 
-Alamat backend di `pos-android/src/config/deployment.ts` sudah mengarah ke `https://kasirpos-api.vercel.app`. Jalankan `npm run check:deployment` sebelum distribusi. APK memerlukan kunci rilis KasirPOS, build baru, dan pengujian perangkat.
+```powershell
+npm --prefix pos-fe run dev
+```
 
-Frontend menggunakan `/api` pada domainnya sendiri. Cloudflare harus memiliki `API_PROXY_TARGET` yang mengarah ke Vercel **KasirPOS**. Ketiga kredensial Cloudinary diperlukan untuk upload pada Vercel.
+Buka http://localhost:3200/login. Backend memakai port **5200**. Akun pertama memakai username `admin` atau email pemilik; password diambil dari environment dan wajib diganti saat login pertama. Tambahkan admin/kasir melalui menu pegawai setelah masuk. Seed berhenti jika database berisi usaha lain dan tidak mereset data.
 
-Dokumen lain yang bertanda **ARSIP** adalah referensi konfigurasi lama. Gunakan panduan deployment KasirPOS di atas.
+`prisma:push` di atas hanya untuk database baru. Untuk database berisi data, tinjau migrasi dan backup sebelum perubahan schema.
+
+## Hosting dan aplikasi
+
+Target hosting: **Cloudflare Pages (frontend) → Vercel (API) → TiDB (database)**, dengan **Cloudinary** untuk gambar. Ikuti [panduan deployment Iwearing](DEPLOY_IWEAR.md).
+
+Belum ada hosting, database produksi, APK, atau installer baru yang dibuat. Semua endpoint contoh harus diganti dengan layanan Iwearing sendiri:
+
+- Frontend: `pos-fe/.env.example`; browser memakai `/api`, dengan `API_PROXY_TARGET` menuju backend toko. Cloudflare Pages tetap memakai `pos-fe/functions` dan `STATIC_EXPORT=true`.
+- Backend: `pos-be/.env.example`; isi database TiDB, secret acak, CORS domain toko, dan ketiga kredensial Cloudinary. Pertahankan `PUBLIC_BUSINESS_REGISTRATION=false`.
+- Android: isi `IWEAR_API_ORIGIN` di `pos-android/src/config/deployment.ts`, lalu `npm run check:deployment` dan build APK dengan signing key toko. Placeholder `.example` sengaja membuat pemeriksaan distribusi gagal hingga domain nyata diisi. Firebase, jika digunakan, memerlukan konfigurasi untuk package toko yang baru.
+- Desktop: isi `IWEAR_APP_URL` sebelum menjalankan/build; default membuka web lokal port 3200.
+
+Aset launcher Android/desktop dari upstream belum diganti dan build native belum diverifikasi. Logo login web sudah memakai logo toko yang disediakan. Dokumen deployment lain di repository adalah referensi upstream; alamat layanan dan instruksi seed demo di sana tidak berlaku untuk instalasi ini.
+
+## Validasi
+
+```powershell
+npm run check:branding
+npm --prefix pos-fe test
+npm --prefix pos-be test
+npm --prefix pos-fe run build
+```
+
+Pengujian transaksi nyata memerlukan database toko. Tidak ada kredensial lama yang disalin dari `D:\AndroidPos-web`.
+
+Hasil pemeriksaan, batas pengujian, dan temuan dependency tercatat di [HASIL_PENGUJIAN_IWEAR.md](HASIL_PENGUJIAN_IWEAR.md).

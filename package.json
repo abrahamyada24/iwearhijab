@@ -1,9 +1,9 @@
 {
-  "name": "kasirpos",
+  "name": "iwear",
   "private": true,
   "scripts": {
-    "setup:local": "node scripts/setup-kasirpos-local.cjs",
-    "check:branding": "node scripts/check-kasirpos-branding.cjs",
-    "check:deployment": "node scripts/check-kasirpos-deployment.cjs"
+    "setup:local": "node scripts/setup-iwear-local.cjs",
+    "check:branding": "node scripts/check-iwear-branding.cjs",
+    "check:deployment": "node scripts/check-iwear-deployment.cjs"
   }
 }

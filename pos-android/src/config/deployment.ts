@@ -1,2 +1,2 @@
-// Backend KasirPOS yang terpisah dari layanan LitePOS lama.
-export const KASIRPOS_API_ORIGIN = 'https://kasirpos-api.vercel.app';
+// Backend Iwearing Hijab khusus toko. Ganti placeholder setelah backend toko di-deploy.
+export const IWEAR_API_ORIGIN = 'https://api.iwear.example';

@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 
-const APP_URL = process.env.KASIRPOS_APP_URL || 'https://kasirpos.example';
+const APP_URL = process.env.IWEAR_APP_URL || 'http://localhost:3200';
 
 ipcMain.handle('print-receipt', async (_event, receiptHTML) => {
   const printWindow = new BrowserWindow({
@@ -47,7 +47,7 @@ function createWindow() {
     height: 800,
     minWidth: 1024,
     minHeight: 700,
-    title: 'KasirPOS',
+    title: 'Iwearing Hijab',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

@@ -321,12 +321,12 @@ export async function createReportPdf(report, { storeName, periodLabel }) {
   const regularFont = await pdf.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
   const color = (name) => rgb(...PDF_COLORS[name]);
-  const safeStoreName = pdfSafeText(storeName || "Warna Warni");
+  const safeStoreName = pdfSafeText(storeName || "Iwearing Hijab");
 
   pdf.setTitle(`Laporan ${pdfSafeText(report.title)} - ${safeStoreName}`);
   pdf.setSubject(pdfSafeText(periodLabel));
-  pdf.setCreator("KasirPOS");
-  pdf.setProducer("KasirPOS");
+  pdf.setCreator("Iwearing Hijab");
+  pdf.setProducer("Iwearing Hijab");
   pdf.setCreationDate(new Date());
 
   const columnWidths = getColumnWidths(report, tableWidth);

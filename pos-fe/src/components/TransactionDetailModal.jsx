@@ -86,11 +86,11 @@ export default function TransactionDetailModal({
     Number(transaction.subTotal) > 0 && Number(transaction.taxAmount) > 0
       ? Math.round((Number(transaction.taxAmount) / Number(transaction.subTotal)) * 100)
       : 0;
-  const storeName = storeSettings?.storeName || "WARNA WARNI BONEKA";
+  const storeName = storeSettings?.storeName || "IWEARING HIJAB";
   const storeAddress = storeSettings?.address || "";
   const storePhone = storeSettings?.phone || "";
   const receiptFooter =
-    storeSettings?.receiptFooter || "Terima kasih sudah berbelanja di Warna Warni Boneka";
+    storeSettings?.receiptFooter || "Terima kasih sudah berbelanja di Iwearing Hijab";
   const storeLogo = storeSettings?.logoUrl
     ? storeSettings.logoUrl.startsWith("http")
       ? storeSettings.logoUrl
@@ -103,7 +103,7 @@ export default function TransactionDetailModal({
   const changeAmount = Math.max(0, paymentAmount - Number(transaction.grandTotal || 0));
   const isReturned = transaction.status === "RETURNED";
   const orderLabel = transaction.orderType === "PRE_ORDER" ? "Pre-order" : "Penjualan toko";
-  const showKasirPosBranding = !(license?.isActive && license?.plan === "PREMIUM");
+  const showIwearBranding = !(license?.isActive && license?.plan === "PREMIUM");
 
   const createHistoryReceiptImage = async () => {
     if (!receiptRef.current) throw new Error("Nota belum siap dibuat menjadi gambar.");
@@ -368,9 +368,9 @@ export default function TransactionDetailModal({
 
           <div style={{ borderTop: "1px dashed #000", margin: "8px 0" }} />
           <div style={{ whiteSpace: "pre-wrap", textAlign: "center" }}>{receiptFooter}</div>
-          {showKasirPosBranding && (
+          {showIwearBranding && (
             <div style={{ marginTop: "6px", textAlign: "center", fontSize: "8px" }}>
-              Powered by KasirPOS
+              Powered by Iwearing Hijab
             </div>
           )}
         </div>

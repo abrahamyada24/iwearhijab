@@ -4,15 +4,15 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$runtimeDirectory = Join-Path $repoRoot '.demo-runtime\kasirpos'
+$runtimeDirectory = Join-Path $repoRoot '.demo-runtime\iwear'
 
 $targets = @(
     @{ Label = 'Cloudflare Tunnel'; PidFile = (Join-Path $runtimeDirectory 'cloudflared.pid'); ProcessName = 'cloudflared' },
-    @{ Label = 'Backend KasirPOS'; PidFile = (Join-Path $runtimeDirectory 'backend.pid'); ProcessName = 'node' }
+    @{ Label = 'Backend Iwearing Hijab'; PidFile = (Join-Path $runtimeDirectory 'backend.pid'); ProcessName = 'node' }
 )
 
 Write-Host ''
-Write-Host '=== Stop KasirPOS Cloudflare Demo ===' -ForegroundColor Cyan
+Write-Host '=== Stop Iwearing Hijab Cloudflare Demo ===' -ForegroundColor Cyan
 Write-Host ''
 
 foreach ($target in $targets) {

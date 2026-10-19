@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'kasirpos-api',
+      name: 'iwear-api',
       script: 'src/app.js',
       cwd: __dirname,
       instances: 1,

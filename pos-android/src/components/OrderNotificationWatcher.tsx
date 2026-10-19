@@ -74,7 +74,7 @@ export default function OrderNotificationWatcher() {
                 token,
                 platform: 'ANDROID',
                 scope: 'KITCHEN',
-                deviceName: 'KasirPOS Android',
+                deviceName: 'Iwearing Hijab Android',
             });
         };
 

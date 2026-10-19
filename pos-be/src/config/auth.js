@@ -1,4 +1,4 @@
-const SESSION_COOKIE_NAME = 'kasirpos_session';
+const SESSION_COOKIE_NAME = 'iwear_session';
 const SESSION_ABSOLUTE_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_IDLE_TIMEOUT_HOURS = 16;
 const SESSION_IDLE_TIMEOUT_MS = SESSION_IDLE_TIMEOUT_HOURS * 60 * 60 * 1000;
@@ -7,8 +7,8 @@ const LOGIN_LOCK_THRESHOLD = 5;
 const LOGIN_LOCK_DURATION_MS = 15 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_BYTES = 72;
-const JWT_ISSUER = 'kasirpos-api';
-const JWT_AUDIENCE = 'kasirpos-clients';
+const JWT_ISSUER = 'iwear-api';
+const JWT_AUDIENCE = 'iwear-clients';
 
 const BLOCKED_PASSWORDS = new Set([
   'boss123',

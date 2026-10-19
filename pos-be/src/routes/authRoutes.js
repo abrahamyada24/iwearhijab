@@ -67,7 +67,12 @@ const { verifyToken, isAdmin } = require('../middlewares/authMiddleware');
  *         description: Email atau Password salah
  */
 router.post('/login', loginLimiter, authController.login);
-router.post('/register-business', businessRegistrationLimiter, authController.registerBusiness);
+router.post('/register-business', (req, res, next) => {
+  if (process.env.PUBLIC_BUSINESS_REGISTRATION !== 'true') {
+    return res.status(403).json({ success: false, message: 'Pendaftaran usaha publik dinonaktifkan. Hubungi pengelola toko.' });
+  }
+  next();
+}, businessRegistrationLimiter, authController.registerBusiness);
 
 /**
  * @swagger

@@ -10,7 +10,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const repoRoot = path.resolve(__dirname, '..');
 const backendDir = path.join(repoRoot, 'pos-be');
 const envPath = path.join(backendDir, '.env');
-const requiredOrigin = 'https://kasirpos.example';
+const requiredOrigin = 'https://iwear.example';
 
 function fail(message) {
   console.error(`\nDEPLOY GAGAL: ${message}`);
@@ -239,7 +239,7 @@ async function verifyLicenseRoute() {
 }
 
 async function main() {
-  console.log('=== KasirPOS: deployment backend ===');
+  console.log('=== Iwearing Hijab: deployment backend ===');
   if (!commandSucceeds('node', ['--version'])) fail('Node.js tidak tersedia.');
   if (!commandSucceeds('npm', ['--version'])) fail('npm tidak tersedia.');
   if (!commandSucceeds('pm2', ['--version'])) fail('PM2 tidak tersedia.');
@@ -252,7 +252,7 @@ async function main() {
   if (!databaseUrl) fail('DATABASE_URL kosong; backup tidak dapat dibuat.');
 
   const stamp = timestamp();
-  const backupDir = path.join(os.homedir(), 'kasirpos-backup');
+  const backupDir = path.join(os.homedir(), 'iwear-backup');
   fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
 
   const databaseBackup = await createDatabaseBackup(databaseUrl, backupDir, stamp);
@@ -267,15 +267,15 @@ async function main() {
   let processName = null;
   if (commandSucceeds('pm2', ['describe', 'pos-backend'], backendDir)) {
     processName = 'pos-backend';
-  } else if (commandSucceeds('pm2', ['describe', 'kasirpos-api'], backendDir)) {
-    processName = 'kasirpos-api';
+  } else if (commandSucceeds('pm2', ['describe', 'iwear-api'], backendDir)) {
+    processName = 'iwear-api';
   }
 
   if (processName) {
     run('pm2', ['reload', processName, '--update-env'], { cwd: backendDir });
   } else {
     run('pm2', ['start', 'ecosystem.config.cjs'], { cwd: backendDir });
-    processName = 'kasirpos-api';
+    processName = 'iwear-api';
   }
   run('pm2', ['save'], { cwd: backendDir });
 

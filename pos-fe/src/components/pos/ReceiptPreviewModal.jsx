@@ -71,7 +71,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
     });
     const paperWidthMm = getPaperWidthMm(devicePreferences);
     const logoMaxWidthMm = paperWidthMm === 80 ? 58 : 42;
-    const showKasirPosBranding = !(license?.isActive && license?.plan === 'PREMIUM');
+    const showIwearBranding = !(license?.isActive && license?.plan === 'PREMIUM');
     const receiptImageFilename = getReceiptImageFilename(transaction.invoiceNumber);
 
     const handleDownloadImage = async () => {
@@ -92,7 +92,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                 blob: receiptImageBlob,
                 filename: receiptImageFilename,
                 title: `Struk ${transaction.invoiceNumber || ''}`.trim(),
-                text: `Struk transaksi ${store?.storeName || 'Warna Warni Boneka'}`,
+                text: `Struk transaksi ${store?.storeName || 'Iwearing Hijab'}`,
             });
             if (result === 'downloaded') {
                 await showAlert.info('Gambar Struk Diunduh', 'Pilih gambar dari folder Download saat membuka WhatsApp.');
@@ -199,7 +199,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                                     }}
                                 />
                             )}
-                            <div className="text-[14px] font-black uppercase">{store?.storeName || 'KASIRPOS'}</div>
+                            <div className="text-[14px] font-black uppercase">{store?.storeName || 'IWEAR'}</div>
                             {store?.address && <div className="mt-1 whitespace-pre-wrap">{store.address}</div>}
                             {store?.phone && <div>Telp: {store.phone}</div>}
                         </div>
@@ -257,8 +257,8 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                             )}
                             {store?.receiptFooter || 'Terima kasih atas kunjungan Anda'}
                         </div>
-                        {showKasirPosBranding && (
-                            <div className="mt-2 text-center text-[8px]">Powered by KasirPOS</div>
+                        {showIwearBranding && (
+                            <div className="mt-2 text-center text-[8px]">Powered by Iwearing Hijab</div>
                         )}
                     </div>
                 </div>
