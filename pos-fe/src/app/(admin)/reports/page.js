@@ -124,7 +124,6 @@ export default function ReportsPage() {
     const [customerData, setCustomerData] = useState([]);
     const [peakHoursData, setPeakHoursData] = useState(null);
     const [profitLossData, setProfitLossData] = useState(null);
-    const [returnsData, setReturnsData] = useState([]);
     const [shiftData, setShiftData] = useState([]);
     const [expensesData, setExpensesData] = useState([]);
 
@@ -136,7 +135,6 @@ export default function ReportsPage() {
         { id: 'KATEGORI', label: 'Kategori', icon: LayoutGrid },
         { id: 'TERLARIS', label: 'Terlaris', icon: TrendingUp },
         { id: 'PELANGGAN', label: 'Pelanggan', icon: Users },
-        { id: 'RETUR', label: 'Retur', icon: ArrowRightLeft },
         { id: 'SHIFT', label: 'Shift', icon: Clock },
         { id: 'LABARUGI', label: 'Laba Rugi', icon: DollarSign },
         { id: 'PENGELUARAN', label: 'Pengeluaran', icon: Wallet },
@@ -181,11 +179,7 @@ export default function ReportsPage() {
                 const data = await res.json();
                 if (data.success) setCustomerData(data.data);
             }
-            else if (activeTab === 'RETUR') {
-                const res = await fetch(`${API_URL}/api/reports/returns${qs}`, requestOptions());
-                const data = await res.json();
-                if (data.success) setReturnsData(data.data);
-            }
+
             else if (activeTab === 'SHIFT') {
                 const res = await fetch(`${API_URL}/api/reports/shift`, requestOptions());
                 const data = await res.json();
@@ -226,7 +220,6 @@ export default function ReportsPage() {
         transactions,
         categoryData,
         customerData,
-        returnsData,
         shiftData,
         profitLossData,
         expensesData,
@@ -279,7 +272,6 @@ export default function ReportsPage() {
                     <div className="space-y-6 animate-in fade-in">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <StatCard title="Penjualan Kotor" value={formatRp(summaryData?.summary?.grossRevenue || 0)} icon={DollarSign} color="blue" />
-                            <StatCard title="Retur" value={formatRp(summaryData?.summary?.returnTotal || 0)} icon={ArrowRightLeft} color="red" />
                             <StatCard title="Penjualan Bersih" value={formatRp(summaryData?.summary?.totalRevenue || 0)} icon={TrendingUp} color="green" />
                             <StatCard title="Total Transaksi" value={summaryData?.summary?.totalTransactions || 0} icon={Receipt} color="purple" />
                         </div>
@@ -415,36 +407,6 @@ export default function ReportsPage() {
                         </table>
                     </div>
                 );
-
-            case 'RETUR':
-                return (
-                    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-in fade-in">
-                        <table className="w-full text-left border-collapse text-sm">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className="px-6 py-4 font-bold text-gray-500">Invoice</th>
-                                    <th className="px-6 py-4 font-bold text-gray-500">Tanggal</th>
-                                    <th className="px-6 py-4 font-bold text-gray-500">Pelanggan</th>
-                                    <th className="px-6 py-4 font-bold text-gray-500">Kasir</th>
-                                    <th className="px-6 py-4 font-bold text-gray-500 text-right">Total Retur</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {returnsData.map((trx, idx) => (
-                                    <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50" onClick={() => setSelectedTrx(trx)}>
-                                        <td className="px-6 py-4 font-medium text-red-600 cursor-pointer hover:underline">{trx.invoiceNumber}</td>
-                                        <td className="px-6 py-4 text-gray-600">{new Date(trx.createdAt).toLocaleString('id-ID')}</td>
-                                        <td className="px-6 py-4 text-gray-800">{trx.customer?.name || trx.customerName || 'Umum'}</td>
-                                        <td className="px-6 py-4 text-gray-800">{trx.user?.name || '-'}</td>
-                                        <td className="px-6 py-4 font-bold text-gray-900 text-right">{formatRp(trx.grandTotal)}</td>
-                                    </tr>
-                                ))}
-                                {returnsData.length === 0 && <tr><td colSpan="5" className="text-center py-10 text-gray-400">Tidak ada transaksi retur</td></tr>}
-                            </tbody>
-                        </table>
-                    </div>
-                );
-            
             case 'SHIFT':
                 return (
                     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-in fade-in">
@@ -576,7 +538,7 @@ export default function ReportsPage() {
                                         <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded font-bold">{e.category}</span></td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 rounded text-xs font-bold ${e.type === 'PURCHASE' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}>
-                                                {e.type === 'PURCHASE' ? 'Pembelian' : 'Pengeluaran'}
+                                                {'Pengeluaran'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 font-bold text-red-600 text-right">{formatRp(e.amount)}</td>

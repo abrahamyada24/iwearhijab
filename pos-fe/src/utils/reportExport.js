@@ -3,7 +3,6 @@ const REPORT_TITLES = {
   KATEGORI: "Kategori",
   TERLARIS: "Produk Terlaris",
   PELANGGAN: "Pelanggan",
-  RETUR: "Retur",
   SHIFT: "Shift",
   LABARUGI: "Laba Rugi",
   PENGELUARAN: "Pengeluaran",
@@ -45,7 +44,6 @@ export function buildReportExport(activeTab, data) {
           ["Invoice", "invoice"],
           ["Tanggal", "date", "date"],
           ["Kasir", "cashier"],
-          ["Tipe", "orderType"],
           ["Total", "total", "currency"],
           ["Status", "status"]
         ),
@@ -53,7 +51,6 @@ export function buildReportExport(activeTab, data) {
           invoice: item.invoiceNumber || "-",
           date: item.createdAt,
           cashier: item.user?.name || "-",
-          orderType: item.orderType === "PRE_ORDER" ? "Pre-order" : "Penjualan",
           total: Number(item.grandTotal) || 0,
           status: item.status || "-",
         })),
@@ -116,24 +113,6 @@ export function buildReportExport(activeTab, data) {
           lastVisit: item.lastVisit,
         })),
       };
-    case "RETUR":
-      return {
-        title,
-        columns: columns(
-          ["Invoice", "invoice"],
-          ["Tanggal", "date", "date"],
-          ["Pelanggan", "customer"],
-          ["Kasir", "cashier"],
-          ["Total Retur", "total", "currency"]
-        ),
-        rows: (data.returnsData || []).map((item) => ({
-          invoice: item.invoiceNumber || "-",
-          date: item.createdAt,
-          customer: item.customer?.name || item.customerName || "Umum",
-          cashier: item.user?.name || "-",
-          total: Number(item.grandTotal) || 0,
-        })),
-      };
     case "SHIFT":
       return {
         title,
@@ -185,7 +164,7 @@ export function buildReportExport(activeTab, data) {
           date: item.createdAt,
           description: item.description || "-",
           category: item.category || "Umum",
-          type: item.type === "PURCHASE" ? "Pembelian" : "Pengeluaran",
+          type: "Pengeluaran",
           amount: Number(item.amount) || 0,
         })),
       };

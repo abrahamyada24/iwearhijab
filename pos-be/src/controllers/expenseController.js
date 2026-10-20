@@ -32,6 +32,9 @@ exports.getAllExpenses = async (req, res) => {
 exports.createExpense = async (req, res) => {
     try {
         const { description, amount, category, type } = req.body;
+        if (type && type !== 'EXPENSE') return res.status(400).json({ success: false, message: 'Jenis pembelian sudah dihapus.' });
+        if (!['Umum', 'Operasional', 'Gaji', 'Konveksi', 'Lainnya'].includes(category || 'Umum')) return res.status(400).json({ success: false, message: 'Kategori pengeluaran tidak tersedia.' });
+        if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) return res.status(400).json({ success: false, message: 'Jumlah pengeluaran harus lebih dari nol.' });
 
         if (!description || !amount) {
             return res.status(400).json({ success: false, message: "Deskripsi dan jumlah wajib diisi" });
@@ -48,7 +51,7 @@ exports.createExpense = async (req, res) => {
                 description,
                 amount: parseFloat(amount),
                 category: category || 'Umum',
-                type: type || 'EXPENSE'
+                type: 'EXPENSE'
             }
         });
 

@@ -64,11 +64,11 @@ router.get(
 
 router.get('/shift/:shiftId?', verifyToken, reportController.getShiftReport);
 
-router.get('/by-category', verifyToken, reportController.getReportByCategory);
-router.get('/by-customer', verifyToken, reportController.getReportByCustomer);
-router.get('/peak-hours', verifyToken, reportController.getPeakHours);
-router.get('/profit-loss', verifyToken, reportController.getProfitLoss);
-router.get('/returns', verifyToken, reportController.getReturnsList);
+router.get('/by-category', verifyToken, isAdmin, reportController.getReportByCategory);
+router.get('/by-customer', verifyToken, isAdmin, reportController.getReportByCustomer);
+router.get('/peak-hours', verifyToken, isAdmin, reportController.getPeakHours);
+router.get('/profit-loss', verifyToken, isAdmin, reportController.getProfitLoss);
+
 
 module.exports = router;
 

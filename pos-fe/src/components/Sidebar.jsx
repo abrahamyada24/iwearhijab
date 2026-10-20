@@ -17,7 +17,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, badge, onNavigate }) => {
   const pathname = usePathname();
-  const isActive = href ? pathname === href : false;
+  const isActive = href ? pathname === href : hasSubmenu && ['/products', '/categories', '/stock'].includes(pathname);
 
   const content = (
     <div className="flex items-center gap-3">
@@ -31,14 +31,14 @@ const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, bad
     </div>
   );
 
-  const className = `w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group mb-1 ${isActive || (hasSubmenu && isOpen)
+  const className = `w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group mb-1 ${isActive
     ? 'bg-blue-50 text-blue-600 font-bold'
     : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 font-medium'
     }`;
 
   if (href) {
     return (
-      <Link href={href} className={className} onClick={onNavigate}>
+      <Link href={href} className={className} aria-current={isActive ? "page" : undefined} onClick={onNavigate}>
         {content}
       </Link>
     );
@@ -216,11 +216,8 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
                 {expandedMenu.inventory && (
                   <div className="ml-4 pl-4 border-l border-gray-100 space-y-1 mt-1 mb-2">
                     <Link href="/products" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/products' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Daftar Produk</Link>
-                    <Link href="/packages" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/packages' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Paket Produk</Link>
                     <Link href="/categories" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/categories' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Kategori</Link>
                     <Link href="/stock" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Riwayat Stok</Link>
-                    <Link href="/stock-receiving" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock-receiving' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Penerimaan Barang</Link>
-                    <Link href="/stock-opname" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock-opname' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Stock Opname</Link>
                   </div>
                 )}
               </div>
@@ -246,7 +243,6 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
                 <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 italic">People</p>
                 <SidebarItem icon={Users} label="Pegawai" href="/users" onNavigate={() => setIsMobileOpen(false)} />
                 <SidebarItem icon={UserCircle} label="Pelanggan" href="/customers" onNavigate={() => setIsMobileOpen(false)} />
-                <SidebarItem icon={Truck} label="Supplier" href="/suppliers" onNavigate={() => setIsMobileOpen(false)} />
               </div>
             )}
 

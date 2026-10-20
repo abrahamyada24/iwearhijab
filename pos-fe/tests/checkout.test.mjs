@@ -13,6 +13,13 @@ test('tagihan frontend dan server sama untuk diskon nominal/persen dan pajak', (
     assert.deepEqual(calculateCheckoutTotals(input), backend.calculateCheckoutTotals(input));
   }
 });
+test('produk gratis dan diskon memakai perhitungan yang sama di web/server', () => {
+  for (const loyaltyDiscount of [0,50000,200000]) for (const discountType of ['amount','percent']) {
+    const input={subTotal:200000,taxRate:0.11,discountAmount:10,discountType,loyaltyDiscount};
+    assert.deepEqual(calculateCheckoutTotals(input),backend.calculateCheckoutTotals(input));
+  }
+  assert.deepEqual(calculateCheckoutTotals({subTotal:200000,loyaltyDiscount:50000,discountType:'percent',discountAmount:10,taxRate:0.11}),{discount:65000,taxAmount:14850,grandTotal:149850});
+});
 test('input telepon menjaga nol awal, menolak huruf dan memvalidasi panjang', () => {
   assert.equal(restrictPhoneInput('0812abc3456789'), '08123456789');
   assert.equal(restrictPhoneInput('+62 (812) 345-6789'), '+628123456789');

@@ -156,7 +156,7 @@ Isi environment berikut dari `pos-be/.env.example`:
 | `CLOUDINARY_FOLDER` | `iwear` |
 | `ENABLE_API_DOCS` | `false` |
 
-Untuk panel super admin, isi `PLATFORM_ADMIN_NAME`, `PLATFORM_ADMIN_EMAIL`, dan `PLATFORM_ADMIN_PASSWORD` (minimal 12 karakter). Akun pemilik toko berbeda dari super admin. Payment gateway dan SMTP opsional, biarkan kosong bila belum dipakai. Kredensial seed cukup dipakai saat inisialisasi lokal dan tidak perlu disimpan pada build frontend.
+Untuk panel super admin, isi `PLATFORM_ADMIN_NAME`, `PLATFORM_ADMIN_EMAIL`, dan `PLATFORM_ADMIN_PASSWORD` (minimal 12 karakter). Akun pemilik toko berbeda dari super admin. SMTP opsional. Midtrans sudah dihapus; QRIS dikonfirmasi manual oleh kasir. Kredensial seed cukup dipakai saat inisialisasi lokal dan tidak perlu disimpan pada build frontend.
 
 Untuk membuat tiga secret aplikasi yang berbeda, jalankan perintah ini **tiga kali** di PowerShell dan simpan masing-masing hasilnya sebagai `JWT_SECRET`, `LICENSE_CODE_SECRET`, serta `PLATFORM_ADMIN_JWT_SECRET`:
 

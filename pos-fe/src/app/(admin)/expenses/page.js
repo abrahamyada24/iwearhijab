@@ -6,11 +6,7 @@ import CurrencyInput from '@/components/CurrencyInput';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
-const EXPENSE_CATEGORIES = ['Umum', 'Operasional', 'Gaji', 'Bahan Baku', 'Utilitas', 'Lainnya'];
-const EXPENSE_TYPES = [
-    { value: 'EXPENSE', label: 'Pengeluaran', icon: ArrowUpCircle, color: 'red' },
-    { value: 'PURCHASE', label: 'Pembelian', icon: ShoppingBag, color: 'orange' }
-];
+const EXPENSE_CATEGORIES = ['Umum', 'Operasional', 'Gaji', 'Konveksi', 'Lainnya'];
 
 export default function ExpensesPage() {
     const [expenses, setExpenses] = useState([]);
@@ -73,14 +69,13 @@ export default function ExpensesPage() {
 
     // Type stats
     const expenseTotal = expenses.filter(e => !e.type || e.type === 'EXPENSE').reduce((s, e) => s + Number(e.amount), 0);
-    const purchaseTotal = expenses.filter(e => e.type === 'PURCHASE').reduce((s, e) => s + Number(e.amount), 0);
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">Pengeluaran</h1>
-                    <p className="text-sm text-gray-500 mt-1">Catat pengeluaran operasional & pembelian harian</p>
+                    <p className="text-sm text-gray-500 mt-1">Catat pengeluaran operasional harian</p>
                 </div>
                 <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-all shadow-lg">
                     <Plus size={18} /> Tambah
@@ -88,7 +83,7 @@ export default function ExpensesPage() {
             </div>
 
             {/* Type Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <button
                     onClick={() => setFilterType('ALL')}
                     className={`p-4 rounded-2xl border transition-all text-left ${filterType === 'ALL' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-white border-gray-200 hover:border-gray-300'}`}
@@ -107,17 +102,6 @@ export default function ExpensesPage() {
                     </div>
                     <p className="text-xl font-black mt-1 text-red-700">{formatRp(expenseTotal)}</p>
                     <p className="text-[10px] text-red-400 mt-1">{expenses.filter(e => !e.type || e.type === 'EXPENSE').length} catatan</p>
-                </button>
-                <button
-                    onClick={() => setFilterType('PURCHASE')}
-                    className={`p-4 rounded-2xl border transition-all text-left ${filterType === 'PURCHASE' ? 'bg-orange-50 border-orange-200 shadow-md' : 'bg-white border-gray-200 hover:border-orange-200'}`}
-                >
-                    <div className="flex items-center gap-2">
-                        <ShoppingBag size={16} className="text-orange-500" />
-                        <p className="text-xs font-bold uppercase tracking-wider text-orange-600">Pembelian</p>
-                    </div>
-                    <p className="text-xl font-black mt-1 text-orange-700">{formatRp(purchaseTotal)}</p>
-                    <p className="text-[10px] text-orange-400 mt-1">{expenses.filter(e => e.type === 'PURCHASE').length} catatan</p>
                 </button>
             </div>
 
@@ -140,24 +124,6 @@ export default function ExpensesPage() {
                     <form onClick={e => e.stopPropagation()} onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
                         <h2 className="text-lg font-bold text-gray-800">Tambah Pengeluaran</h2>
 
-                        {/* Type selector */}
-                        <div className="grid grid-cols-2 gap-3">
-                            {EXPENSE_TYPES.map(t => (
-                                <button
-                                    key={t.value}
-                                    type="button"
-                                    onClick={() => setForm({ ...form, type: t.value })}
-                                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-bold transition-all ${
-                                        form.type === t.value
-                                            ? t.color === 'red' ? 'border-red-500 bg-red-50 text-red-700' : 'border-orange-500 bg-orange-50 text-orange-700'
-                                            : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                                    }`}
-                                >
-                                    <t.icon size={18} />
-                                    {t.label}
-                                </button>
-                            ))}
-                        </div>
 
                         <input required placeholder="Deskripsi" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:border-blue-500 outline-none" />
                         <CurrencyInput required placeholder="Jumlah (Rp)" value={form.amount} onChange={value => setForm({ ...form, amount: value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:border-blue-500 outline-none" />
@@ -194,14 +160,7 @@ export default function ExpensesPage() {
                                     <td className="px-6 py-4 text-sm text-gray-600">{new Date(e.createdAt).toLocaleDateString('id-ID')}</td>
                                     <td className="px-6 py-4 text-sm font-medium text-gray-800">{e.description}</td>
                                     <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${
-                                            e.type === 'PURCHASE'
-                                                ? 'bg-orange-50 text-orange-600 border border-orange-100'
-                                                : 'bg-red-50 text-red-600 border border-red-100'
-                                        }`}>
-                                            {e.type === 'PURCHASE' ? <ShoppingBag size={12} /> : <ArrowUpCircle size={12} />}
-                                            {e.type === 'PURCHASE' ? 'Pembelian' : 'Pengeluaran'}
-                                        </span>
+                                        <span className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">Pengeluaran</span>
                                     </td>
                                     <td className="px-6 py-4"><span className="px-2.5 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-600">{e.category}</span></td>
                                     <td className="px-6 py-4 text-sm font-bold text-red-600 text-right">{formatRp(Number(e.amount))}</td>

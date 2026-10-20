@@ -38,26 +38,9 @@ exports.getPublicCatalog = async (req, res) => {
         });
 
         const settings = await prisma.storeSetting.findFirst();
-        const packages = await prisma.package.findMany({
-            where: { isActive: true },
-            include: { items: { include: { product: true } } },
-            orderBy: { name: 'asc' }
-        });
-        const availablePackages = packages.filter(pkg => pkg.items.length > 0 && pkg.items.every(item =>
-            item.product.isActive && (item.product.isUnlimitedStock || item.product.stock >= item.qty)
-        ));
-
           return {
-                products: products.map(product => serializeProductPrice(product)),
-                packages: availablePackages.map(pkg => ({
-                    ...pkg,
-                    price: Number(pkg.price),
-                    categoryId: 'PACKAGE',
-                    category: { id: 'PACKAGE', name: 'Paket' },
-                    isPackage: true,
-                    stock: 999,
-                    isUnlimitedStock: true
-                })),
+                products: products.map(product => { const { costPrice, ...publicProduct } = serializeProductPrice(product); return publicProduct; }),
+
                 categories,
                 settings,
                 store: { id: store.id, slug: store.slug, name: store.name, type: store.type }

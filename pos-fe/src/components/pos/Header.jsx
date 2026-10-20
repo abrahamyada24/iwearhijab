@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useStore } from '@/store/useStore';
 
-export default function Header({ search, setSearch, currentUser, shiftEnabled, activeShift }) {
+export default function Header({ search, setSearch, currentUser, shiftEnabled, activeShift, onSearchSubmit }) {
     const router = useRouter();
     const logout = useStore((state) => state.logout);
 
@@ -38,6 +38,7 @@ export default function Header({ search, setSearch, currentUser, shiftEnabled, a
                         placeholder="Cari produk..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
+                        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); onSearchSubmit?.(); } }}
                         className="pl-9 pr-4 py-2 bg-gray-100 border-none rounded-lg lg:rounded-xl text-xs lg:text-sm w-full focus:ring-2 focus:ring-blue-100 focus:bg-white transition-all outline-none font-medium placeholder:text-gray-400"
                     />
                 </div>

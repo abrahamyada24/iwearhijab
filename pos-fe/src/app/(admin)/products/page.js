@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Edit, Trash2, ImageIcon, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, ImageIcon, ChevronLeft, ChevronRight, Filter, QrCode } from 'lucide-react';
 // Menggunakan relative paths untuk menghindari kendala resolusi alias @/ di beberapa environment
 import { useStore } from '../../../store/useStore';
 import ProductModal from '../../../components/ProductModal';
+import ProductLabelModal from '@/components/ProductLabelModal';
 import { showAlert } from '../../../utils/swal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -19,6 +20,7 @@ export default function ProductsPage() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+    const [labelProduct, setLabelProduct] = useState(null);
 
     useEffect(() => {
         fetchDataMaster();
@@ -119,6 +121,8 @@ export default function ProductsPage() {
         data.append('name', formData.name);
         data.append('sku', formData.sku || '');
         data.append('barcode', formData.barcode || '');
+        data.append('variant', formData.variant || '');
+        data.append('color', formData.color || '');
         data.append('price', formData.price);
         data.append('costPrice', formData.costPrice);
         data.append('stock', formData.isUnlimitedStock ? 999 : (formData.stock === '' ? 0 : formData.stock));
@@ -243,6 +247,7 @@ export default function ProductsPage() {
 
                         {/* Hover Actions (Top Right) */}
                         <div className="absolute top-3 right-3 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                            <button title="Label QR Produk" onClick={e => { e.stopPropagation(); setLabelProduct(item); }} className="p-2 bg-white/90 rounded-full text-gray-700 hover:text-blue-500 shadow-sm"><QrCode size={14}/></button>
                             <button onClick={(e) => handleEdit(item, e)} className="p-2 bg-white/90 rounded-full text-gray-700 hover:text-blue-500 shadow-sm"><Edit size={14} /></button>
                             <button onClick={(e) => handleDelete(item.id, e)} className="p-2 bg-white/90 rounded-full text-gray-700 hover:text-red-500 shadow-sm"><Trash2 size={14} /></button>
                         </div>
@@ -271,6 +276,7 @@ export default function ProductsPage() {
             )}
 
             {/* Modal CRUD */}
+            <ProductLabelModal product={labelProduct} onClose={() => setLabelProduct(null)} />
             <ProductModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}

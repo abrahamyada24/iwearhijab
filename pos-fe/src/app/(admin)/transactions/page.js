@@ -23,7 +23,6 @@ export default function TransactionsPage() {
 
     const [selectedTransaction, setSelectedTransaction] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [preOrderFilter, setPreOrderFilter] = useState(false);
     const [isReturning, setIsReturning] = useState(false);
 
     const fetchTransactions = async (page = 1) => {
@@ -43,9 +42,7 @@ export default function TransactionsPage() {
                 params.append('startDate', startDate);
                 params.append('endDate', endDate);
             }
-            if (preOrderFilter) {
-                params.append('preOrder', 'true');
-            }
+
 
             const res = await fetch(`${API_URL}/api/transactions?${params.toString()}`, { headers, credentials: 'include' });
             const json = await res.json();
@@ -66,7 +63,7 @@ export default function TransactionsPage() {
             fetchTransactions(1);
         }, 500);
         return () => clearTimeout(timer);
-    }, [search, statusFilter, startDate, endDate, preOrderFilter]);
+    }, [search, statusFilter, startDate, endDate]);
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= meta.totalPages) {
@@ -215,17 +212,6 @@ export default function TransactionsPage() {
                         <RefreshCw size={18} />
                     </button>
 
-                    <button 
-                        onClick={() => setPreOrderFilter(!preOrderFilter)} 
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                            preOrderFilter 
-                                ? 'bg-purple-50 text-purple-600 border-purple-200' 
-                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                        }`}
-                    >
-                        <PackageCheck size={16} />
-                        Pre-Order
-                    </button>
                 </div>
             </div>
 
@@ -242,7 +228,6 @@ export default function TransactionsPage() {
                                 <th className="px-6 py-4 font-semibold">Pelanggan</th>
                                 <th className="px-6 py-4 font-semibold">Total</th>
                                 <th className="px-6 py-4 font-semibold">Metode</th>
-                                <th className="px-6 py-4 font-semibold">Pre-Order</th>
                                 <th className="px-6 py-4 font-semibold">Status</th>
                                 {activeStore?.type === 'LAUNDRY' && <th className="px-6 py-4 font-semibold">Pengerjaan</th>}
                                 <th className="px-6 py-4 font-semibold text-center">Aksi</th>
@@ -251,7 +236,7 @@ export default function TransactionsPage() {
                         <tbody className="divide-y divide-gray-100 bg-white">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 11 : 10} className="px-6 py-12 text-center text-gray-400">
+                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 10 : 9} className="px-6 py-12 text-center text-gray-400">
                                         <div className="flex justify-center items-center gap-2">
                                             <Loader2 className="animate-spin" size={20} /> Memuat data...
                                         </div>
@@ -259,7 +244,7 @@ export default function TransactionsPage() {
                                 </tr>
                             ) : transactions.length === 0 ? (
                                 <tr>
-                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 11 : 10} className="px-6 py-12 text-center text-gray-400">Tidak ada transaksi ditemukan.</td>
+                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 10 : 9} className="px-6 py-12 text-center text-gray-400">Tidak ada transaksi ditemukan.</td>
                                 </tr>
                             ) : (
                                 transactions.map((trx, index) => (
@@ -274,9 +259,7 @@ export default function TransactionsPage() {
                                             {formatDate(trx.createdAt)}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider border whitespace-nowrap ${trx.orderType === 'PRE_ORDER' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                                {trx.orderType === 'PRE_ORDER' ? 'PRE-ORDER' : 'PENJUALAN'}
-                                            </span>
+                                            <span className="text-xs text-gray-500">Penjualan</span>
                                         </td>
                                         <td className="px-6 py-4 text-gray-800 font-medium text-xs">
                                             {trx.customerName || trx.customer?.name || 'Umum'}
@@ -286,17 +269,8 @@ export default function TransactionsPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase border border-gray-200">
-                                                {trx.payments?.[0]?.paymentType || '-'}
+                                                {trx.payments?.[0]?.paymentType === 'QRIS_MANUAL' ? 'QRIS' : trx.payments?.[0]?.paymentType || '-'}
                                             </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {trx.preOrderDate ? (
-                                                <span className="px-2 py-1 bg-purple-50 text-purple-600 rounded text-[10px] font-bold border border-purple-100">
-                                                    {new Date(trx.preOrderDate).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-300 text-xs">-</span>
-                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${trx.status === 'PAID' ? 'bg-green-50 text-green-600 border-green-100' :

@@ -10,6 +10,7 @@ import ProductGrid from '@/components/pos/ProductGrid';
 import CartSidebar from '@/components/pos/CartSidebar';
 import MemberModal from '@/components/pos/MemberModal';
 import PaymentModal from '@/components/pos/PaymentModal';
+import RewardModal from '@/components/pos/RewardModal';
 import DiscountModal from '@/components/pos/DiscountModal';
 import ReceiptPreviewModal from '@/components/pos/ReceiptPreviewModal';
 import SavedTransactionModal from '@/components/pos/SavedTransactionModal';
@@ -30,7 +31,6 @@ import { useStore } from '@/store/useStore';
 
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const API_URL = RAW_API_URL.endsWith('/api') ? RAW_API_URL.slice(0, -4) : RAW_API_URL;
-const MIDTRANS_CLIENT_KEY = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
 
 export default function POSPage() {
   const router = useRouter(); 
@@ -40,6 +40,11 @@ export default function POSPage() {
   // --- STATE DATA ---
   const [products, setProducts] = useState([]);
   const [members, setMembers] = useState([]);
+  const [loyaltyConfig, setLoyaltyConfig] = useState(null);
+  const [rewardQuantities, setRewardQuantities] = useState({});
+  const [isRewardModalOpen, setIsRewardModalOpen] = useState(false);
+  const checkoutKey = useRef(null);
+  const checkoutInFlight = useRef(false);
   const [categories, setCategories] = useState([]);
   const [currentUser, setCurrentUser] = useState(null); 
   const [storeSettings, setStoreSettings] = useState(null);
@@ -65,6 +70,8 @@ export default function POSPage() {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
 
+  useEffect(() => { setRewardQuantities({}); checkoutKey.current = null; }, [cart, selectedMember?.id]);
+
   // Payment States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentStep, setPaymentStep] = useState('SELECT'); 
@@ -82,8 +89,8 @@ export default function POSPage() {
   const [addonNotes, setAddonNotes] = useState('');
 
   // Retail transaction type
-  const [orderType, setOrderType] = useState('TAKE_AWAY');
-  const [preOrderDate, setPreOrderDate] = useState('');
+  const orderType = 'TAKE_AWAY';
+
   const [taxRate, setTaxRate] = useState(0);
   const shiftReminderGateRef = useRef({ key: '', nextAt: 0 });
 
@@ -112,18 +119,19 @@ export default function POSPage() {
 
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-            const [prodRes, catRes, memRes, pkgRes, settingsRes] = await Promise.all([
+            const [prodRes, catRes, memRes, loyaltyRes, settingsRes] = await Promise.all([
                 fetch(`${API_URL}/api/products`, { headers }),
                 fetch(`${API_URL}/api/products/categories`, { headers }),
                 fetch(`${API_URL}/api/customers`, { headers }),
-                fetch(`${API_URL}/api/packages`, { headers }),
+                fetch(`${API_URL}/api/settings/loyalty`, { headers }),
                 fetch(`${API_URL}/api/settings`, { headers, cache: 'no-store' })
             ]);
 
             const prodData = await prodRes.json();
             const catData = await catRes.json();
             const memData = await memRes.json();
-            const pkgData = await pkgRes.json();
+            const loyaltyData = await loyaltyRes.json();
+            if (loyaltyData.success) setLoyaltyConfig(loyaltyData.data);
 
             if (prodData.success) {
                 const regularProducts = prodData.data.map(product => ({
@@ -131,20 +139,9 @@ export default function POSPage() {
                     originalPrice: Number(product.originalPrice ?? product.price),
                     price: Number(product.effectivePrice ?? product.price)
                 }));
-                const packageProducts = pkgData.success ? pkgData.data.filter(pkg => pkg.isActive).map(pkg => ({
-                    ...pkg,
-                    id: `pkg-${pkg.id}`,
-                    packageId: pkg.id,
-                    category: { name: 'Paket' },
-                    stock: 999,
-                    isUnlimitedStock: true,
-                    originalPrice: Number(pkg.price),
-                    price: Number(pkg.price),
-                    isPackage: true
-                })) : [];
-                setProducts([...regularProducts, ...packageProducts]);
+                setProducts(regularProducts);
             }
-            if (catData.success) setCategories([{ id: 0, name: 'Semua' }, ...catData.data, ...(pkgData.success && pkgData.data.some(pkg => pkg.isActive) ? [{ id: 'PACKAGE', name: 'Paket' }] : [])]);
+            if (catData.success) setCategories([{ id: 0, name: 'Semua' }, ...catData.data]);
             if (memData.success) setMembers(memData.data);
 
             // Store settings ikut dimuat paralel bersama data master.
@@ -175,20 +172,6 @@ export default function POSPage() {
 
   }, [authenticatedUser]);
 
-  useEffect(() => {
-    if (!settingsLoaded || storeSettings?.enableQris !== true || !MIDTRANS_CLIENT_KEY) {
-      return undefined;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://app.sandbox.midtrans.com/snap/snap.js';
-    script.setAttribute('data-client-key', MIDTRANS_CLIENT_KEY);
-    document.body.appendChild(script);
-
-    return () => {
-      if (document.body.contains(script)) document.body.removeChild(script);
-    };
-  }, [settingsLoaded, storeSettings?.enableQris]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -261,7 +244,7 @@ export default function POSPage() {
     return products
       .filter(p => {
         if (p.isActive === false) return false;
-        const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+        const matchSearch = [p.name, p.sku, p.barcode, p.variant, p.color].some(value => String(value || '').toLowerCase().includes(search.toLowerCase()));
         const categoryName = p.category ? p.category.name : 'Uncategorized';
         const matchCategory = selectedCategory === 'Semua' || categoryName === selectedCategory;
         return matchSearch && matchCategory;
@@ -386,8 +369,12 @@ export default function POSPage() {
 
   // --- CALCULATIONS ---
   const subTotal = cart.reduce((sum, item) => sum + getCartItemLineTotal(item), 0);
+  const pointsPerReward = Math.max(1, Number(loyaltyConfig?.minRedemptionPoints) || 10);
+  const rewardCount = Object.values(rewardQuantities).reduce((sum, qty) => sum + qty, 0);
+  const pointsUsed = rewardCount * pointsPerReward;
+  const rewardDiscount = cart.reduce((sum, item) => sum + (rewardQuantities[item.id] || 0) * getCartItemLineTotal(item) / item.qty, 0);
   const { discount: discountAmount, taxAmount, grandTotal } = calculateCheckoutTotals({
-    subTotal, taxRate, discountAmount: discountValue, discountType,
+    subTotal, taxRate, discountAmount: discountValue, discountType, loyaltyDiscount: rewardDiscount,
   });
 
   useEffect(() => {
@@ -408,7 +395,7 @@ export default function POSPage() {
       createdAt: transaction.createdAt || new Date().toISOString(),
       customerName: transaction.customerName || customerName || null,
       user: transaction.user || currentUser,
-      items: cart.map(item => ({
+      items: transaction.items?.length ? transaction.items.map(item => ({ ...item, product: { name: cart.find(cartItem => String(cartItem.id) === String(item.productId))?.name || item.product?.name || "Produk" } })) : cart.map(item => ({
           productId: item.id,
           qty: item.qty,
           price: Number(item.price),
@@ -418,8 +405,8 @@ export default function POSPage() {
       payments: transaction.payments?.length
           ? transaction.payments
           : [{ paymentType: type, amount: grandTotal }],
-      cashAmount: type === 'CASH' ? cashGiven : (transaction.cashAmount ?? grandTotal),
-      changeAmount: type === 'CASH' ? change : (transaction.changeAmount ?? 0),
+      cashAmount: transaction.cashAmount ?? (type === 'CASH' ? cashGiven : grandTotal),
+      changeAmount: transaction.changeAmount ?? (type === 'CASH' ? change : 0),
       subTotal: transaction.subTotal ?? subTotal,
       taxAmount: transaction.taxAmount ?? taxAmount,
       discountAmount: transaction.discountAmount ?? 0,
@@ -433,11 +420,9 @@ export default function POSPage() {
 
   // --- TRANSAKSI ---
   const handleProcessTransaction = async (type) => {
-      // Validasi Ekstra
-      if (orderType === 'PRE_ORDER' && !preOrderDate) {
-          return showAlert.warning("Waktu Kosong", "Silakan tentukan waktu pengambilan Pre Order.");
-      }
-
+      if (checkoutInFlight.current) return;
+      checkoutInFlight.current = true;
+      if (type === 'QRIS_MANUAL' && !await showAlert.confirm('Konfirmasi QRIS', 'Pastikan pembayaran Rp ' + formatNumber(grandTotal) + ' sudah diterima toko.', 'Sudah Diterima')) { checkoutInFlight.current = false; return; }
       setIsProcessing(true);
       try {
           const token = localStorage.getItem('token');
@@ -449,10 +434,12 @@ export default function POSPage() {
               customerName: selectedMember?.name || guestCustomerName.trim() || null,
               discountAmount: discountValue,
               discountType,
+              loyaltyPointsRedeemed: pointsUsed,
               items: cart.map(c => ({
                 productId: c.id,
                 packageId: c.packageId || null,
                 qty: c.qty,
+                loyaltyRewardQty: rewardQuantities[c.id] || 0,
                 addons: (c.addons || []).map(addon => ({ id: addon.id, quantity: Number(addon.quantity || 1) })),
                 addonIds: (c.addons || []).map(addon => addon.id),
                 notes: c.customerNotes || (c.addons?.length ? null : c.notes) || null,
@@ -463,18 +450,20 @@ export default function POSPage() {
                 cashAmount: type === 'CASH' ? cashGiven : null,
                 changeAmount: type === 'CASH' ? change : null,
               },
-              orderType: orderType,
+              orderType: 'TAKE_AWAY',
               tableNumber: null,
               note: null,
               sourceOrderCode: null,
-              preOrderDate: orderType === 'PRE_ORDER' && preOrderDate ? new Date(preOrderDate).toISOString() : null
+              preOrderDate: null
           };
 
+          checkoutKey.current ||= crypto.randomUUID();
           const res = await fetch(`${API_URL}/api/transactions`, {
               method: 'POST',
               headers: { 
                   'Content-Type': 'application/json',
-                  'Authorization': token ? `Bearer ${token}` : ''
+                  'Authorization': token ? `Bearer ${token}` : '',
+                  'Idempotency-Key': checkoutKey.current
               },
               body: JSON.stringify(payload)
           });
@@ -508,34 +497,14 @@ export default function POSPage() {
               }
           }
 
-          if (type === 'QRIS' && data.data.midtransToken) {
-              window.snap.pay(data.data.midtransToken, {
-                  onSuccess: function(result) {
-                      setCompletedTransaction(receiptTransaction);
-                      setPaymentStep('SUCCESS');
-                      showAlert.success("Pembayaran Sukses", "Transaksi QRIS berhasil!");
-                  },
-                  onPending: function(result) {
-                      setCompletedTransaction(receiptTransaction);
-                      setPaymentStep('SUCCESS'); 
-                      showAlert.info("Menunggu", "Pembayaran sedang diproses.");
-                  },
-                  onError: function(result) {
-                      showAlert.error("Gagal", "Pembayaran gagal.");
-                  },
-                  onClose: function() {
-                      showAlert.warning("Dibatalkan", "Anda menutup popup pembayaran.");
-                  }
-              });
-          } else {
-              setCompletedTransaction(receiptTransaction);
-              setPaymentStep('SUCCESS');
-              showAlert.success("Pembayaran Sukses", "Transaksi berhasil disimpan dan struk siap dicetak.");
-          }
+          setCompletedTransaction(receiptTransaction);
+          setPaymentStep('SUCCESS');
+          setIsReceiptModalOpen(true);
 
       } catch (error) {
           showAlert.error("Transaksi Gagal", error.message);
       } finally {
+          checkoutInFlight.current = false;
           setIsProcessing(false);
       }
   };
@@ -599,7 +568,7 @@ export default function POSPage() {
         guestCustomerName: guestCustomerName.trim() || '',
         orderType,
         tableNumber: null,
-        preOrderDate: preOrderDate || null,
+
         discountValue,
         discountType,
         subTotal,
@@ -635,8 +604,6 @@ export default function POSPage() {
       setCart([]);
       setSelectedMember(null);
       setGuestCustomerName('');
-      setOrderType('TAKE_AWAY');
-      setPreOrderDate('');
       setActiveSavedTransactionId(null);
       setMobileView('menu');
       await refreshSavedTransactionCount();
@@ -660,8 +627,6 @@ export default function POSPage() {
       setDiscountType(payload.discountType === 'percent' ? 'percent' : 'amount');
       setSelectedMember(payload.selectedMember || null);
       setGuestCustomerName(payload.guestCustomerName || '');
-      setOrderType(payload.orderType === 'PRE_ORDER' ? 'PRE_ORDER' : 'TAKE_AWAY');
-      setPreOrderDate(payload.preOrderDate || '');
       setActiveSavedTransactionId(transaction.id);
       setIsSavedTransactionModalOpen(false);
       if (window.innerWidth < 1024) setMobileView('cart');
@@ -672,14 +637,14 @@ export default function POSPage() {
   };
 
   const resetTransaction = () => {
+      checkoutKey.current = null;
+      setRewardQuantities({});
       setIsPaymentModalOpen(false);
       setIsReceiptModalOpen(false);
       setCompletedTransaction(null);
       setCart([]);
       setSelectedMember(null);
       setGuestCustomerName('');
-      setOrderType('TAKE_AWAY');
-      setPreOrderDate('');
       setMobileView('menu');
       window.location.reload(); 
   }
@@ -730,6 +695,7 @@ export default function POSPage() {
         <Header 
             search={search} 
             setSearch={setSearch} 
+            onSearchSubmit={() => { const found = products.find(product => product.barcode === search.trim() || product.sku === search.trim()); if (found) { addToCart(found); setSearch(''); } }}
             currentUser={currentUser} 
             shiftEnabled={storeSettings?.enableShift === true || shiftRequiredByServer}
             activeShift={activeShift}
@@ -770,14 +736,11 @@ export default function POSPage() {
         grandTotal={grandTotal}
         subTotal={subTotal}
         taxAmount={taxAmount}
-        orderType={orderType}
-        setOrderType={setOrderType}
-        preOrderDate={preOrderDate}
-        setPreOrderDate={setPreOrderDate}
         taxRate={taxRate}
+        pointsUsed={pointsUsed}
         discount={{ type: discountType, value: discountValue, amount: discountAmount }}
         onOpenDiscountModal={() => setIsDiscountModalOpen(true)}
-        onRemoveDiscount={() => { setDiscountValue(0); setDiscountType('amount'); }}
+        onRemoveDiscount={() => { setDiscountValue(0); setDiscountType('amount'); setRewardQuantities({}); checkoutKey.current = null; }}
         onSaveTransaction={handleSaveTransaction}
         isSavingTransaction={isSavingTransaction}
         savedTransactionCount={savedTransactionCount}
@@ -858,7 +821,14 @@ export default function POSPage() {
          onOpenReceipt={() => setIsReceiptModalOpen(true)}
          grandTotal={grandTotal}
          formatNumber={formatNumber}
-         midtransEnabled={storeSettings?.enableQris === true && Boolean(MIDTRANS_CLIENT_KEY)}
+         member={selectedMember}
+         pointsUsed={pointsUsed}
+         onRemoveRewards={() => { setRewardQuantities({}); checkoutKey.current = null; }}
+         onOpenRewards={() => {
+           if (!loyaltyConfig?.isActive) return showAlert.info('Poin tidak aktif', 'Program poin sedang tidak aktif.');
+           if (Number(selectedMember?.points || 0) < pointsPerReward) return showAlert.info('Poin belum cukup', 'Perlu ' + pointsPerReward + ' poin untuk 1 produk.');
+           setIsRewardModalOpen(true);
+         }}
       />
 
       <SavedTransactionModal
@@ -869,7 +839,10 @@ export default function POSPage() {
          formatNumber={formatNumber}
       />
 
+      <RewardModal isOpen={isRewardModalOpen} onClose={() => setIsRewardModalOpen(false)} member={selectedMember} cart={cart} pointsPerReward={pointsPerReward} quantities={rewardQuantities} onApply={quantities => { setRewardQuantities(quantities); checkoutKey.current = null; setIsRewardModalOpen(false); }} />
+
       <ReceiptPreviewModal
+         autoPrint
          isOpen={isReceiptModalOpen}
          onClose={() => setIsReceiptModalOpen(false)}
          transaction={completedTransaction}

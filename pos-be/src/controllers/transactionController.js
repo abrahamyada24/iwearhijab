@@ -1,5 +1,5 @@
+const { calculateRewardRedemption } = require('../services/rewardRedemptionService');
 const { basePrisma, prisma, runWithStore } = require('../config/prisma');
-const midtransClient = require('midtrans-client');
 const { getProductPrice } = require('../utils/productDiscount');
 const { normalizePaymentType, resolvePaymentMethod } = require('../services/paymentMethodService');
 const { resolveSelectedAddons, buildAddonItemNotes, calculateAddonAwareLinePricing } = require('../services/productAddonService');
@@ -36,15 +36,10 @@ const sendTransactionResult = (res, transaction, replayed = false) => {
     });
 };
 
-// Inisialisasi Midtrans Snap
-const snap = new midtransClient.Snap({
-    isProduction: process.env.MIDTRANS_IS_PRODUCTION === 'true',
-    serverKey: process.env.MIDTRANS_SERVER_KEY
-});
 
 /**
  * HELPER: Generate Invoice Number Otomatis dengan Suffix Unik
- * Menghindari error 'Order ID already taken' di Midtrans.
+ * Nomor invoice unik per transaksi.
  */
 const generateInvoiceNumber = async (tx) => {
     const date = new Date();
@@ -92,10 +87,13 @@ exports.createTransaction = async (req, res) => {
             loyaltyPointsRedeemed
         } = req.body;
 
-        if (!items || items.length === 0) {
+        if (!Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: "Keranjang kosong!" });
         }
 
+        if (orderType === 'PRE_ORDER' || preOrderDate || items.some(item => item.packageId || String(item.productId).startsWith('pkg-'))) {
+            return res.status(400).json({ success: false, message: 'Preorder dan paket produk sudah dihapus.' });
+        }
         const requestedPaymentType = normalizePaymentType(payment?.type);
         if (!requestedPaymentType) {
             return res.status(400).json({ success: false, message: "Metode pembayaran wajib dipilih." });
@@ -115,10 +113,7 @@ exports.createTransaction = async (req, res) => {
                 if (!customer) throw new Error('Pelanggan tidak tersedia pada usaha aktif.');
             }
             const setting = await tx.storeSetting.findFirst();
-            const { paymentType, isGatewayPayment, isInstantPayment } = resolvePaymentMethod(
-                requestedPaymentType,
-                { midtransEnabled: setting?.enableQris === true }
-            );
+            const { paymentType, isInstantPayment } = resolvePaymentMethod(requestedPaymentType);
             const shiftEnabled = setting?.enableShift !== false;
             const activeShift = shiftEnabled
                 ? await tx.shift.findFirst({
@@ -135,7 +130,6 @@ exports.createTransaction = async (req, res) => {
 
             let subTotal = 0;
             const transactionItemsData = [];
-            const itemDetailsForMidtrans = [];
             const stockDeductions = new Map();
             const addStockDeduction = (product, qty) => {
                 const current = stockDeductions.get(product.id);
@@ -144,34 +138,8 @@ exports.createTransaction = async (req, res) => {
 
             // Validasi produk dan hitung total
             for (const item of items) {
-                const requestedQty = Math.max(1, parseInt(item.qty) || 1);
-                const packageId = parseInt(item.packageId) || (String(item.productId || '').startsWith('pkg-') ? parseInt(String(item.productId).replace('pkg-', '')) : null);
-
-                if (packageId) {
-                    const pkg = await tx.package.findUnique({
-                        where: { id: packageId },
-                        include: { items: { include: { product: true } } }
-                    });
-                    if (!pkg || !pkg.isActive || pkg.items.length === 0) throw new Error('Paket produk tidak tersedia.');
-
-                    const packagePrice = Number(pkg.price);
-                    subTotal += packagePrice * requestedQty;
-                    pkg.items.forEach((packageItem, index) => {
-                        const componentQty = packageItem.qty * requestedQty;
-                        addStockDeduction(packageItem.product, componentQty);
-                        transactionItemsData.push({
-                            productId: packageItem.productId,
-                            qty: componentQty,
-                            price: index === 0 ? packagePrice / packageItem.qty : 0,
-                            originalPrice: index === 0 ? packagePrice / packageItem.qty : 0,
-                            discountAmount: 0,
-                            costPrice: packageItem.product.costPrice,
-                            notes: `[Paket ${pkg.name}] ${item.notes || ''}`.trim()
-                        });
-                    });
-                    itemDetailsForMidtrans.push({ id: `PKG-${pkg.id}`, price: Math.round(packagePrice), quantity: requestedQty, name: pkg.name.substring(0, 50) });
-                    continue;
-                }
+                const requestedQty = Number(item.qty);
+                if (!Number.isSafeInteger(requestedQty) || requestedQty < 1) throw new Error('Jumlah produk tidak valid.');
 
                 const product = await tx.product.findUnique({
                     where: { id: parseInt(item.productId) },
@@ -204,15 +172,11 @@ exports.createTransaction = async (req, res) => {
                     originalPrice,
                     discountAmount: priceInfo.discountAmount,
                     costPrice: product.costPrice,
+                    loyaltyRewardQty: Number(item.loyaltyRewardQty || 0),
+                    loyaltyRewardDiscount: price * Number(item.loyaltyRewardQty || 0),
                     notes: itemNotes
                 });
 
-                itemDetailsForMidtrans.push({
-                    id: product.sku || product.id.toString(),
-                    price: Math.round(lineTotal),
-                    quantity: 1,
-                    name: product.name.substring(0, 50)
-                });
             }
 
             for (const { product, qty } of stockDeductions.values()) {
@@ -224,34 +188,18 @@ exports.createTransaction = async (req, res) => {
             // Hitung pajak
             const taxRate = setting?.taxRate ? Number(setting.taxRate) / 100 : 0;
 
-            // Loyalty points redemption discount
-            let loyaltyDiscount = 0;
-            const redeemedPoints = Number(loyaltyPointsRedeemed || 0);
-            if (!Number.isSafeInteger(redeemedPoints) || redeemedPoints < 0) throw new Error('Jumlah poin penukaran tidak valid.');
-            if (redeemedPoints > 0) {
-                if (!customerId || !isInstantPayment) throw new Error('Penukaran poin membutuhkan member dan pembayaran manual yang langsung lunas.');
-                const loyaltyConfig = await tx.loyaltyConfig.findFirst({ where: { isActive: true } });
-                const customer = await tx.customer.findUnique({ where: { id: parseInt(customerId) } });
-                if (!loyaltyConfig || !customer || customer.points < redeemedPoints || redeemedPoints < loyaltyConfig.minRedemptionPoints) throw new Error('Poin tidak mencukupi atau belum memenuhi minimum penukaran.');
-                loyaltyDiscount = redeemedPoints * Number(loyaltyConfig.pointValue);
-                const manual = calculateCheckoutTotals({ subTotal, taxRate, discountAmount, discountType });
-                if (loyaltyDiscount > subTotal - manual.discount) throw new Error('Nilai penukaran poin melebihi sisa tagihan.');
-            }
+            const loyaltyConfig = await tx.loyaltyConfig.findFirst({ where: { isActive: true } });
+            const loyaltyCustomer = customerId ? await tx.customer.findUnique({ where: { id: parseInt(customerId) } }) : null;
+            const redemption = calculateRewardRedemption({ lines: transactionItemsData, points: loyaltyPointsRedeemed, customer: loyaltyCustomer, config: loyaltyConfig });
+            const redeemedPoints = redemption.points;
+            const loyaltyDiscount = redemption.discount;
             const { discount, taxAmount, grandTotal } = calculateCheckoutTotals({ subTotal, taxRate, discountAmount, discountType, loyaltyDiscount });
+            if (paymentType === 'POINT' && (grandTotal !== 0 || redeemedPoints === 0)) throw new Error('Pembayaran poin harus melunasi tagihan. Bayar sisanya dengan Cash atau QRIS.');
+            const cashAmount = paymentType === 'CASH' ? Number(payment.cashAmount) : null;
+            if (paymentType === 'CASH' && (!Number.isFinite(cashAmount) || cashAmount < grandTotal)) throw new Error('Uang tunai belum mencukupi tagihan.');
 
             // Generate Invoice unik
             const invoiceNumber = await generateInvoiceNumber(tx);
-
-            // Tambahkan pajak ke item details Midtrans
-            if (taxAmount > 0) {
-                itemDetailsForMidtrans.push({
-                    id: 'TAX-PPN',
-                    price: taxAmount,
-                    quantity: 1,
-                    name: `Pajak (PPN ${setting.taxRate || 0}%)`
-                });
-            }
-            if (discount > 0) itemDetailsForMidtrans.push({ id: 'DISCOUNT', price: -discount, quantity: 1, name: 'Diskon transaksi' });
 
             const initialStatus = isInstantPayment ? 'PAID' : 'PENDING';
             const paymentStatus = isInstantPayment ? 'SETTLEMENT' : 'PENDING';
@@ -301,14 +249,14 @@ exports.createTransaction = async (req, res) => {
                     taxAmount,
                     discountAmount: discount,
                     grandTotal,
-                    cashAmount: payment.cashAmount != null ? parseFloat(payment.cashAmount) : null,
-                    changeAmount: payment.changeAmount != null ? parseFloat(payment.changeAmount) : null,
+                    cashAmount,
+                    changeAmount: paymentType === 'CASH' ? cashAmount - grandTotal : 0,
                     status: initialStatus,
                     workStatus: req.store?.type === 'LAUNDRY' ? 'RECEIVED' : null,
-                    orderType: orderType === 'PRE_ORDER' || preOrderDate ? 'PRE_ORDER' : 'TAKE_AWAY',
+                    orderType: 'TAKE_AWAY',
                     tableNumber: null,
                     note: note || null,
-                    preOrderDate: preOrderDate ? new Date(preOrderDate) : null,
+                    preOrderDate: null,
                     preOrderConfirmed: false,
                     items: { create: transactionItemsData },
                     payments: {
@@ -325,35 +273,8 @@ exports.createTransaction = async (req, res) => {
             const loyaltySnapshot = await awardTransactionPoints(tx, newTransaction, redeemedPoints);
             if (loyaltySnapshot) Object.assign(newTransaction, loyaltySnapshot);
 
-            let midtransToken = null;
-            let midtransUrl = null;
-
-            // Hanya QRIS otomatis yang boleh membuat transaksi Midtrans.
-            if (isGatewayPayment) {
-                const parameter = {
-                    transaction_details: {
-                        order_id: invoiceNumber,
-                        gross_amount: Math.round(grandTotal)
-                    },
-                    item_details: itemDetailsForMidtrans,
-                    credit_card: { secure: true },
-                    enabled_payments: ['gopay', 'other_qris', 'shopeepay']
-                };
-
-                try {
-                    const transaction = await snap.createTransaction(parameter);
-                    midtransToken = transaction.token;
-                    midtransUrl = transaction.redirect_url;
-
-                    console.log('[OK] Midtrans transaction created:', invoiceNumber);
-                } catch (midtransErr) {
-                    console.error('[ERROR] Midtrans Error:', midtransErr.message);
-                    throw new Error(`Gagal membuat payment link: ${midtransErr.message}`);
-                }
-            }
-
             return {
-                transaction: { ...newTransaction, midtransToken, midtransUrl },
+                transaction: newTransaction,
                 replayed: false
             };
         }, {
@@ -405,13 +326,12 @@ exports.createTransaction = async (req, res) => {
  */
 exports.getAllTransactions = async (req, res) => {
     try {
-        const { page = 1, limit = 10, status, search, preOrder, startDate, endDate } = req.query;
+        const { page = 1, limit = 10, status, search, startDate, endDate } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const whereClause = {};
 
         if (status) whereClause.status = status;
         if (search) whereClause.invoiceNumber = { contains: search };
-        if (preOrder === 'true') whereClause.preOrderDate = { not: null };
         if (startDate && endDate) {
             whereClause.createdAt = {
                 gte: new Date(startDate + 'T00:00:00'),
@@ -510,276 +430,6 @@ exports.updateWorkStatus = async (req, res) => {
 /**
  * 4. WEBHOOK HANDLER - PENTING: Ini yang sinkronkan status payment
  */
-exports.handleMidtransNotification = async (req, res) => {
-    try {
-        console.log('[WEBHOOK] Midtrans notification received');
-        console.log("Body:", JSON.stringify(req.body, null, 2));
-
-        const notification = await snap.transaction.notification(req.body);
-        const orderId = notification.order_id;
-        const transactionStatus = notification.transaction_status;
-        const fraudStatus = notification.fraud_status;
-        const transactionId = notification.transaction_id;
-
-        console.log(`[WEBHOOK] Order: ${orderId} | Status: ${transactionStatus} | Fraud: ${fraudStatus}`);
-
-        // Invoice bersifat unik global; lookup awal hanya dipakai untuk menemukan konteks store.
-        const locator = await basePrisma.transaction.findUnique({
-            where: { invoiceNumber: orderId },
-            select: { storeId: true }
-        });
-        if (!locator) {
-            console.error('[ERROR] Transaction not found:', orderId);
-            return res.status(404).json({ success: false, message: 'Transaction not found' });
-        }
-        const transaction = await runWithStore(locator.storeId, () => prisma.transaction.findUnique({
-            where: { invoiceNumber: orderId },
-            include: { items: true, payments: true }
-        }));
-
-        if (!transaction) {
-            console.error('[ERROR] Transaction not found:', orderId);
-            return res.status(404).json({ success: false, message: 'Transaction not found' });
-        }
-
-        // Mapping status
-        let newStatus = '';
-        let paymentStatus = '';
-
-        if (transactionStatus === 'capture') {
-            if (fraudStatus === 'challenge') {
-                newStatus = 'PENDING';
-                paymentStatus = 'PENDING';
-            } else if (fraudStatus === 'accept') {
-                newStatus = 'PAID';
-                paymentStatus = 'SETTLEMENT';
-            }
-        } else if (transactionStatus === 'settlement') {
-            newStatus = 'PAID';
-            paymentStatus = 'SETTLEMENT';
-        } else if (transactionStatus === 'cancel' || transactionStatus === 'deny' || transactionStatus === 'expire') {
-            newStatus = 'CANCELLED';
-            paymentStatus = 'FAILED';
-        } else if (transactionStatus === 'pending') {
-            newStatus = 'PENDING';
-            paymentStatus = 'PENDING';
-        }
-
-        if (!newStatus) {
-            console.log('[WARN] Unknown status, skipping update');
-            return res.status(200).json({ status: 'OK', message: 'Unknown status' });
-        }
-
-        // Update database dalam satu transaksi
-        await runWithStore(locator.storeId, () => prisma.$transaction(async (tx) => {
-            const current = await tx.transaction.findUnique({ where: { id: transaction.id } });
-            if (!current || ['RETURNED', 'CANCELLED', 'COMPLETED'].includes(current.status)) return;
-            if (current.status === 'PAID' && newStatus === 'PENDING') return;
-            const changed = await tx.transaction.updateMany({
-                where: { id: current.id, status: current.status },
-                data: { status: newStatus }
-            });
-            if (changed.count !== 1) return;
-            if (newStatus === 'PAID') await awardTransactionPoints(tx, { ...current, status: newStatus });
-            if (newStatus === 'CANCELLED') await reverseTransactionPoints(tx, current);
-
-            // Update payment status - PERBAIKAN QUERY
-            await tx.payment.updateMany({
-                where: { transactionId: transaction.id },
-                data: {
-                    paymentStatus: paymentStatus,
-                    referenceId: transactionId
-                }
-            });
-
-            // JIKA PAID, KURANGI STOCK (untuk non-CASH payment)
-            if (newStatus === 'PAID' && current.status !== 'PAID') {
-                console.log('[OK] Payment confirmed! Reducing stock...');
-
-                for (const item of transaction.items) {
-                    const product = await tx.product.findUnique({
-                        where: { id: item.productId }
-                    });
-
-                    if (product) {
-                        await tx.product.update({
-                            where: { id: item.productId },
-                            data: { stock: product.stock - item.qty }
-                        });
-
-                        await tx.stockMovement.create({
-                            data: {
-                                productId: item.productId,
-                                type: 'OUT',
-                                qty: item.qty,
-                                source: 'SALE',
-                                description: `Penjualan QRIS/Digital - ${orderId}`
-                            }
-                        });
-
-                        console.log(`  [OK] ${product.name}: ${product.stock} -> ${product.stock - item.qty}`);
-                    }
-                }
-            }
-
-            // JIKA CANCELLED/EXPIRED, CEK APAKAH PERLU ROLLBACK STOCK
-            if (newStatus === 'CANCELLED' && current.status === 'PAID') {
-                console.log('[INFO] Transaction cancelled after payment, restoring stock...');
-
-                // Cari stock movements yang terkait
-                const movements = await tx.stockMovement.findMany({
-                    where: {
-                        description: { contains: orderId },
-                        type: 'OUT'
-                    }
-                });
-
-                for (const movement of movements) {
-                    const product = await tx.product.findUnique({
-                        where: { id: movement.productId }
-                    });
-
-                    if (product) {
-                        await tx.product.update({
-                            where: { id: movement.productId },
-                            data: { stock: product.stock + movement.qty }
-                        });
-
-                        await tx.stockMovement.create({
-                            data: {
-                                productId: movement.productId,
-                                type: 'IN',
-                                qty: movement.qty,
-                                source: 'RETURN',
-                                description: `Rollback pembatalan - ${orderId}`
-                            }
-                        });
-
-                        console.log(`  [OK] Restored ${product.name}: ${product.stock} -> ${product.stock + movement.qty}`);
-                    }
-                }
-            }
-        }));
-
-        console.log(`[OK] [WEBHOOK] Invoice ${orderId} updated: ${newStatus}`);
-        res.status(200).json({ status: 'OK' });
-
-    } catch (error) {
-        console.error('[ERROR] [WEBHOOK]:', error.message);
-        console.error(error.stack);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-/**
- * 5. CHECK STATUS MANUAL (untuk debugging)
- */
-exports.checkTransactionStatus = async (req, res) => {
-    try {
-        const { invoiceNumber } = req.params;
-
-        // Check di Midtrans
-        const statusResponse = await snap.transaction.status(invoiceNumber);
-        console.log('Midtrans Status:', statusResponse);
-
-        // Update database
-        const transaction = await prisma.transaction.findUnique({
-            where: { invoiceNumber: invoiceNumber },
-            include: { payments: true, items: true }
-        });
-
-        if (!transaction) {
-            return res.status(404).json({
-                success: false,
-                message: 'Transaksi tidak ditemukan'
-            });
-        }
-
-        let newStatus = '';
-        let paymentStatus = '';
-
-        if (statusResponse.transaction_status === 'settlement') {
-            newStatus = 'PAID';
-            paymentStatus = 'SETTLEMENT';
-        } else if (statusResponse.transaction_status === 'pending') {
-            newStatus = 'PENDING';
-            paymentStatus = 'PENDING';
-        } else if (['cancel', 'deny', 'expire'].includes(statusResponse.transaction_status)) {
-            newStatus = 'CANCELLED';
-            paymentStatus = 'FAILED';
-        }
-
-        if (newStatus && transaction.status !== newStatus) {
-            await prisma.$transaction(async (tx) => {
-                const current = await tx.transaction.findUnique({ where: { id: transaction.id } });
-                if (!current || ['RETURNED', 'CANCELLED', 'COMPLETED'].includes(current.status)) return;
-                if (current.status === 'PAID' && newStatus === 'PENDING') return;
-                const changed = await tx.transaction.updateMany({
-                    where: { id: current.id, status: current.status },
-                    data: { status: newStatus }
-                });
-                if (changed.count !== 1) return;
-                if (newStatus === 'PAID') await awardTransactionPoints(tx, { ...current, status: newStatus });
-                if (newStatus === 'CANCELLED') await reverseTransactionPoints(tx, current);
-
-                await tx.payment.updateMany({
-                    where: { transactionId: transaction.id },
-                    data: {
-                        paymentStatus: paymentStatus,
-                        referenceId: statusResponse.transaction_id
-                    }
-                });
-
-                // Kurangi stock jika baru jadi PAID
-                if (newStatus === 'PAID' && current.status !== 'PAID') {
-                    for (const item of transaction.items) {
-                        const product = await tx.product.findUnique({
-                            where: { id: item.productId }
-                        });
-
-                        if (product) {
-                            await tx.product.update({
-                                where: { id: item.productId },
-                                data: { stock: product.stock - item.qty }
-                            });
-
-                            await tx.stockMovement.create({
-                                data: {
-                                    productId: item.productId,
-                                    type: 'OUT',
-                                    qty: item.qty,
-                                    source: 'SALE',
-                                    description: `Manual Check - ${invoiceNumber}`
-                                }
-                            });
-                        }
-                    }
-                }
-            });
-        }
-
-        res.json({
-            success: true,
-            message: 'Status checked and updated',
-            data: {
-                midtransStatus: statusResponse.transaction_status,
-                databaseStatus: newStatus,
-                updated: transaction.status !== newStatus
-            }
-        });
-
-    } catch (error) {
-        console.error('[ERROR] Check Status Error:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-};
-
-/**
- * 6. RETURN TRANSACTION — Mark as RETURNED and revert stock
- */
 exports.returnTransaction = async (req, res) => {
     try {
         const { id } = req.params;
@@ -838,48 +488,3 @@ exports.returnTransaction = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
-
-/**
- * 7. GET PRE-ORDERS — List upcoming pre-orders
- */
-exports.getPreOrders = async (req, res) => {
-    try {
-        const preOrders = await prisma.transaction.findMany({
-            where: {
-                preOrderDate: { not: null },
-                preOrderConfirmed: false,
-                status: { in: ['PENDING', 'PAID', 'COMPLETED'] }
-            },
-            include: {
-                user: { select: { name: true } },
-                customer: { select: { name: true, phone: true } },
-                items: { include: { product: { select: { name: true } } } }
-            },
-            orderBy: { preOrderDate: 'asc' }
-        });
-
-        res.json({ success: true, data: preOrders });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-};
-
-/**
- * 8. CONFIRM PRE-ORDER PICKUP
- */
-exports.confirmPreOrder = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        await prisma.transaction.update({
-            where: { id: parseInt(id) },
-            data: { preOrderConfirmed: true, status: 'COMPLETED' }
-        });
-
-        res.json({ success: true, message: "Pre-order confirmed as picked up" });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-};
-
-module.exports = exports;

@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const expenseController = require('../controllers/expenseController');
-const { verifyToken } = require('../middlewares/authMiddleware');
+const { verifyToken, isAdmin } = require('../middlewares/authMiddleware');
 
-router.get('/', verifyToken, expenseController.getAllExpenses);
-router.post('/', verifyToken, expenseController.createExpense);
-router.delete('/:id', verifyToken, expenseController.deleteExpense);
+router.get('/', verifyToken, isAdmin, expenseController.getAllExpenses);
+router.post('/', verifyToken, isAdmin, expenseController.createExpense);
+router.delete('/:id', verifyToken, isAdmin, expenseController.deleteExpense);
 
 module.exports = router;

@@ -84,6 +84,8 @@ exports.createProduct = async (req, res) => {
         displayType: displayType || 'normal',
         imageUrl: imageUrl,
         barcode: barcode || null,
+        variant: String(req.body.variant || "").trim().slice(0,100) || null,
+        color: String(req.body.color || "").trim().slice(0,100) || null,
         isUnlimitedStock: isUnlimitedStock === 'true' || isUnlimitedStock === true,
         enableCostPrice: enableCostPrice === 'true' || enableCostPrice === true,
         minStock: parseInt(minStock) || 0,
@@ -140,6 +142,7 @@ exports.updateProduct = async (req, res) => {
     if (displayType) updateData.displayType = displayType;
     if (isActive !== undefined) updateData.isActive = isActive === 'true' || isActive === true;
     if (barcode !== undefined) updateData.barcode = barcode || null;
+    for (const field of ["variant", "color"]) if (req.body[field] !== undefined) updateData[field] = String(req.body[field]).trim().slice(0,100) || null;
     if (isUnlimitedStock !== undefined) updateData.isUnlimitedStock = isUnlimitedStock === 'true' || isUnlimitedStock === true;
     if (enableCostPrice !== undefined) updateData.enableCostPrice = enableCostPrice === 'true' || enableCostPrice === true;
     if (minStock !== undefined) updateData.minStock = parseInt(minStock) || 0;
@@ -208,7 +211,7 @@ exports.getProductByBarcode = async (req, res) => {
   try {
     const { barcode } = req.params;
     const product = await prisma.product.findFirst({
-      where: { barcode, isActive: true },
+      where: { OR: [{ barcode }, { sku: barcode }], isActive: true },
       include: { category: true, addons: true }
     });
 

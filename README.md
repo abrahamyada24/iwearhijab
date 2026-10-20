@@ -12,7 +12,7 @@ Proyek dedicated di `D:\iwear`, bersumber dari [webandroid-pos](https://github.c
 - Pendaftaran usaha publik API dinonaktifkan secara default. Penambahan pegawai tetap melalui pengelola toko.
 - Seed khusus satu toko retail dan satu pemilik; tanpa laundry, produk, pelanggan, atau transaksi contoh. Seed tidak menimpa password, lisensi, atau pengaturan yang sudah ada.
 
-Fitur upstream tetap tersedia: kasir, diskon nominal/persen, pajak, pembayaran manual/gateway opsional, member dan poin, retur, produk/paket/opsi tambahan, supplier, stok/opname/penerimaan, laporan, pengeluaran, shift, katalog, serta sinkronisasi Android. Aturan lisensi trial/premium upstream tetap berlaku.
+Web mengikuti revisi MoM 18 Oktober 2026: Cash, QRIS manual, tukar poin menjadi produk gratis, label QR produk, struk otomatis, dan pembatasan akses Admin/Staff. Paket, supplier, penerimaan barang, stock opname, preorder, laporan Retur, Transfer, dan Midtrans sudah dihapus dari web/backend. Android belum diubah. Detail migrasi dan pemeriksaan ada di [catatan revisi web](REVISI_WEB_IWEAR_2026-10-20.md). Aturan lisensi trial/premium upstream tetap berlaku.
 
 ## Menjalankan lokal
 

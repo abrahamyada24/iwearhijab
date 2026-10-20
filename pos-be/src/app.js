@@ -42,11 +42,7 @@ const inventoryRoutes = require('./routes/inventoryRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
 const shiftRoutes = require('./routes/shiftRoutes');
 const savedTransactionRoutes = require('./routes/savedTransactionRoutes');
-const stockReceiptRoutes = require('./routes/stockReceiptRoutes');
-const stockOpnameRoutes = require('./routes/stockOpnameRoutes');
 const addonRoutes = require('./routes/addonRoutes');
-const packageRoutes = require('./routes/packageRoutes');
-const supplierRoutes = require('./routes/supplierRoutes');
 const syncRoutes = require('./routes/syncRoutes');
 const catalogRoutes = require('./routes/catalogRoutes'); // Rute Katalog Publik
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
@@ -113,7 +109,6 @@ app.use('/api/license', licenseRoutes);
 app.use('/api/catalog', catalogRoutes);
 // Autentikasi platform terpisah dan harus dipasang sebelum middleware tenant.
 app.use('/api/platform-admin', platformAdminRoutes);
-app.post('/api/transactions/notification', transactionController.handleMidtransNotification);
 
 app.get('/api/health', async (req, res) => {
   try {
@@ -125,7 +120,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-app.use('/api', verifyToken, requireActiveLicense);
+app.use('/api', verifyToken, requireActiveLicense, require('./middlewares/staffResponseMiddleware').restrictStaffResponse);
 app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/transactions', transactionRoutes);
@@ -138,11 +133,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/shifts', shiftRoutes);
 app.use('/api/saved-transactions', savedTransactionRoutes);
-app.use('/api/stock-receipts', stockReceiptRoutes);
-app.use('/api/stock-opname', stockOpnameRoutes);
 app.use('/api/addons', addonRoutes);
-app.use('/api/packages', packageRoutes);
-app.use('/api/suppliers', supplierRoutes);
 app.use('/api/sync', syncRoutes);
 
 app.get('/', (req, res) => {

@@ -143,23 +143,8 @@ export default function KatalogPage() {
             price: Number(product.effectivePrice ?? product.price),
           }))
         : [];
-      const packageProducts = Array.isArray(payload.data?.packages)
-        ? payload.data.packages.map((item) => ({
-            ...item,
-            id: `package-${item.id}`,
-            packageId: item.id,
-            categoryId: "PACKAGE",
-            category: { id: "PACKAGE", name: "Paket Boneka" },
-            originalPrice: Number(item.price),
-            price: Number(item.price),
-          }))
-        : [];
-
-      setProducts([...regularProducts, ...packageProducts]);
-      setCategories([
-        ...(Array.isArray(payload.data?.categories) ? payload.data.categories : []),
-        ...(packageProducts.length ? [{ id: "PACKAGE", name: "Paket Boneka" }] : []),
-      ]);
+      setProducts(regularProducts);
+      setCategories(Array.isArray(payload.data?.categories) ? payload.data.categories : []);
       setSettings(payload.data?.settings || null);
     } catch (error) {
       setLoadError(

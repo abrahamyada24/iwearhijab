@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { resolvePaymentMethod } = require('./paymentMethodService');
 
-test('manual payment methods never use Midtrans', () => {
-    for (const paymentType of ['CASH', 'TRANSFER', 'QRIS_MANUAL']) {
+test('Cash, QRIS manual, dan Point langsung diselesaikan tanpa gateway', () => {
+    for (const paymentType of ['CASH', 'POINT', 'QRIS_MANUAL']) {
         assert.deepEqual(resolvePaymentMethod(paymentType), {
             paymentType,
             isGatewayPayment: false,
@@ -12,17 +12,9 @@ test('manual payment methods never use Midtrans', () => {
     }
 });
 
-test('QRIS gateway is rejected while Midtrans is disabled', () => {
-    assert.throws(
-        () => resolvePaymentMethod('QRIS'),
-        error => error.code === 'MIDTRANS_DISABLED'
+test('Transfer dan QRIS gateway ditolak meskipun klien meminta mengaktifkan gateway', () => {
+    for (const type of ['TRANSFER', 'QRIS', 'abc', '']) assert.throws(
+        () => resolvePaymentMethod(type, { midtransEnabled: true }),
+        error => error.code === 'UNSUPPORTED_PAYMENT_METHOD'
     );
-});
-
-test('QRIS gateway is available only when Midtrans is enabled', () => {
-    assert.deepEqual(resolvePaymentMethod('qris', { midtransEnabled: true }), {
-        paymentType: 'QRIS',
-        isGatewayPayment: true,
-        isInstantPayment: false
-    });
 });

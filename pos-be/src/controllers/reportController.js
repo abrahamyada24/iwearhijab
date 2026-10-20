@@ -1,3 +1,4 @@
+const { paymentBreakdownFor } = require('../services/dashboardPaymentService');
 const { prisma } = require('../config/prisma');
 const { Parser } = require('json2csv');
 const { calculateShiftSummary } = require('../services/shiftSummaryService');
@@ -59,15 +60,15 @@ exports.getDashboardStats = async (req, res) => {
         const totalDiscount = transactions.reduce((sum, t) => sum + Number(t.discountAmount), 0);
 
         // 1b. Today-only stats for dashboard cards
-        const todayStart = new Date(now);
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date(now);
-        todayEnd.setHours(23, 59, 59, 999);
+        const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+        const todayStart = new Date(dayKey + 'T00:00:00+07:00');
+        const todayEnd = new Date(todayStart.getTime() + 86400000 - 1);
         const todayTransactions = transactions.filter(t => t.createdAt >= todayStart && t.createdAt <= todayEnd);
         const todayRevenue = todayTransactions.reduce((sum, t) => sum + Number(t.grandTotal), 0);
         const todayCount = todayTransactions.length;
         let todayProfit = 0;
         for (const trx of todayTransactions) {
+            todayProfit -= Number(trx.discountAmount || 0);
             for (const item of trx.items) {
                 todayProfit += (Number(item.price) - Number(item.costPrice)) * item.qty;
             }
@@ -76,6 +77,7 @@ exports.getDashboardStats = async (req, res) => {
         // 2. Profit calculation (using cost price snapshots)
         let totalProfit = 0;
         for (const trx of transactions) {
+            totalProfit -= Number(trx.discountAmount || 0);
             for (const item of trx.items) {
                 totalProfit += (Number(item.price) - Number(item.costPrice)) * item.qty;
             }
@@ -93,8 +95,6 @@ exports.getDashboardStats = async (req, res) => {
             .reduce((sum, t) => sum + Number(t.grandTotal), 0);
 
         // 4. Retail order breakdown.
-        const preOrderCount = transactions.filter(t => t.orderType === 'PRE_ORDER' || t.preOrderDate).length;
-        const retailCount = transactions.length - preOrderCount;
 
         // 5. Category breakdown
         const categoryMap = {};
@@ -144,18 +144,6 @@ exports.getDashboardStats = async (req, res) => {
         });
         const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
-        // 9. Low stock products
-        const lowStockProducts = await prisma.product.findMany({
-            where: {
-                isActive: true,
-                isUnlimitedStock: false,
-                stock: { lte: 5 }
-            },
-            include: { category: { select: { name: true } } },
-            orderBy: { stock: 'asc' },
-            take: 10
-        });
-
         // 10. Sales chart data (daily breakdown)
         const salesByDay = {};
         for (const trx of transactions) {
@@ -192,22 +180,15 @@ exports.getDashboardStats = async (req, res) => {
                     totalDiscount,
                     totalExpenses,
                     netProfit: totalProfit - totalExpenses,
-                    lowStockCount: lowStockProducts.length // for dashboard
+
                 },
-                paymentBreakdown: {
-                    cash: cashRevenue,
-                    qris: qrisRevenue,
-                    transfer: transferRevenue
-                },
-                orderTypeBreakdown: {
-                    retail: retailCount,
-                    preOrder: preOrderCount
-                },
+                paymentBreakdown: paymentBreakdownFor(transactions),
+
                 categoryBreakdown,
                 topProducts,
                 bestsellers: topProducts,
                 returns: { count: returnCount, total: returnTotal },
-                lowStockProducts,
+                todayPaymentBreakdown: paymentBreakdownFor(todayTransactions),
                 chart: chartData,
                 chartData,
                 recentTransactions,
@@ -245,7 +226,6 @@ exports.exportTransactionReport = async (req, res) => {
                 'Tanggal': t.createdAt.toISOString(),
                 'Kasir': t.user?.name || '-',
                 'Pelanggan': t.customer?.name || t.customerName || 'Guest',
-                'Jenis Penjualan': t.orderType === 'PRE_ORDER' || t.preOrderDate ? 'PRE-ORDER' : 'PENJUALAN TOKO',
                 'Subtotal': Number(t.subTotal),
                 'Diskon': Number(t.discountAmount),
                 'Pajak': Number(t.taxAmount),
@@ -607,51 +587,6 @@ exports.getProfitLoss = async (req, res) => {
         });
     } catch (error) {
         console.error("Profit Loss Error:", error.message);
-        res.status(500).json({ success: false, error: error.message });
-    }
-};
-
-/**
- * GET RETURNS LIST
- */
-exports.getReturnsList = async (req, res) => {
-    try {
-        const { dateFilter } = parseDateRange(req.query);
-        const { page = 1, limit = 10 } = req.query;
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-
-        const whereClause = {
-            ...dateFilter,
-            status: 'RETURNED'
-        };
-
-        const [returns, total] = await prisma.$transaction([
-            prisma.transaction.findMany({
-                where: whereClause,
-                include: {
-                    items: { include: { product: { select: { name: true, sku: true } } } },
-                    user: { select: { name: true } },
-                    customer: { select: { name: true, phone: true } }
-                },
-                orderBy: { createdAt: 'desc' },
-                skip,
-                take: parseInt(limit)
-            }),
-            prisma.transaction.count({ where: whereClause })
-        ]);
-
-        res.json({
-            success: true,
-            data: returns,
-            meta: {
-                total,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                totalPages: Math.ceil(total / parseInt(limit))
-            }
-        });
-    } catch (error) {
-        console.error("Returns List Error:", error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 };

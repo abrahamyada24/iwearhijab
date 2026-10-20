@@ -19,6 +19,8 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
     name: '',
     sku: '',
     barcode: '',
+    variant: '',
+    color: '',
     categoryId: '',
     price: '',
     costPrice: '',
@@ -76,6 +78,8 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
           name: initialData.name,
           sku: initialData.sku || '',
           barcode: initialData.barcode || '',
+          variant: initialData.variant || '',
+          color: initialData.color || '',
           categoryId: initialData.categoryId || '',
           price: initialData.price || '',
           costPrice: initialData.costPrice || '',
@@ -106,6 +110,8 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
           name: '',
           sku: '',
           barcode: '',
+    variant: '',
+    color: '',
           categoryId: categories && categories.length > 0 ? categories[0].id : '',
           price: '',
           costPrice: '',
@@ -320,6 +326,10 @@ export default function ProductModal({ isOpen, onClose, onSave, initialData, cat
                       <Tag className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
                       <input type="text" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-700 focus:outline-none focus:border-blue-500 transition-all placeholder:text-gray-300" placeholder="AUTO_GENERATE" />
                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="text-xs font-bold text-gray-600">Varian<input maxLength={100} value={formData.variant} onChange={e=>setFormData({...formData,variant:e.target.value})} className="mt-2 w-full rounded-xl border border-gray-200 p-3" placeholder="Contoh: Pashmina"/></label>
+                    <label className="text-xs font-bold text-gray-600">Warna<input maxLength={100} value={formData.color} onChange={e=>setFormData({...formData,color:e.target.value})} className="mt-2 w-full rounded-xl border border-gray-200 p-3" placeholder="Contoh: Dusty Pink"/></label>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Barcode Scanner</label>

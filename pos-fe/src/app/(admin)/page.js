@@ -215,55 +215,7 @@ function PendingSalesAlert({ count }) {
   );
 }
 
-// ─── Pre-Order Card ─────────────────────────────────────────────────
-function PreOrderCard({ order, onConfirm, confirming }) {
-  const now = new Date();
-  const pickupDate = new Date(order.pickupDate || order.preOrderDate);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const orderDay = new Date(pickupDate.getFullYear(), pickupDate.getMonth(), pickupDate.getDate());
-
-  let statusColor, statusLabel;
-  if (orderDay < today) {
-    statusColor = 'bg-red-50 border-red-200 text-red-700';
-    statusLabel = 'Terlambat';
-  } else if (orderDay.getTime() === today.getTime()) {
-    statusColor = 'bg-orange-50 border-orange-200 text-orange-700';
-    statusLabel = 'Hari Ini';
-  } else {
-    statusColor = 'bg-blue-50 border-blue-200 text-blue-700';
-    statusLabel = 'Mendatang';
-  }
-
-  const itemsSummary = (order.items || []).slice(0, 3).map(i => `${i.product?.name || i.productName || 'Item'} x${i.qty}`).join(', ');
-
-  return (
-    <div className={`rounded-xl border p-4 ${statusColor} transition-all hover:shadow-md`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="font-bold text-sm truncate">{order.customer?.name || order.customerName || 'Customer'}</p>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusColor}`}>{statusLabel}</span>
-          </div>
-          <p className="text-xs opacity-80 truncate">{itemsSummary || 'Tidak ada detail item'}</p>
-          <p className="text-xs opacity-60 mt-1 flex items-center gap-1">
-            <Clock size={12} />
-            Pickup: {pickupDate.toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-          </p>
-        </div>
-        <button
-          onClick={() => onConfirm(order.id)}
-          disabled={confirming === order.id}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-white/80 hover:bg-white rounded-lg text-xs font-bold transition-colors border border-current/10 disabled:opacity-50"
-        >
-          {confirming === order.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-          Konfirmasi
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Dashboard ─────────────────────────────────────────────────
+// ─── Dashboard ─────────────────────────────────────────────────
 export default function Dashboard() {
   const user = useStore(state => state.user);
   const settings = useStore(state => state.settings);
@@ -276,8 +228,6 @@ export default function Dashboard() {
   const [activeShift, setActiveShift] = useState(null);
   const [shiftLoading, setShiftLoading] = useState(true);
   const [savedTrxCount, setSavedTrxCount] = useState(0);
-  const [preOrders, setPreOrders] = useState([]);
-  const [confirmingPreOrder, setConfirmingPreOrder] = useState(null);
 
   // Modal state
   const [openShiftModal, setOpenShiftModal] = useState(false);
@@ -324,17 +274,16 @@ export default function Dashboard() {
     loadDashboardData();
   }, []);
 
-  // ── Fetch shift, saved transactions, pre-orders ──
+  // ── Fetch shift and saved transactions ──
   useEffect(() => {
     const loadAndroidPosData = async () => {
       try {
         const token = localStorage.getItem('token');
         const headers = { 'Authorization': `Bearer ${token}` };
 
-        const [shiftRes, savedRes, preOrderRes] = await Promise.allSettled([
+        const [shiftRes, savedRes] = await Promise.allSettled([
           fetch(`${API_URL}/api/shifts/current`, { headers }),
-          fetch(`${API_URL}/api/saved-transactions`, { headers }),
-          fetch(`${API_URL}/api/transactions/pre-orders`, { headers })
+          fetch(`${API_URL}/api/saved-transactions`, { headers })
         ]);
 
         // Active shift
@@ -351,13 +300,6 @@ export default function Dashboard() {
           }
         }
 
-        // Pre-orders
-        if (preOrderRes.status === 'fulfilled' && preOrderRes.value.ok) {
-          const preOrderJson = await preOrderRes.value.json();
-          if (preOrderJson.success) {
-            setPreOrders(Array.isArray(preOrderJson.data) ? preOrderJson.data : []);
-          }
-        }
       } catch (error) {
         console.error("AndroidPos data error:", error);
       } finally {
@@ -425,7 +367,7 @@ export default function Dashboard() {
         setClosingCash('');
         showAlert.success(
           'Shift berhasil ditutup',
-          `Tunai ${formatRp(json.data.cashSales)} • Pengeluaran ${formatRp(json.data.cashExpenses)} • Selisih ${formatRp(json.data.difference)}`
+          `Tunai ${formatRp(json.data.cashSales)} • Selisih ${formatRp(json.data.difference)}`
         );
       } else {
         showAlert.error('Gagal menutup shift', json.message || 'Coba lagi.');
@@ -437,53 +379,12 @@ export default function Dashboard() {
     }
   };
 
-  // ── Pre-order confirm ──
-  const handleConfirmPreOrder = async (id) => {
-    setConfirmingPreOrder(id);
-    try {
-      const res = await fetch(`${API_URL}/api/transactions/${id}/confirm-preorder`, {
-        method: 'POST',
-        headers: getHeaders()
-      });
-      const json = await res.json();
-      if (json.success) {
-        setPreOrders(prev => prev.filter(po => po.id !== id));
-      } else {
-        showAlert.error('Gagal konfirmasi pre-order', json.message || 'Coba lagi.');
-      }
-    } catch (err) {
-      showAlert.error('Gagal konfirmasi pre-order', err.message);
-    } finally {
-      setConfirmingPreOrder(null);
-    }
-  };
-
   // ── Helpers ──
   const formatRp = (num) => "Rp " + (Number(num) || 0).toLocaleString('id-ID');
   const getImageUrl = (path) => path ? (path.startsWith('http') ? path : `${API_URL}${path}`) : null;
   const formatDate = (dateStr) => new Date(dateStr).toLocaleString('id-ID', {
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
   });
-
-  // ── Group pre-orders by date ──
-  const groupedPreOrders = (() => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const groups = { overdue: [], today: [], upcoming: [] };
-
-    preOrders.forEach(po => {
-      const pickupDate = new Date(po.pickupDate || po.preOrderDate);
-      const orderDay = new Date(pickupDate.getFullYear(), pickupDate.getMonth(), pickupDate.getDate());
-
-      if (orderDay < today) groups.overdue.push(po);
-      else if (orderDay.getTime() === today.getTime()) groups.today.push(po);
-      else groups.upcoming.push(po);
-    });
-
-    return groups;
-  })();
-
-  const hasPreOrders = preOrders.length > 0;
 
   return (
     <div className="space-y-6 pb-10">
@@ -517,17 +418,23 @@ export default function Dashboard() {
       )}
 
       {/* ── Stat Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdminOrOwner ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
         {loading || !stats ? (
           <>
             <CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton />
           </>
         ) : (
           <>
-            <StatCardItem title="Total Penjualan" value={formatRp(stats.summary.todayRevenue)} subtitle="Pendapatan hari ini" icon={DollarSign} trend="up" trendValue="Realtime" color="blue" />
-            <StatCardItem title="Transaksi Selesai" value={stats.summary.todayCount} subtitle="Penjualan berhasil" icon={ShoppingCart} trend="up" trendValue="Hari ini" color="blue" />
-            <StatCardItem title="Gross Profit" value={formatRp(stats.summary.grossProfit)} subtitle="Margin (Jual - Modal)" icon={TrendingUp} trend="up" trendValue="Profit" color="green" />
-            <StatCardItem title="Stok Menipis" value={`${stats.summary.lowStockCount} Item`} subtitle="Perlu restock segera" icon={AlertTriangle} trend="down" trendValue="Warning" isAlert={true} color="red" />
+            {isAdminOrOwner ? <>
+              <StatCardItem title="Total Penjualan" value={formatRp(stats.summary.todayRevenue)} subtitle="Pendapatan hari ini" icon={DollarSign} color="blue" />
+              <StatCardItem title="Total Transaksi" value={stats.summary.todayCount} subtitle="Hari ini" icon={ShoppingCart} color="blue" />
+            </> : <>
+              <StatCardItem title="Total Penjualan Cash" value={formatRp(stats.todayPaymentBreakdown?.cash)} subtitle="Hari ini" icon={DollarSign} color="blue" />
+              <StatCardItem title="Total Penjualan QRIS" value={formatRp(stats.todayPaymentBreakdown?.qris)} subtitle="Hari ini" icon={DollarSign} color="green" />
+              <StatCardItem title="Total Transaksi Cash" value={stats.todayPaymentBreakdown?.cashCount || 0} subtitle="Hari ini" icon={ShoppingCart} color="blue" />
+              <StatCardItem title="Total Transaksi QRIS" value={stats.todayPaymentBreakdown?.qrisCount || 0} subtitle="Hari ini" icon={ShoppingCart} color="green" />
+            </>}
+            {isAdminOrOwner && <StatCardItem title="Gross Profit" value={formatRp(stats.summary.grossProfit)} subtitle="Margin hari ini" icon={TrendingUp} color="green" />}
           </>
         )}
       </div>
@@ -555,9 +462,9 @@ export default function Dashboard() {
                   <h3 className="font-bold text-lg text-gray-800">Analitik Pendapatan</h3>
                   <p className="text-xs text-gray-400">Tren penjualan 7 hari terakhir</p>
                 </div>
-                <Link href="/reports" className="text-xs text-blue-500 font-bold hover:underline bg-blue-50 px-3 py-1.5 rounded-lg">
+                {isAdminOrOwner && <Link href="/reports" className="text-xs text-blue-500 font-bold hover:underline bg-blue-50 px-3 py-1.5 rounded-lg">
                   Lihat Laporan
-                </Link>
+                </Link>}
               </div>
               <div className="flex-1 w-full min-h-[300px]">
                 <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>}>
@@ -569,39 +476,6 @@ export default function Dashboard() {
         </div>
 
         <div className="space-y-6">
-          {loading || !stats ? <ListSkeleton /> : (
-            <div className="card-base p-5 bg-white border border-gray-200 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-red-600 font-bold">
-                  <AlertTriangle size={18} />
-                  <h3>Stok Kritis</h3>
-                </div>
-                <Link href="/stock" className="text-[10px] text-gray-400 hover:text-gray-600">Lihat Gudang</Link>
-              </div>
-              <div className="space-y-3">
-                {(stats.lowStockProducts || []).length === 0 ? (
-                  <div className="text-center py-6 bg-green-50 rounded-xl border border-green-100">
-                    <p className="text-green-600 font-bold text-sm">Stok Aman 👍</p>
-                  </div>
-                ) : (
-                  (stats.lowStockProducts || []).map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100">
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-8 h-8 rounded-lg bg-white overflow-hidden flex-shrink-0">
-                          {item.imageUrl ? <img src={getImageUrl(item.imageUrl)} className="w-full h-full object-cover" /> : <Package size={14} className="m-2 text-red-200" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-gray-800 text-xs truncate">{item.name}</p>
-                          <p className="text-red-500 text-[10px] font-medium">Sisa: {item.stock}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
           {loading || !stats ? <ListSkeleton /> : (
             <div className="card-base p-5 bg-white border border-gray-200 shadow-sm">
               <h3 className="font-bold text-gray-800 mb-4">Produk Terlaris</h3>
@@ -625,69 +499,6 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-
-      {/* ── Pre-Order Section ── */}
-      {hasPreOrders && (
-        <div className="card-base bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg">
-                <Calendar size={20} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg text-gray-800">Pre-Order</h3>
-                <p className="text-xs text-gray-400">{preOrders.length} pesanan menunggu konfirmasi</p>
-              </div>
-            </div>
-          </div>
-          <div className="p-6 space-y-6">
-            {/* Overdue */}
-            {groupedPreOrders.overdue.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle size={16} className="text-red-500" />
-                  <h4 className="font-bold text-red-700 text-sm">Terlambat ({groupedPreOrders.overdue.length})</h4>
-                </div>
-                <div className="space-y-3">
-                  {groupedPreOrders.overdue.map(po => (
-                    <PreOrderCard key={po.id} order={po} onConfirm={handleConfirmPreOrder} confirming={confirmingPreOrder} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Today */}
-            {groupedPreOrders.today.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock size={16} className="text-orange-500" />
-                  <h4 className="font-bold text-orange-700 text-sm">Hari Ini ({groupedPreOrders.today.length})</h4>
-                </div>
-                <div className="space-y-3">
-                  {groupedPreOrders.today.map(po => (
-                    <PreOrderCard key={po.id} order={po} onConfirm={handleConfirmPreOrder} confirming={confirmingPreOrder} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Upcoming */}
-            {groupedPreOrders.upcoming.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Calendar size={16} className="text-blue-500" />
-                  <h4 className="font-bold text-blue-700 text-sm">Mendatang ({groupedPreOrders.upcoming.length})</h4>
-                </div>
-                <div className="space-y-3">
-                  {groupedPreOrders.upcoming.map(po => (
-                    <PreOrderCard key={po.id} order={po} onConfirm={handleConfirmPreOrder} confirming={confirmingPreOrder} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ── Recent Transactions Table ── */}
       <div className="mt-6">
@@ -719,7 +530,7 @@ export default function Dashboard() {
                       <td className="px-6 py-4 text-gray-700 font-medium text-xs">{trx.user?.name || '-'}</td>
                       <td className="px-6 py-4">
                         <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[9px] font-bold uppercase border border-gray-200">
-                          {trx.payments?.[0]?.paymentType || '-'}
+                          {trx.payments?.[0]?.paymentType === 'QRIS_MANUAL' ? 'QRIS' : trx.payments?.[0]?.paymentType || '-'}
                         </span>
                       </td>
                       <td className="px-6 py-4 font-bold text-gray-900 text-xs">{formatRp(trx.grandTotal)}</td>

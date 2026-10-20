@@ -22,10 +22,6 @@ export default function CartSidebar({
     grandTotal,
     subTotal,
     taxAmount,
-    orderType,
-    setOrderType,
-    preOrderDate,
-    setPreOrderDate,
     taxRate,
     // New props for enhanced features
     discount,
@@ -36,7 +32,8 @@ export default function CartSidebar({
     savedTransactionCount,
     onOpenSavedTransactions,
     onUpdateItemNotes,
-    onEditItemAddons
+    onEditItemAddons,
+    pointsUsed = 0
 }) {
   const [editingNoteId, setEditingNoteId] = useState(null);
   const clearCart = async () => {
@@ -112,34 +109,6 @@ export default function CartSidebar({
                 </div>
             )}
 
-            {/* Retail transaction type */}
-            <div className="flex bg-gray-100 p-1 rounded-lg">
-                <button 
-                    onClick={() => setOrderType('TAKE_AWAY')}
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${orderType === 'TAKE_AWAY' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
-                >
-                    Penjualan
-                </button>
-                <button 
-                    onClick={() => setOrderType('PRE_ORDER')}
-                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${orderType === 'PRE_ORDER' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
-                >
-                    Pre Order
-                </button>
-            </div>
-
-            {/* Pre Order Date Input (Only if Pre Order) */}
-            {orderType === 'PRE_ORDER' && (
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-600">Waktu Pengambilan</label>
-                    <input 
-                        type="datetime-local" 
-                        value={preOrderDate}
-                        onChange={(e) => setPreOrderDate(e.target.value)}
-                        className="w-full text-sm bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-blue-300 transition-colors text-gray-800"
-                    />
-                </div>
-            )}
         </div>
 
         {/* Cart Items List */}
@@ -255,7 +224,7 @@ export default function CartSidebar({
                         <div className="flex items-center gap-1.5">
                             <Tag size={12} className="text-orange-500" />
                             <span className="text-orange-600 font-medium">
-                                Diskon {discount.type === 'percent' ? `(${discount.value}%)` : ''}
+                                {pointsUsed ? `Diskon & penukaran ${pointsUsed} poin` : `Diskon ${discount.type === 'percent' ? `(${discount.value}%)` : ''}`}
                             </span>
                             <button 
                                 onClick={onRemoveDiscount}

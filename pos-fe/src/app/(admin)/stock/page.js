@@ -5,19 +5,16 @@ import {
     ClipboardList, ArrowDownRight, ArrowUpRight, AlertTriangle, 
     Search, Filter, Calendar, Package, Loader2, ArrowRightLeft 
 } from 'lucide-react';
-import StockModal from '@/components/StockModal';
 import { showAlert } from '@/utils/swal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function InventoryPage() {
   const [logs, setLogs] = useState([]);
-  const [products, setProducts] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('ALL'); 
   const [search, setSearch] = useState('');
   
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -25,16 +22,11 @@ export default function InventoryPage() {
         const token = localStorage.getItem('token');
         const headers = { 'Authorization': `Bearer ${token}` };
 
-        const [historyRes, productRes] = await Promise.all([
-            fetch(`${API_URL}/api/inventory/history`, { headers }),
-            fetch(`${API_URL}/api/products`, { headers })
-        ]);
+        const historyRes = await fetch(`${API_URL}/api/inventory/history`, { headers });
 
         const historyData = await historyRes.json();
-        const productData = await productRes.json();
 
         if (historyData.success) setLogs(historyData.data);
-        if (productData.success) setProducts(productData.data);
 
     } catch (error) {
         console.error("Gagal load inventory:", error);
@@ -56,30 +48,6 @@ export default function InventoryPage() {
       });
   }, [logs, filterType, search]);
 
-  const handleSaveAdjustment = async (formData) => {
-      try {
-          const token = localStorage.getItem('token');
-          const res = await fetch(`${API_URL}/api/inventory/adjustment`, {
-              method: 'POST',
-              headers: { 
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify(formData)
-          });
-
-          const data = await res.json();
-          if (!data.success) throw new Error(data.message);
-
-          showAlert.success('Stok diperbarui', 'Perubahan stok berhasil disimpan.');
-          setIsModalOpen(false);
-          fetchData();
-
-      } catch (error) {
-          showAlert.error('Gagal memperbarui stok', error.message);
-      }
-  };
-
   const formatDate = (dateString) => {
       const date = new Date(dateString);
       return new Intl.DateTimeFormat('id-ID', {
@@ -96,12 +64,6 @@ export default function InventoryPage() {
           <p className="text-gray-400 text-sm">Monitor pergerakan barang masuk & keluar.</p>
         </div>
         
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 shadow-lg shadow-blue-200 transition-colors font-medium"
-        >
-           <ClipboardList size={18} /> Stock Opname
-        </button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 justify-between bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
@@ -198,12 +160,6 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <StockModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveAdjustment}
-        products={products}
-      />
     </div>
   );
 }

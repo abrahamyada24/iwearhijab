@@ -1,14 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { hasThermalPrinter, printThermalReceipt } from '@/utils/thermalPrinter';
 import { Download, Loader2, Printer, Share2, X } from 'lucide-react';
 import { DEFAULT_DEVICE_PREFERENCES, getDevicePreferences, getPaperWidthMm } from '@/utils/devicePreferences';
 import { useStore } from '@/store/useStore';
 import { showAlert } from '@/utils/swal';
 import { createReceiptImageBlob, downloadReceiptImage, getReceiptImageFilename, shareReceiptImage } from '@/utils/receiptImage';
 
-export default function ReceiptPreviewModal({ isOpen, onClose, transaction, store, formatNumber }) {
+export default function ReceiptPreviewModal({ isOpen, onClose, transaction, store, formatNumber, autoPrint = false }) {
     const receiptRef = useRef(null);
+    const autoPrinted = useRef(new Set());
+    const printAction = useRef(null);
+    const [isPrinting, setIsPrinting] = useState(false);
     const imageGenerationRef = useRef(0);
     const [devicePreferences, setDevicePreferences] = useState(DEFAULT_DEVICE_PREFERENCES);
     const [receiptImageBlob, setReceiptImageBlob] = useState(null);
@@ -55,6 +59,15 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
         };
     }, [devicePreferences, isOpen, prepareReceiptImage, store, transaction]);
 
+    useEffect(() => {
+      const key = transaction?.invoiceNumber;
+      if (!isOpen || !autoPrint || !key || autoPrinted.current.has(key)) return;
+      const timer = window.setTimeout(() => {
+        autoPrinted.current.add(key);
+        printAction.current?.(true);
+      }, 500);
+      return () => window.clearTimeout(timer);
+    }, [isOpen, autoPrint, transaction?.invoiceNumber]);
     if (!isOpen || !transaction) return null;
 
     const numberFormat = (value) => {
@@ -104,13 +117,20 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
         }
     };
 
-    const handlePrint = async () => {
-        if (typeof window === 'undefined') return;
+    const handlePrint = async (automatic = false) => {
+        if (typeof window === 'undefined' || isPrinting) return;
+        if (hasThermalPrinter()) {
+            setIsPrinting(true);
+            try { await printThermalReceipt(receiptRef.current, { transaction, allowDrawer: automatic === true, paperWidth: paperWidthMm }); }
+            catch (error) { showAlert.error('Cetak belum berhasil', error.message + ' Transaksi sudah tersimpan; gunakan Cetak Struk untuk mencoba lagi.'); }
+            finally { setIsPrinting(false); }
+            return;
+        }
 
         if (window.electronAPI?.printReceipt && receiptRef.current) {
             const html = `<!doctype html><html><head><meta charset="utf-8"><style>
                 @page { size: ${paperWidthMm}mm auto; margin: 0; }
-                body { width: ${paperWidthMm}mm; margin: 0; padding: ${devicePreferences.printMarginMm}mm; box-sizing: border-box; font-family: monospace; color: #000; }
+                body { width: ${paperWidthMm}mm; margin: 0; padding: ${devicePreferences.printMarginMm}mm; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; color: #000; }
                 .receipt-logo { display: block; width: 100%; height: 16mm; max-width: ${logoMaxWidthMm}mm; margin: 0 auto 2mm; object-fit: contain; object-position: center; }
             </style></head><body>${receiptRef.current.innerHTML}</body></html>`;
             try {
@@ -123,8 +143,9 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
 
         window.print();
     };
+    printAction.current = handlePrint;
 
-    const paymentType = transaction.payments?.[0]?.paymentType || 'CASH';
+    const paymentType = transaction.payments?.[0]?.paymentType === 'QRIS_MANUAL' ? 'QRIS' : transaction.payments?.[0]?.paymentType || 'CASH';
     const paidAmount = transaction.cashAmount ?? transaction.payments?.[0]?.amount ?? transaction.grandTotal;
 
     return (
@@ -174,12 +195,13 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                         id="pos-receipt-print"
                         data-print-surface
                         ref={receiptRef}
-                        className="mx-auto bg-white font-mono text-[10px] leading-tight text-black shadow-md"
+                        className="mx-auto bg-white text-[11px] leading-tight text-black shadow-md"
                         style={{
                             overflowWrap: 'anywhere',
                             width: `${paperWidthMm}mm`,
                             padding: `${devicePreferences.printMarginMm}mm`,
                             boxSizing: 'border-box',
+                            fontFamily: 'Arial, Helvetica, sans-serif',
                         }}
                     >
                         <div className="mb-3 text-center">
@@ -209,8 +231,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                             <div>No: {transaction.invoiceNumber}</div>
                             <div>{formatDate(transaction.createdAt)}</div>
                             <div>Kasir: {transaction.user?.name || 'Kasir'}</div>
-                            <div>Pelanggan: {transaction.customerName || transaction.customer?.name || 'Umum'}</div>
-                            <div>Jenis: {transaction.orderType === 'PRE_ORDER' ? 'Pre-order' : 'Penjualan toko'}</div>
+                            {transaction.customerId && <div>Pelanggan: {transaction.customerName || transaction.customer?.name}</div>}
                         </div>
 
                         <div className="my-2 border-t border-dashed border-black" />
@@ -223,6 +244,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                                         <span>{numberFormat(Number(item.price) * Number(item.qty || item.quantity))}</span>
                                     </div>
                                     {item.notes && <div className="italic">Catatan: {item.notes}</div>}
+                                    {Number(item.loyaltyRewardQty) > 0 && <div>{item.loyaltyRewardQty} produk gratis · Tukar poin</div>}
                                 </div>
                             ))}
                         </div>
@@ -270,6 +292,9 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <button disabled={isPrinting} onClick={() => handlePrint(false)} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-3 text-sm font-bold text-white hover:bg-blue-700">
+                        <Printer size={17} /> Cetak Struk
+                    </button>
                     <button onClick={onClose} className="rounded-xl bg-gray-100 px-3 py-3 text-sm font-bold text-gray-700 hover:bg-gray-200">
                         Tutup
                     </button>
@@ -281,9 +306,7 @@ export default function ReceiptPreviewModal({ isOpen, onClose, transaction, stor
                         {isSharing ? <Loader2 size={17} className="animate-spin" /> : <Share2 size={17} />}
                         {isSharing ? 'Membuka' : 'Bagikan WA'}
                     </button>
-                    <button onClick={handlePrint} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-3 text-sm font-bold text-white hover:bg-blue-700">
-                        <Printer size={17} /> Cetak Struk
-                    </button>
+
                     </div>
                 </div>
             </div>

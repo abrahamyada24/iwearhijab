@@ -66,7 +66,7 @@ exports.updateSettings = async (req, res) => {
 
     // Konversi string 'true'/'false' dari FormData menjadi Boolean murni
     if (enableCash !== undefined) dataToUpdate.enableCash = enableCash === 'true' || enableCash === true;
-    if (enableQris !== undefined) dataToUpdate.enableQris = enableQris === 'true' || enableQris === true;
+    dataToUpdate.enableQris = false;
     if (enableDebit !== undefined) dataToUpdate.enableDebit = enableDebit === 'true' || enableDebit === true;
     if (autoPrintReceipt !== undefined) dataToUpdate.autoPrintReceipt = autoPrintReceipt === 'true' || autoPrintReceipt === true;
 
@@ -74,7 +74,7 @@ exports.updateSettings = async (req, res) => {
     if (allowNegativeStock !== undefined) dataToUpdate.allowNegativeStock = allowNegativeStock === 'true' || allowNegativeStock === true;
     if (showImages !== undefined) dataToUpdate.showImages = showImages === 'true' || showImages === true;
     if (theme !== undefined) dataToUpdate.theme = theme;
-    if (req.body.enablePreOrder !== undefined) dataToUpdate.enablePreOrder = req.body.enablePreOrder === 'true' || req.body.enablePreOrder === true;
+    dataToUpdate.enablePreOrder = false;
     if (req.body.enableShift !== undefined) dataToUpdate.enableShift = req.body.enableShift === 'true' || req.body.enableShift === true;
     if (req.body.enableShiftReminder !== undefined) dataToUpdate.enableShiftReminder = req.body.enableShiftReminder === 'true' || req.body.enableShiftReminder === true;
     if (req.body.shiftDurationMinutes !== undefined) {

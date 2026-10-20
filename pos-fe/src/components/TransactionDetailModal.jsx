@@ -98,11 +98,10 @@ export default function TransactionDetailModal({
     : "";
   const paperWidthMm = getPaperWidthMm(devicePreferences);
   const logoMaxWidthMm = paperWidthMm === 80 ? 58 : 42;
-  const paymentType = payments[0]?.paymentType || "TUNAI";
-  const paymentAmount = Number(payments[0]?.amount || transaction.grandTotal);
-  const changeAmount = Math.max(0, paymentAmount - Number(transaction.grandTotal || 0));
+  const paymentType = payments[0]?.paymentType === "QRIS_MANUAL" ? "QRIS" : payments[0]?.paymentType || "CASH";
+  const paymentAmount = Number(transaction.cashAmount ?? payments[0]?.amount ?? transaction.grandTotal);
+  const changeAmount = Number(transaction.changeAmount ?? Math.max(0, paymentAmount - Number(transaction.grandTotal || 0)));
   const isReturned = transaction.status === "RETURNED";
-  const orderLabel = transaction.orderType === "PRE_ORDER" ? "Pre-order" : "Penjualan toko";
   const showIwearBranding = !(license?.isActive && license?.plan === "PREMIUM");
 
   const createHistoryReceiptImage = async () => {
@@ -156,7 +155,7 @@ export default function TransactionDetailModal({
             box-sizing: border-box !important;
             background: #fff !important;
             color: #000 !important;
-            font-family: "Courier New", monospace !important;
+            font-family: Arial, Helvetica, sans-serif !important;
             line-height: 1.25 !important;
           }
           #history-receipt-print .receipt-logo {
@@ -229,17 +228,7 @@ export default function TransactionDetailModal({
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-100 bg-white p-3">
-            <p className="mb-1 text-[10px] font-bold uppercase text-gray-400">Jenis transaksi</p>
-            <div className="flex items-center gap-2 text-xs font-bold text-orange-700">
-              <Package size={14} /> {orderLabel}
-            </div>
-            {transaction.preOrderDate && (
-              <p className="mt-1 text-xs text-gray-500">
-                Pengambilan: {formatDate(transaction.preOrderDate)}
-              </p>
-            )}
-          </div>
+
 
           <div>
             <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
@@ -306,8 +295,8 @@ export default function TransactionDetailModal({
           data-print-surface
           ref={receiptRef}
           aria-hidden="true"
-          className="fixed -left-[10000px] top-0 block bg-white font-mono text-[10px] text-black"
-          style={{ width: `${paperWidthMm}mm`, padding: `${devicePreferences.printMarginMm}mm`, boxSizing: "border-box", lineHeight: 1.25 }}
+          className="fixed -left-[10000px] top-0 block bg-white text-[11px] text-black"
+          style={{ width: `${paperWidthMm}mm`, padding: `${devicePreferences.printMarginMm}mm`, boxSizing: "border-box", lineHeight: 1.25, fontFamily: "Arial, Helvetica, sans-serif" }}
         >
           <div style={{ textAlign: "center", marginBottom: "12px" }}>
             {storeLogo && (
@@ -335,8 +324,7 @@ export default function TransactionDetailModal({
           <div>No: {transaction.invoiceNumber}</div>
           <div>{formatDate(transaction.createdAt)}</div>
           <div>Kasir: {user?.name || "Kasir"}</div>
-          <div>Pelanggan: {transaction.customerName || customer?.name || "Umum"}</div>
-          <div>Jenis: {orderLabel}</div>
+          {transaction.customerId && <div>Pelanggan: {transaction.customerName || customer?.name}</div>}
 
           <div style={{ borderTop: "1px dashed #000", margin: "8px 0" }} />
           {items.map((item, index) => (
@@ -349,6 +337,7 @@ export default function TransactionDetailModal({
                 <span>{formatNumber(Number(item.price) * Number(item.qty))}</span>
               </div>
               {item.notes && <div style={{ fontSize: "9px", fontStyle: "italic" }}>CATATAN: {item.notes}</div>}
+              {Number(item.loyaltyRewardQty) > 0 && <div>{item.loyaltyRewardQty} produk gratis · Tukar poin</div>}
             </div>
           ))}
 
@@ -367,6 +356,9 @@ export default function TransactionDetailModal({
           )}
 
           <div style={{ borderTop: "1px dashed #000", margin: "8px 0" }} />
+          {transaction.customerId && transaction.pointsBalanceAfter != null && <div style={{ marginBottom: '8px' }}>
+            <div>Poin didapat: +{transaction.pointsEarned || 0}</div><div>Poin ditukar: {transaction.pointsRedeemed || 0}</div><div>Saldo poin: {transaction.pointsBalanceAfter}</div>
+          </div>}
           <div style={{ whiteSpace: "pre-wrap", textAlign: "center" }}>{receiptFooter}</div>
           {showIwearBranding && (
             <div style={{ marginTop: "6px", textAlign: "center", fontSize: "8px" }}>

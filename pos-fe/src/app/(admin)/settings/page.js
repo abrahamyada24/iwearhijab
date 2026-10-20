@@ -11,6 +11,7 @@ import {
 import { useStore } from '../../../store/useStore';
 import { showAlert } from '../../../utils/swal';
 import CurrencyInput from '../../../components/CurrencyInput';
+import { connectThermalPrinter, disconnectThermalPrinter, hasThermalPrinter, printThermalReceipt } from '@/utils/thermalPrinter';
 import { formatNumberId } from '../../../utils/currency';
 import {
   DEFAULT_DEVICE_PREFERENCES,
@@ -32,6 +33,8 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState(canManageBusinessSettings ? 'general' : 'theme');
   const [isLoading, setIsLoading] = useState(false);
   const [devicePreferences, setDevicePreferences] = useState(DEFAULT_DEVICE_PREFERENCES);
+  const [thermalConnected, setThermalConnected] = useState(false);
+  useEffect(() => { setThermalConnected(hasThermalPrinter()); }, []);
 
   const [form, setForm] = useState({
     storeName: '',
@@ -50,7 +53,6 @@ export default function SettingsPage() {
     allowNegativeStock: false,
     showImages: true,
     theme: 'light',
-    enablePreOrder: false,
     enableShift: true,
     enableShiftReminder: true,
     shiftDurationMinutes: 480,
@@ -131,7 +133,6 @@ export default function SettingsPage() {
         allowNegativeStock: settings.allowNegativeStock,
         showImages: settings.showImages,
         theme: settings.theme || 'light',
-        enablePreOrder: settings.enablePreOrder || false,
         enableShift: settings.enableShift !== undefined ? settings.enableShift : true,
         enableShiftReminder: settings.enableShiftReminder !== false,
         shiftDurationMinutes: Number(settings.shiftDurationMinutes) || 480,
@@ -333,7 +334,7 @@ export default function SettingsPage() {
             box-sizing: border-box !important;
             background: #fff !important;
             color: #000 !important;
-            font-family: monospace !important;
+            font-family: Arial, Helvetica, sans-serif !important;
           }
           #settings-printer-test .receipt-logo {
             display: block !important;
@@ -347,7 +348,7 @@ export default function SettingsPage() {
         }
       `}</style>
 
-      <div id="settings-printer-test" data-print-surface className="hidden text-[10px] leading-tight">
+      <div id="settings-printer-test" data-print-surface className="fixed -left-[10000px] top-0 bg-white text-[11px] leading-tight text-black" style={{ width: `${paperWidthMm}mm`, padding: `${devicePreferences.printMarginMm}mm`, fontFamily: 'Arial, Helvetica, sans-serif', boxSizing: 'border-box' }}>
         {printableLogoUrl && (
           <img className="receipt-logo" src={printableLogoUrl} alt="Logo toko" />
         )}
@@ -356,7 +357,7 @@ export default function SettingsPage() {
         <div>TEST PRINT — {paperWidthMm} MM</div>
         <div>Rasio logo dipertahankan otomatis</div>
         <div className="my-2 border-t border-dashed border-black" />
-        <div className="text-center">Printer browser siap digunakan</div>
+        <div className="text-center">Iwearing Hijab · Test Printer</div>
       </div>
 
       <div className="sticky -top-4 sm:-top-6 lg:-top-8 z-30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 py-4 border-b border-gray-200">
@@ -468,34 +469,7 @@ export default function SettingsPage() {
                             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                         </label>
                     </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-blue-200 transition-colors bg-white">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-blue-100 text-blue-600 rounded-xl"><Smartphone size={24} /></div>
-                            <div>
-                                <p className="font-bold text-gray-800">Midtrans (Payment Gateway)</p>
-                                <p className="text-xs text-gray-500">Aktifkan hanya setelah akun dan API key Midtrans siap</p>
-                            </div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" className="sr-only peer" checked={form.enableQris} onChange={() => handleToggle('enableQris')} />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                        </label>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-blue-200 transition-colors bg-white">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-purple-100 text-purple-600 rounded-xl"><CreditCard size={24} /></div>
-                            <div>
-                                <p className="font-bold text-gray-800">EDC / Debit</p>
-                                <p className="text-xs text-gray-500">Mesin EDC Bank (Manual Input)</p>
-                            </div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" className="sr-only peer" checked={form.enableDebit} onChange={() => handleToggle('enableDebit')} />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                        </label>
-                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-4"><p className="font-bold text-gray-800">QRIS</p><p className="text-xs text-gray-500">Pembayaran QRIS statis dikonfirmasi kasir.</p></div>
                 </div>
             </div>
         </div>
@@ -576,16 +550,6 @@ export default function SettingsPage() {
                         </label>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                        <div>
-                            <p className="font-bold text-gray-800 text-sm">Fitur Pre-Order</p>
-                            <p className="text-xs text-gray-500">Izinkan input tanggal pengambilan di checkout.</p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" className="sr-only peer" checked={form.enablePreOrder} onChange={() => handleToggle('enablePreOrder')} />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                        </label>
-                    </div>
 
                     {form.enableShift && (
                         <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 space-y-4">
@@ -720,19 +684,9 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
+
                         <div className="space-y-2">
-                            <label className="block text-sm font-bold text-gray-700">Nilai 1 Poin (Penukaran)</label>
-                            <div className="flex items-center gap-2">
-                                <span className="text-gray-400 font-bold">Rp</span>
-                                <CurrencyInput
-                                    value={loyaltyForm.pointValue} 
-                                    onChange={(value) => setLoyaltyForm({...loyaltyForm, pointValue: value})}
-                                    className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-bold"
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="block text-sm font-bold text-gray-700">Min. Poin Untuk Tukar</label>
+                            <label className="block text-sm font-bold text-gray-700">Poin untuk 1 Produk Gratis</label>
                             <div className="flex items-center gap-2">
                                 <input 
                                     type="number" 
@@ -751,8 +705,7 @@ export default function SettingsPage() {
                             <span className="font-bold underline mx-1">
                                 {Math.floor(50000 / (loyaltyForm.multiplierAmount || 10000)) * (loyaltyForm.pointMultiplier || 1)} Poin
                             </span>. 
-                            10 Poin dapat ditukar dengan potongan belanja senilai 
-                            <span className="font-bold underline ml-1">Rp {formatNumberId(10 * (loyaltyForm.pointValue || 100))}</span>.
+                            {loyaltyForm.minRedemptionPoints} poin dapat ditukar dengan 1 produk dari keranjang.
                         </p>
                     </div>
                 </div>
@@ -865,9 +818,13 @@ export default function SettingsPage() {
                 </select>
               </div>
             </div>
+            <div className="space-y-3 rounded-xl border border-gray-200 p-4">
+              <p className="text-sm font-bold text-gray-800">Printer Bluetooth / Serial 58 mm</p><p className="text-xs text-gray-500">Pasangkan printer di komputer, lalu hubungkan melalui Chrome atau Edge. Cetak langsung dan laci otomatis tersedia jika printer mendukung ESC/POS dan port laci.</p>
+              <button type="button" onClick={async () => { try { if (thermalConnected) await disconnectThermalPrinter(); else await connectThermalPrinter(); setThermalConnected(hasThermalPrinter()); } catch(error) { if(error.name !== 'NotFoundError') showAlert.error('Printer belum terhubung',error.message); } }} className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">{thermalConnected ? 'Putuskan Printer' : 'Hubungkan Printer'}</button>
+            </div>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={async () => { try { if (hasThermalPrinter()) await printThermalReceipt(document.getElementById('settings-printer-test'), { paperWidth: paperWidthMm }); else window.print(); } catch (error) { showAlert.error('Test print gagal', error.message); } }}
               className="w-full sm:w-auto rounded-xl bg-teal-600 px-5 py-3 text-sm font-bold text-white hover:bg-teal-700 flex items-center justify-center gap-2"
             >
               <Printer size={17} /> Test Print
