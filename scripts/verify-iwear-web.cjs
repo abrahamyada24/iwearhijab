@@ -314,7 +314,7 @@ const dashboard = {
     checks++;
     role = "CASHIER";
     await page.goto(base + "/");
-    await page.getByText("Total Penjualan Cash", { exact: true }).waitFor();
+    await page.getByRole("region", { name: "Total Penjualan", exact: true }).waitFor();
     assert.equal(
       await page.getByText("Gross Profit", { exact: true }).count(),
       0,

@@ -54,7 +54,7 @@ const menus = [
         else if (p === '/api/shifts/current') body.data = null;
         else if (p === '/api/transactions') body.meta = { page: 1, totalPages: 1, total: 0 };
         else if (p === '/api/expenses') body.total = 0;
-        else if (p === '/api/reports/dashboard') body.data = { summary: { todayRevenue: 50000, todayCount: 1, grossProfit: 10000 }, todayPaymentBreakdown: { cash: 50000, qris: 0, cashCount: 1, qrisCount: 0 }, chart: [], topProducts: [] };
+        else if (p === '/api/reports/dashboard') body.data = { summary: { todayRevenue: 125000, todayCount: 3, grossProfit: 10000 }, todayPaymentBreakdown: { cash: 50000, qris: 75000, cashCount: 1, qrisCount: 2 }, chart: [], topProducts: [] };
         await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
       });
 
@@ -79,6 +79,40 @@ const menus = [
         assert.equal(await nav.getByRole('link', { name: 'Pegawai', exact: true }).count(), 0);
         assert.equal(await nav.getByRole('link', { name: 'Pelanggan', exact: true }).count(), 0);
         await nav.getByRole('heading', { name: 'SISTEM KASIR', exact: true }).waitFor();
+        if (url === '/settings/') {
+          for (const hidden of ['Pembayaran', 'Tentang Aplikasi']) assert.equal(await page.getByRole('button', { name: hidden, exact: true }).count(), 0);
+          await page.getByRole('button', { name: 'Printer', exact: true }).click();
+          await page.getByRole('button', { name: 'Test Print', exact: true }).waitFor();
+          checks++;
+        }
+        if (url === '/') {
+          if (role === 'CASHIER') {
+            const sales = page.getByRole('region', { name: 'Total Penjualan', exact: true });
+            const count = page.getByRole('region', { name: 'Transaksi Selesai', exact: true });
+            await sales.waitFor(); await count.waitFor();
+            assert.equal(await page.locator('[data-payment-summary]').count(), 2);
+            assert.match(await sales.innerText(), /Rp 50\.000/);
+            assert.match(await sales.innerText(), /Rp 75\.000/);
+            assert.equal(await count.locator('[data-payment-method="CASH"]').getByText('1', { exact: true }).count(), 1);
+            assert.equal(await count.locator('[data-payment-method="QRIS"]').getByText('2', { exact: true }).count(), 1);
+            for (const card of [sales, count]) {
+              const cash = card.locator('[data-payment-method="CASH"]'); const qris = card.locator('[data-payment-method="QRIS"]');
+              assert.ok((await cash.boundingBox()).x < (await qris.boundingBox()).x);
+              assert.ok((await cash.getByText('CASH', { exact: true }).getAttribute('class')).includes('text-green-600'));
+              assert.ok((await qris.getByText('QRIS', { exact: true }).getAttribute('class')).includes('text-blue-600'));
+            }
+            assert.equal(await page.getByText('Gross Profit', { exact: true }).count(), 0);
+          } else {
+            await page.locator('main').getByRole('link', { name: 'Kelola Produk', exact: true }).waitFor();
+            assert.equal(await page.locator('main').getByRole('link', { name: 'Member', exact: true }).count(), 1);
+            assert.equal(await page.locator('main').getByText('Kelola Data', { exact: true }).count(), 0);
+            assert.equal(await page.locator('main').getByText('Rp', { exact: true }).count(), 1);
+          }
+          for (const removed of ['Stok Menipis','Stok Kritis']) assert.equal(await page.getByText(removed, { exact: true }).count(), 0);
+          await page.locator('canvas').first().waitFor();
+          if (role !== 'OWNER') await page.screenshot({ path: path.join(output, `${role.toLowerCase()}-dashboard.png`) });
+          checks++;
+        }
         if (role === 'CASHIER') {
           for (const hidden of ['Laporan','Pengeluaran','Pengguna']) assert.equal(await nav.getByRole('link', { name: hidden, exact: true }).count(), 0);
           if (url === '/products/') {
@@ -116,6 +150,11 @@ const menus = [
       if (role !== 'OWNER') await page.screenshot({ path: path.join(output, `${role.toLowerCase()}-desktop.png`) });
       if (role === 'CASHIER') {
         await page.setViewportSize({ width: 390, height: 844 });
+        await page.goto(base + '/');
+        await page.getByRole('region', { name: 'Total Penjualan', exact: true }).waitFor();
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        await page.screenshot({ path: path.join(output, 'staff-dashboard-mobile.png') });
+        await page.goto(base + '/stock/');
         await page.reload();
         await page.locator('header').count();
         await page.locator('main').waitFor();

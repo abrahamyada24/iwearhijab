@@ -61,3 +61,14 @@ Contoh hasil tampilan lokal berada di `artifacts/revision-web/`: `reward-desktop
 Validasi tindak lanjut: **6 tes frontend**, **34 pemeriksaan browser pada static export**, dan **build static export 22 halaman** lulus. Pengujian memakai Admin, Owner, dan Staff, URL berakhiran slash, reload, navigasi antarmenu, back/forward, pemblokiran akses, serta mobile; tidak ada page error. Screenshot berada di `artifacts/sidebar-role/` dan pengujian dapat diulang menggunakan `scripts/verify-sidebar-static.cjs` dengan Playwright/Edge.
 
 Perubahan sidebar ini hanya frontend; **tidak memerlukan migrasi database tambahan**. Belum di-commit, di-push, atau di-deploy oleh asisten.
+
+## Tindak lanjut Pengaturan dan Dashboard
+
+- Tab Pembayaran dan Tentang Aplikasi dihapus untuk semua role, beserta konten tab yang tidak lagi digunakan. Pengaturan Staff tetap Tema dan Printer; tab bisnis tetap untuk Admin/Owner.
+- Cash ditetapkan aktif pada form, respons pengaturan API, dan penyimpanan pengaturan, termasuk jika konfigurasi lama atau klien lama mengirim `enableCash=false`. QRIS manual dan Tukar Point tetap tersedia pada kasir.
+- Pintasan dashboard Admin/Owner menjadi Kelola Produk dan Member. Ikon Total Penjualan menggunakan Rp.
+- Dashboard Staff memakai dua kartu: Total Penjualan dan Transaksi Selesai. Masing-masing terbagi CASH hijau di kiri serta QRIS biru di kanan, dengan nominal/jumlah dari rekap pembayaran yang sudah ada. Gross Profit tetap disembunyikan.
+
+Validasi: **62 tes backend**, **6 tes frontend**, **40 pemeriksaan browser static export**, dan **build static export 22 halaman** lulus. Browser memeriksa Admin/Owner/Staff, tab yang dihapus, label baru, posisi/warna dan angka setiap metode pembayaran, serta mobile tanpa overflow. Screenshot dashboard berada di `artifacts/sidebar-role/admin-dashboard.png`, `cashier-dashboard.png`, dan `staff-dashboard-mobile.png`.
+
+Tidak memerlukan migrasi database tambahan. Perubahan masih lokal; commit, push, dan deployment belum dijalankan oleh asisten.

@@ -28,7 +28,7 @@ exports.getSettings = async (req, res) => {
     // Konfigurasi fitur harus selalu aktual karena dipakai untuk membentuk menu.
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Pragma', 'no-cache');
-    res.json({ success: true, data: { ...setting, enableDineTable: false } });
+    res.json({ success: true, data: { ...setting, enableCash: true, enableQris: false, enableDebit: false, enableDineTable: false } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -43,7 +43,7 @@ exports.updateSettings = async (req, res) => {
     const {
       storeName, address, phone, email, website,
       taxRate, serviceCharge, receiptFooter,
-      enableCash, enableQris, enableDebit, autoPrintReceipt,
+      autoPrintReceipt,
       allowNegativeStock, showImages, theme
     } = req.body;
 
@@ -65,9 +65,9 @@ exports.updateSettings = async (req, res) => {
     if (serviceCharge !== undefined) dataToUpdate.serviceCharge = parseFloat(serviceCharge);
 
     // Konversi string 'true'/'false' dari FormData menjadi Boolean murni
-    if (enableCash !== undefined) dataToUpdate.enableCash = enableCash === 'true' || enableCash === true;
+    dataToUpdate.enableCash = true;
     dataToUpdate.enableQris = false;
-    if (enableDebit !== undefined) dataToUpdate.enableDebit = enableDebit === 'true' || enableDebit === true;
+    dataToUpdate.enableDebit = false;
     if (autoPrintReceipt !== undefined) dataToUpdate.autoPrintReceipt = autoPrintReceipt === 'true' || autoPrintReceipt === true;
 
     // New PosAndroid integration toggles

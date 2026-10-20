@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigationGuard } from '@/components/NavigationGuard';
 import { 
-  Save, Store, CreditCard, ShieldCheck, UploadCloud, 
-  Receipt, Printer, Smartphone, DollarSign, Loader2, Image as ImageIcon,
+  Save, Store, ShieldCheck, UploadCloud,
+  Receipt, Printer, Smartphone, Loader2, Image as ImageIcon,
   Gift, Layout,
-  Moon, Info
+  Moon
 } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
 import { showAlert } from '../../../utils/swal';
@@ -93,8 +93,9 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (!canManageBusinessSettings && !['theme', 'printer', 'about'].includes(activeTab)) {
-      setActiveTab('theme');
+    const allowedTabs = canManageBusinessSettings ? ['general', 'system', 'loyalty', 'security', 'theme', 'printer'] : ['theme', 'printer'];
+    if (!allowedTabs.includes(activeTab)) {
+      setActiveTab(canManageBusinessSettings ? 'general' : 'theme');
     }
   }, [activeTab, canManageBusinessSettings]);
 
@@ -122,9 +123,9 @@ export default function SettingsPage() {
         address: settings.address || '',
         email: settings.email || '',
         website: settings.website || '',
-        enableCash: settings.enableCash,
-        enableQris: settings.enableQris,
-        enableDebit: settings.enableDebit,
+        enableCash: true,
+        enableQris: false,
+        enableDebit: false,
         taxRate: Number(settings.taxRate) || 0,
         serviceCharge: Number(settings.serviceCharge) || 0,
         autoPrintReceipt: settings.autoPrintReceipt,
@@ -363,10 +364,10 @@ export default function SettingsPage() {
       <div className="sticky -top-4 sm:-top-6 lg:-top-8 z-30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 py-4 border-b border-gray-200">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Pengaturan</h2>
-          <p className="text-gray-400 text-sm">Kelola profil toko, pembayaran, dan sistem.</p>
+          <p className="text-gray-400 text-sm">Kelola profil toko, poin, struk, dan perangkat.</p>
           {hasUnsavedChanges && <p role="status" className="mt-1 text-xs font-bold text-amber-700">Perubahan belum disimpan</p>}
         </div>
-        {canManageBusinessSettings && !['security', 'theme', 'printer', 'about'].includes(activeTab) && (
+        {canManageBusinessSettings && !['security', 'theme', 'printer'].includes(activeTab) && (
             <button 
                 onClick={async () => { if (await saveAllChanges()) showAlert.success('Pengaturan tersimpan', 'Semua perubahan berhasil disimpan.'); }}
                 disabled={isLoading}
@@ -380,13 +381,11 @@ export default function SettingsPage() {
 
       <div className="flex gap-2 border-b border-gray-100 pb-2 overflow-x-auto no-scrollbar">
         {canManageBusinessSettings && <TabButton id="general" label="Profil Toko" icon={Store} />}
-        {canManageBusinessSettings && <TabButton id="payment" label="Pembayaran" icon={CreditCard} />}
         {canManageBusinessSettings && <TabButton id="system" label="Sistem & Struk" icon={Receipt} />}
         {canManageBusinessSettings && <TabButton id="loyalty" label="Poin Pelanggan" icon={Gift} />}
         {canManageBusinessSettings && <TabButton id="security" label="Keamanan" icon={ShieldCheck} />}
         <TabButton id="theme" label="Tema" icon={Moon} />
         <TabButton id="printer" label="Printer" icon={Printer} />
-        <TabButton id="about" label="Tentang Aplikasi" icon={Info} />
       </div>
 
       {activeTab === 'general' && (
@@ -448,30 +447,6 @@ export default function SettingsPage() {
                 </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {activeTab === 'payment' && (
-        <div className="max-w-3xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="card-base p-6">
-                <h3 className="font-bold text-gray-800 mb-4 border-b border-gray-100 pb-3">Metode Pembayaran Aktif</h3>
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-blue-200 transition-colors bg-white">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-green-100 text-green-600 rounded-xl"><DollarSign size={24} /></div>
-                            <div>
-                                <p className="font-bold text-gray-800">Tunai (Cash)</p>
-                                <p className="text-xs text-gray-500">Terima pembayaran uang fisik</p>
-                            </div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" className="sr-only peer" checked={form.enableCash} onChange={() => handleToggle('enableCash')} />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                        </label>
-                    </div>
-                    <div className="rounded-xl border border-gray-100 bg-white p-4"><p className="font-bold text-gray-800">QRIS</p><p className="text-xs text-gray-500">Pembayaran QRIS statis dikonfirmasi kasir.</p></div>
-                </div>
-            </div>
         </div>
       )}
 
@@ -833,15 +808,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {activeTab === 'about' && (
-        <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="card-base p-8 text-center">
-            <h3 className="text-2xl font-black text-gray-800">Iwearing Hijab</h3>
-            <p className="mt-1 text-sm text-gray-500">Point of Sale untuk operasional outlet</p>
-            <p className="mt-5 text-xs text-gray-400">Pengaturan tema dan printer disimpan per perangkat.</p>
-          </div>
-        </div>
-      )}
 
     </div>
   );

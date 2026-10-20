@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import {
-  DollarSign, ShoppingCart, TrendingUp, AlertTriangle,
+  ShoppingCart, TrendingUp, AlertTriangle,
   Calendar, ArrowRight, Package, Eye, Loader2,
   Sun, Moon, Sunset, CloudSun,
   Clock, PlayCircle, StopCircle, X,
@@ -412,13 +412,13 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           <QuickActionCard icon={ShoppingCart} label="Buka Kasir" href="/pos" gradient="from-blue-500 to-indigo-600" />
           <QuickActionCard icon={BarChart3} label="Laporan" href="/reports" gradient="from-emerald-500 to-teal-600" />
-          <QuickActionCard icon={Package} label="Kelola Data" href="/products" gradient="from-violet-500 to-purple-600" />
-          <QuickActionCard icon={Users} label="Kontak" href="/customers" gradient="from-rose-500 to-pink-600" />
+          <QuickActionCard icon={Package} label="Kelola Produk" href="/products" gradient="from-violet-500 to-purple-600" />
+          <QuickActionCard icon={Users} label="Member" href="/customers" gradient="from-rose-500 to-pink-600" />
         </div>
       )}
 
       {/* ── Stat Cards ── */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdminOrOwner ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdminOrOwner ? 'lg:grid-cols-3' : ''} gap-4`}>
         {loading || !stats ? (
           <>
             <CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton />
@@ -426,13 +426,11 @@ export default function Dashboard() {
         ) : (
           <>
             {isAdminOrOwner ? <>
-              <StatCardItem title="Total Penjualan" value={formatRp(stats.summary.todayRevenue)} subtitle="Pendapatan hari ini" icon={DollarSign} color="blue" />
+              <StatCardItem title="Total Penjualan" value={formatRp(stats.summary.todayRevenue)} subtitle="Pendapatan hari ini" icon={RupiahIcon} color="blue" />
               <StatCardItem title="Total Transaksi" value={stats.summary.todayCount} subtitle="Hari ini" icon={ShoppingCart} color="blue" />
             </> : <>
-              <StatCardItem title="Total Penjualan Cash" value={formatRp(stats.todayPaymentBreakdown?.cash)} subtitle="Hari ini" icon={DollarSign} color="blue" />
-              <StatCardItem title="Total Penjualan QRIS" value={formatRp(stats.todayPaymentBreakdown?.qris)} subtitle="Hari ini" icon={DollarSign} color="green" />
-              <StatCardItem title="Total Transaksi Cash" value={stats.todayPaymentBreakdown?.cashCount || 0} subtitle="Hari ini" icon={ShoppingCart} color="blue" />
-              <StatCardItem title="Total Transaksi QRIS" value={stats.todayPaymentBreakdown?.qrisCount || 0} subtitle="Hari ini" icon={ShoppingCart} color="green" />
+              <PaymentSplitStatCard title="Total Penjualan" cash={formatRp(stats.todayPaymentBreakdown?.cash)} qris={formatRp(stats.todayPaymentBreakdown?.qris)} icon={RupiahIcon} />
+              <PaymentSplitStatCard title="Transaksi Selesai" cash={Number(stats.todayPaymentBreakdown?.cashCount || 0).toLocaleString('id-ID')} qris={Number(stats.todayPaymentBreakdown?.qrisCount || 0).toLocaleString('id-ID')} icon={ShoppingCart} />
             </>}
             {isAdminOrOwner && <StatCardItem title="Gross Profit" value={formatRp(stats.summary.grossProfit)} subtitle="Margin hari ini" icon={TrendingUp} color="green" />}
           </>
@@ -631,6 +629,33 @@ export default function Dashboard() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+function RupiahIcon({ size = 24 }) {
+  return <span aria-hidden="true" className="inline-flex items-center justify-center text-lg font-black leading-none" style={{ width: size, height: size }}>Rp</span>;
+}
+
+function PaymentSplitStatCard({ title, cash, qris, icon: Icon }) {
+  return (
+    <section aria-label={title} data-payment-summary className="card-base rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="rounded-xl bg-gray-100 p-3 text-gray-600"><Icon size={24} /></div>
+        <h3 className="text-sm font-bold text-gray-800">{title}</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-4 divide-x divide-gray-100">
+        <div data-payment-method="CASH" className="min-w-0">
+          <p className="mb-1 text-xs font-bold text-green-600">CASH</p>
+          <p className="break-words text-lg font-black text-gray-900 sm:text-2xl">{cash}</p>
+          <p className="mt-1 text-[10px] text-gray-400">Hari ini</p>
+        </div>
+        <div data-payment-method="QRIS" className="min-w-0 pl-4">
+          <p className="mb-1 text-xs font-bold text-blue-600">QRIS</p>
+          <p className="break-words text-lg font-black text-gray-900 sm:text-2xl">{qris}</p>
+          <p className="mt-1 text-[10px] text-gray-400">Hari ini</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
