@@ -4,8 +4,25 @@ import { createRequire } from 'node:module';
 import { calculateCheckoutTotals } from '../src/utils/checkoutTotals.js';
 import { validatePhoneInput, restrictPhoneInput } from '../src/utils/phone.js';
 import { buildReportExport } from '../src/utils/reportExport.js';
+import { normalizePathname, isRouteActive, canAccessPage } from '../src/utils/navigation.js';
 const require = createRequire(import.meta.url);
 const backend = require('../../pos-be/src/services/checkoutTotalsService');
+
+test('menu aktif konsisten untuk trailing slash, query, submenu, dan navigasi langsung', () => {
+  for (const path of ['/', '/products', '/categories', '/stock', '/transactions', '/reports', '/expenses', '/users', '/customers', '/settings', '/shifts']) {
+    for (const suffix of ['', '/', '/?from=sidebar']) assert.equal(isRouteActive(path + suffix, path), true);
+  }
+  assert.equal(normalizePathname('/expenses///?from=sidebar'), '/expenses');
+  assert.equal(isRouteActive('/products/12/', '/products'), true);
+  assert.equal(isRouteActive('/products/', '/'), false);
+  assert.equal(isRouteActive('/products-other/', '/products'), false);
+});
+test('Staff dapat membuka inventori dan member, tanpa laporan, pengeluaran, atau pengguna', () => {
+  for (const path of ['/products/', '/categories/', '/stock/', '/customers/', '/settings/', '/license/']) assert.equal(canAccessPage('CASHIER', path), true);
+  for (const path of ['/expenses/', '/reports/', '/reports/profit-loss/', '/users/']) assert.equal(canAccessPage('CASHIER', path), false);
+  for (const role of ['ADMIN', 'OWNER']) for (const path of ['/products/', '/reports/', '/expenses/', '/users/']) assert.equal(canAccessPage(role, path), true);
+  assert.equal(canAccessPage(undefined, '/products/'), false);
+});
 
 test('tagihan frontend dan server sama untuk diskon nominal/persen dan pajak', () => {
   for (const subTotal of [0, 325000, 99999]) for (const discountType of ['amount', 'percent']) for (const taxRate of [0, 0.11]) {

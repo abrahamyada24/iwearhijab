@@ -117,7 +117,7 @@ const handleSaveCustomer = async (formData) => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
          <div>
-           <h2 className="text-2xl font-bold text-gray-800">Pelanggan & Member</h2>
+           <h2 className="text-2xl font-bold text-gray-800">Member</h2>
            <p className="text-gray-400 text-sm">Database pelanggan setia toko Anda.</p>
          </div>
          

@@ -7,11 +7,13 @@ import { useStore } from '../../../store/useStore';
 import ProductModal from '../../../components/ProductModal';
 import ProductLabelModal from '@/components/ProductLabelModal';
 import { showAlert } from '../../../utils/swal';
+import { isManagementRole } from '@/utils/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function ProductsPage() {
     const { products, categories, fetchDataMaster } = useStore();
+    const canManage = isManagementRole(useStore(state => state.user?.role));
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Semua');
@@ -80,18 +82,21 @@ export default function ProductsPage() {
     };
 
     const handleAdd = () => {
+        if (!canManage) return;
         setEditingProduct(null);
         setIsModalOpen(true);
     };
 
     const handleEdit = (product, e) => {
         e.stopPropagation();
+        if (!canManage) return;
         setEditingProduct(product);
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id, e) => {
         e.stopPropagation();
+        if (!canManage) return;
         const confirmed = await showAlert.confirm("Hapus Produk?", "Produk akan dinonaktifkan dan disembunyikan dari daftar.");
 
         if (confirmed) {
@@ -116,6 +121,7 @@ export default function ProductsPage() {
     };
 
     const handleSaveProduct = async (formData) => {
+        if (!canManage) return;
         const token = localStorage.getItem('token');
         const data = new FormData();
         data.append('name', formData.name);
@@ -202,15 +208,15 @@ export default function ProductsPage() {
                         <Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
                     </div>
                 </div>
-                <button onClick={handleAdd} className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-100 transition-all active:scale-95">
+                {canManage && <button onClick={handleAdd} className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-100 transition-all active:scale-95">
                     <Plus size={18} /> Tambah Produk
-                </button>
+                </button>}
             </div>
 
             {/* Bento Grid Produk */}
             <div className="grid grid-cols-1 md:grid-cols-4 auto-rows-[200px] gap-4">
                 {/* Tombol Cepat Tambah Produk */}
-                {currentPage === 1 && !searchQuery && selectedCategory === 'Semua' && (
+                {canManage && currentPage === 1 && !searchQuery && selectedCategory === 'Semua' && (
                     <div onClick={handleAdd} className="md:col-span-1 md:row-span-1 border-2 border-dashed border-gray-300 rounded-3xl flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all cursor-pointer bg-gray-50/50 group">
                         <div className="p-3 bg-white rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform"><Plus size={24} /></div>
                         <span className="font-medium text-sm">Tambah Produk Baru</span>
@@ -248,8 +254,8 @@ export default function ProductsPage() {
                         {/* Hover Actions (Top Right) */}
                         <div className="absolute top-3 right-3 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
                             <button title="Label QR Produk" onClick={e => { e.stopPropagation(); setLabelProduct(item); }} className="p-2 bg-white/90 rounded-full text-gray-700 hover:text-blue-500 shadow-sm"><QrCode size={14}/></button>
-                            <button onClick={(e) => handleEdit(item, e)} className="p-2 bg-white/90 rounded-full text-gray-700 hover:text-blue-500 shadow-sm"><Edit size={14} /></button>
-                            <button onClick={(e) => handleDelete(item.id, e)} className="p-2 bg-white/90 rounded-full text-gray-700 hover:text-red-500 shadow-sm"><Trash2 size={14} /></button>
+                            {canManage && <button aria-label={`Edit produk ${item.name}`} onClick={(e) => handleEdit(item, e)} className="p-2 bg-white/90 rounded-full text-gray-700 hover:text-blue-500 shadow-sm"><Edit size={14} /></button>}
+                            {canManage && <button aria-label={`Hapus produk ${item.name}`} onClick={(e) => handleDelete(item.id, e)} className="p-2 bg-white/90 rounded-full text-gray-700 hover:text-red-500 shadow-sm"><Trash2 size={14} /></button>}
                         </div>
 
                         {/* Bottom Info */}
@@ -277,13 +283,13 @@ export default function ProductsPage() {
 
             {/* Modal CRUD */}
             <ProductLabelModal product={labelProduct} onClose={() => setLabelProduct(null)} />
-            <ProductModal
+            {canManage && <ProductModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSaveProduct}
                 initialData={editingProduct}
                 categories={categories}
-            />
+            />}
         </div>
     );
 }

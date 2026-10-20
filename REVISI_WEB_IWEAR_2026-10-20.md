@@ -48,3 +48,16 @@ Prisma Client lokal sudah dibuat ulang. Jalankan `npm ci` pada frontend/backend 
 Fixture browser hanya hidup dalam memori. Tidak ada transaksi uji permanen, deployment, commit, push, atau perubahan aplikasi Android. Script browser `scripts/verify-iwear-web.cjs` memerlukan Playwright dan Edge; dijalankan di sini menggunakan runtime bawaan Codex.
 
 Contoh hasil tampilan lokal berada di `artifacts/revision-web/`: `reward-desktop.png`, `receipt-desktop.png`, `label-desktop.png`, `staff-dashboard.png`, dan `pos-mobile.png`.
+
+## Tindak lanjut sidebar dan role
+
+- Header sidebar dan tampilan mobile menjadi **SISTEM KASIR / IWEARINGHIJAB**.
+- Pegawai diganti Pengguna; Pelanggan diganti Member. Menu Lisensi Outlet dihapus, sementara pemeriksaan lisensi dan halaman aktivasi internal tetap berjalan.
+- Staff bisa membuka Daftar Produk, Kategori, Riwayat Stok, Transaksi, Member, dan Pengaturan. Laporan, Pengeluaran, serta Pengguna tetap hanya Admin/Owner. Shift tetap mengikuti pengaturan toko.
+- Staff melihat produk/kategori tanpa tombol tambah, edit, atau hapus. Admin/Owner tetap dapat mengubah harga. Akses API penulisan produk/kategori tetap dibatasi oleh backend yang sudah ada.
+- URL dinormalisasi sebelum mencocokkan menu dan akses halaman: `/expenses` dan `/expenses/` menunjuk menu yang sama. Menu aktif diberi `aria-current`, dan grup inventori hanya aktif pada halaman inventori. Submenu terbuka otomatis saat masuk langsung ke halaman inventori.
+- Guard halaman langsung menahan render halaman yang dilarang untuk role aktif, termasuk saat navigasi dari halaman lain.
+
+Validasi tindak lanjut: **6 tes frontend**, **34 pemeriksaan browser pada static export**, dan **build static export 22 halaman** lulus. Pengujian memakai Admin, Owner, dan Staff, URL berakhiran slash, reload, navigasi antarmenu, back/forward, pemblokiran akses, serta mobile; tidak ada page error. Screenshot berada di `artifacts/sidebar-role/` dan pengujian dapat diulang menggunakan `scripts/verify-sidebar-static.cjs` dengan Playwright/Edge.
+
+Perubahan sidebar ini hanya frontend; **tidak memerlukan migrasi database tambahan**. Belum di-commit, di-push, atau di-deploy oleh asisten.

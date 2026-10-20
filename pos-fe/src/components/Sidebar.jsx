@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Users, Settings,
   ChevronDown, Box, ClipboardList, UserCircle, LogOut,
-  Wallet, Clock, Truck, BadgeCheck
+  Wallet, Clock
   , Building2, Loader2
 } from 'lucide-react';
 import Link, { useNavigationGuard } from './NavigationGuard';
@@ -12,12 +12,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '../store/useStore';
 import { showAlert } from '../utils/swal';
 import { getPosPendingTransactions } from '../utils/savedTransactions';
+import { normalizePathname, isRouteActive, INVENTORY_ROUTES, isManagementRole } from '../utils/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, badge, onNavigate }) => {
-  const pathname = usePathname();
-  const isActive = href ? pathname === href : hasSubmenu && ['/products', '/categories', '/stock'].includes(pathname);
+  const pathname = normalizePathname(usePathname());
+  const isActive = href ? isRouteActive(pathname, href) : hasSubmenu && INVENTORY_ROUTES.some(path => isRouteActive(pathname, path));
 
   const content = (
     <div className="flex items-center gap-3">
@@ -45,7 +46,7 @@ const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, bad
   }
 
   return (
-    <button onClick={onClick} className={className}>
+    <button onClick={onClick} className={className} aria-expanded={hasSubmenu ? isOpen : undefined} aria-controls={hasSubmenu ? 'inventory-navigation' : undefined} data-active={isActive ? 'true' : undefined}>
       {content}
       {hasSubmenu && (
         <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
@@ -57,7 +58,7 @@ const SidebarItem = ({ icon: Icon, label, href, hasSubmenu, isOpen, onClick, bad
 export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
   const navigation = useNavigationGuard();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = normalizePathname(usePathname());
 
   // Menggunakan selector reaktif dari Zustand Store
   const user = useStore((state) => state.user);
@@ -80,6 +81,9 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
 
   useEffect(() => {
     setIsMobileOpen(false);
+    if (INVENTORY_ROUTES.some(path => isRouteActive(pathname, path))) {
+      setExpandedMenu(current => ({ ...current, inventory: true }));
+    }
   }, [pathname, setIsMobileOpen]);
 
   // Fetch pending saved transactions count
@@ -144,7 +148,8 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
     return path.startsWith('http') ? path : `${API_URL}${path}`;
   };
 
-  const isAdminOrOwner = user?.role === 'ADMIN' || user?.role === 'OWNER';
+  const isAdminOrOwner = isManagementRole(user?.role);
+  const canBrowseInventory = isAdminOrOwner || user?.role === 'CASHIER';
   const enableShift = settings?.enableShift;
 
   return (
@@ -157,8 +162,8 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
           {/* Brand Header - Identik dengan Header Kasir */}
           <Link href="/" className="h-16 lg:h-20 flex items-center px-6 border-b border-gray-100 flex-shrink-0" title="Kembali ke dashboard">
             <div className="min-w-0">
-              <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">{settings?.storeName || 'Iwearing Hijab'}</h1>
-              <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">Iwearing Hijab · Retail Suite</p>
+              <h1 className="text-lg font-bold leading-none tracking-tight text-gray-800 truncate">SISTEM KASIR</h1>
+              <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider truncate">IWEARINGHIJAB</p>
             </div>
           </Link>
 
@@ -202,8 +207,8 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
           <div className="flex-1 overflow-y-auto py-4 px-4 space-y-1 no-scrollbar">
             <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/" onNavigate={() => setIsMobileOpen(false)} />
 
-            {/* MANAGEMENT MENU: ADMIN AND OWNER ONLY */}
-            {isAdminOrOwner && (
+            {/* Staff can browse inventory; product/category writes remain Admin/Owner only. */}
+            {canBrowseInventory && (
               <div className="pt-4 pb-2">
                 <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 italic">Management</p>
                 <SidebarItem
@@ -214,10 +219,12 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
                   onClick={() => toggleSubmenu('inventory')}
                 />
                 {expandedMenu.inventory && (
-                  <div className="ml-4 pl-4 border-l border-gray-100 space-y-1 mt-1 mb-2">
-                    <Link href="/products" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/products' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Daftar Produk</Link>
-                    <Link href="/categories" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/categories' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Kategori</Link>
-                    <Link href="/stock" onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${pathname === '/stock' ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>Riwayat Stok</Link>
+                  <div id="inventory-navigation" className="ml-4 pl-4 border-l border-gray-100 space-y-1 mt-1 mb-2">
+                    {[
+                      ['/products', 'Daftar Produk'], ['/categories', 'Kategori'], ['/stock', 'Riwayat Stok'],
+                    ].map(([href, label]) => (
+                      <Link key={href} href={href} aria-current={isRouteActive(pathname, href) ? 'page' : undefined} onClick={() => setIsMobileOpen(false)} className={`block w-full text-left px-4 py-2 text-sm rounded-lg transition-colors ${isRouteActive(pathname, href) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-500 hover:text-gray-800'}`}>{label}</Link>
+                    ))}
                   </div>
                 )}
               </div>
@@ -230,24 +237,23 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
               <SidebarItem icon={ClipboardList} label="Laporan" href="/reports" onNavigate={() => setIsMobileOpen(false)} />
             )}
 
-            <div className="pt-4 pb-2">
+            {(isAdminOrOwner || enableShift) && <div className="pt-4 pb-2">
               <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 italic">Operasional</p>
               {enableShift && <SidebarItem icon={Clock} label="Shift" href="/shifts" onNavigate={() => setIsMobileOpen(false)} />}
               {isAdminOrOwner && (
                 <SidebarItem icon={Wallet} label="Pengeluaran" href="/expenses" onNavigate={() => setIsMobileOpen(false)} />
               )}
-            </div>
+            </div>}
 
-            {isAdminOrOwner && (
+            {canBrowseInventory && (
               <div className="pt-4 pb-2">
                 <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 italic">People</p>
-                <SidebarItem icon={Users} label="Pegawai" href="/users" onNavigate={() => setIsMobileOpen(false)} />
-                <SidebarItem icon={UserCircle} label="Pelanggan" href="/customers" onNavigate={() => setIsMobileOpen(false)} />
+                {isAdminOrOwner && <SidebarItem icon={Users} label="Pengguna" href="/users" onNavigate={() => setIsMobileOpen(false)} />}
+                <SidebarItem icon={UserCircle} label="Member" href="/customers" onNavigate={() => setIsMobileOpen(false)} />
               </div>
             )}
 
             <SidebarItem icon={Settings} label="Pengaturan" href="/settings" onNavigate={() => setIsMobileOpen(false)} />
-            <SidebarItem icon={BadgeCheck} label="Lisensi Outlet" href="/license" onNavigate={() => setIsMobileOpen(false)} />
           </div>
 
           {/* User Profile Area - Persis seperti Header (Clean & Mewah) */}

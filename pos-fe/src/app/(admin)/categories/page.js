@@ -5,11 +5,13 @@ import { Search, Plus, TrendingUp, Package, ArrowUpRight, ImageIcon, Trash2, Edi
 import { useStore } from '@/store/useStore';
 import CategoryModal from '@/components/CategoryModal';
 import { showAlert } from '@/utils/swal';
+import { isManagementRole } from '@/utils/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function CategoriesPage() {
     const { categories, fetchDataMaster } = useStore();
+    const canManage = isManagementRole(useStore(state => state.user?.role));
 
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,18 +44,21 @@ export default function CategoriesPage() {
     );
 
     const handleAdd = () => {
+        if (!canManage) return;
         setEditingCategory(null);
         setIsModalOpen(true);
     };
 
     const handleEdit = (category, e) => {
         e.stopPropagation();
+        if (!canManage) return;
         setEditingCategory(category);
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id, e) => {
         e.stopPropagation();
+        if (!canManage) return;
 
         const confirmed = await showAlert.confirm(
             "Hapus Kategori?",
@@ -85,6 +90,7 @@ export default function CategoriesPage() {
     };
 
     const handleSaveCategory = async (formData) => {
+        if (!canManage) return;
         const token = localStorage.getItem('token');
         const data = new FormData();
         data.append('name', formData.name);
@@ -143,17 +149,17 @@ export default function CategoriesPage() {
                             className="w-full sm:w-64 pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm transition-all text-sm font-medium"
                         />
                     </div>
-                    <button
+                    {canManage && <button
                         onClick={handleAdd}
                         className="min-h-11 flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-all active:scale-95 whitespace-nowrap font-bold text-sm"
                     >
                         <Plus size={20} strokeWidth={3} /> Tambah
-                    </button>
+                    </button>}
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 auto-rows-[152px] md:auto-rows-[200px] gap-3 md:gap-6">
-                <div
+                {canManage && <div
                     onClick={handleAdd}
                     className="hidden md:flex md:col-span-1 md:row-span-1 border-2 border-dashed border-gray-200 rounded-lg flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/20 transition-all cursor-pointer bg-white group shadow-sm"
                 >
@@ -161,7 +167,7 @@ export default function CategoriesPage() {
                         <Plus size={28} className="group-hover:text-blue-600" />
                     </div>
                     <span className="font-black text-[10px] uppercase tracking-[0.2em]">Tambah Kategori</span>
-                </div>
+                </div>}
 
                 {filteredCategories.map((cat) => (
                     <div
@@ -181,7 +187,7 @@ export default function CategoriesPage() {
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
                         </div>
 
-                        <div className="absolute top-3 right-3 md:top-4 md:right-4 flex gap-2 opacity-100 translate-y-0 md:opacity-0 md:translate-y-2 md:group-hover:opacity-100 md:group-hover:translate-y-0 transition-all duration-300 z-20">
+                        {canManage && <div className="absolute top-3 right-3 md:top-4 md:right-4 flex gap-2 opacity-100 translate-y-0 md:opacity-0 md:translate-y-2 md:group-hover:opacity-100 md:group-hover:translate-y-0 transition-all duration-300 z-20">
                             <button
                                 type="button"
                                 aria-label={`Edit kategori ${cat.name}`}
@@ -200,7 +206,7 @@ export default function CategoriesPage() {
                             >
                                 <Trash2 size={17} />
                             </button>
-                        </div>
+                        </div>}
 
                         <div className="absolute inset-0 p-4 md:p-7 flex flex-col justify-between z-10 pointer-events-none">
                             <div className="hidden md:flex flex-wrap gap-2">
@@ -227,12 +233,12 @@ export default function CategoriesPage() {
                 ))}
             </div>
 
-            <CategoryModal
+            {canManage && <CategoryModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSaveCategory}
                 initialData={editingCategory}
-            />
+            />}
         </div>
     );
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
+import { normalizePathname, canAccessPage } from '@/utils/navigation';
 
 const INACTIVITY_TIMEOUT_HOURS = 16;
 const INACTIVITY_TIMEOUT_MS = INACTIVITY_TIMEOUT_HOURS * 60 * 60 * 1000;
@@ -12,7 +13,8 @@ const INACTIVITY_NOTICE = `Sesi berakhir karena tidak aktif selama ${INACTIVITY_
 
 export default function AuthGuard({ children }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = normalizePathname(usePathname());
+  const user = useStore(state => state.user);
   const hydrateSession = useStore((state) => state.hydrateSession);
   const fetchLicenseStatus = useStore((state) => state.fetchLicenseStatus);
   const logout = useStore((state) => state.logout);
@@ -24,13 +26,9 @@ export default function AuthGuard({ children }) {
       return false;
     }
 
-    if (user.role === 'CASHIER') {
-      const allowedPaths = ['/', '/pos', '/transactions', '/shifts', '/settings', '/license'];
-      const isAllowed = allowedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-      if (!isAllowed) {
-        router.replace('/');
-        return false;
-      }
+    if (!canAccessPage(user.role, pathname)) {
+      router.replace('/');
+      return false;
     }
 
     return true;
@@ -137,7 +135,7 @@ export default function AuthGuard({ children }) {
     };
   }, [fetchLicenseStatus, isAuthorized, pathname, router]);
 
-  if (!isAuthorized) {
+  if (!isAuthorized || !canAccessPage(user?.role, pathname)) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 text-gray-500 gap-3">
         <Loader2 className="animate-spin text-blue-500" size={48} />
