@@ -1,6 +1,7 @@
 import React from 'react';
 import { Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import tw, { useAppColorScheme } from 'twrnc';
+import { useAppColorScheme } from 'twrnc';
+import tw from '../theme';
 import DatePickerDropdown from './DatePickerDropdown';
 
 export type DiscountValues = {

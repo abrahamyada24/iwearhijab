@@ -1,2 +1,2 @@
-// Backend Iwearing Hijab khusus toko. Ganti placeholder setelah backend toko di-deploy.
-export const IWEAR_API_ORIGIN = 'https://api.iwear.example';
+// Same-origin /api endpoint supplied by the store owner.
+export const IWEAR_API_ORIGIN = 'https://iwearhijab.vercel.app';

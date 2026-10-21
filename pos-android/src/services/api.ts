@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearAuthSession, getAuthToken, OFFLINE_SESSION_TOKEN } from './secureAuthStorage';
 import { clearLicenseCache } from './secureLicenseStorage';
 import { IWEAR_API_ORIGIN } from '../config/deployment';
+import { useStore } from '../store/useStore';
 
 export const DEFAULT_API_URL = IWEAR_API_ORIGIN;
 export const API_BASE_URL_STORAGE_KEY = '@iwear_api_base_url';
@@ -115,7 +116,7 @@ api.interceptors.request.use(
             config.baseURL = buildApiBaseUrl(baseUrl);
 
             const token = await getAuthToken();
-            if (token && token !== OFFLINE_SESSION_TOKEN) {
+            if (token && token !== OFFLINE_SESSION_TOKEN && !config.headers.Authorization) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
         } catch (error) {
@@ -127,5 +128,16 @@ api.interceptors.request.use(
         return Promise.reject(error);
     }
 );
+
+api.interceptors.response.use(response => response, async error => {
+    const code = error?.response?.data?.code;
+    if (error?.response?.status === 401 || ['STORE_ACCESS_REQUIRED', 'PASSWORD_CHANGE_REQUIRED', 'USER_INACTIVE'].includes(code)) {
+        await clearAuthSession();
+        useStore.getState().clearCart();
+        useStore.getState().setActiveShift(null);
+        useStore.getState().setUser(null);
+    }
+    return Promise.reject(error);
+});
 
 export default api;

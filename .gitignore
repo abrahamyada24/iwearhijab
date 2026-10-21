@@ -30,6 +30,7 @@ yarn-error.log*
 Thumbs.db
 
 # Android build cache
+artifacts/android/
 pos-android/android/app/build/
 pos-android/android/.gradle/
 pos-android/android/local.properties

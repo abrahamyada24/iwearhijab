@@ -3,7 +3,7 @@ import { Alert, BackHandler, Text, TextInput, TouchableOpacity, View } from 'rea
 import Clipboard from '@react-native-clipboard/clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import tw from 'twrnc';
+import tw from '../theme';
 import { useStore } from '../store/useStore';
 import { clearAuthSession } from '../services/secureAuthStorage';
 import {

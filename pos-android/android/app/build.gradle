@@ -92,8 +92,8 @@ android {
         applicationId "com.iwear.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 11
-        versionName "1.4.2"
+        versionCode 12
+        versionName "1.5.0"
     }
     signingConfigs {
         debug {
@@ -103,7 +103,7 @@ android {
             keyPassword 'android'
         }
         release {
-            if (hasReleaseSigning) {
+            if (hasReleaseSigning && releaseKeystoreProperties['storeFile']) {
                 storeFile file(releaseKeystoreProperties['storeFile'])
                 storePassword releaseKeystoreProperties['storePassword']
                 keyAlias releaseKeystoreProperties['keyAlias']
@@ -132,6 +132,29 @@ tasks.register('validateReleaseSigning') {
         if (!hasReleaseSigning) {
             throw new GradleException('android/keystore.properties belum tersedia. Jangan membangun APK release dengan debug.keystore.')
         }
+        ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { field ->
+            def value = releaseKeystoreProperties.getProperty(field)
+            if (!value?.trim() || value.startsWith('GANTI_DENGAN_')) {
+                throw new GradleException("Isi ${field} pada android/keystore.properties sebelum build release.")
+            }
+        }
+        def releaseKeyFile = file(releaseKeystoreProperties.getProperty('storeFile'))
+        def releaseAlias = releaseKeystoreProperties.getProperty('keyAlias')
+        if (releaseKeyFile.name.equalsIgnoreCase('debug.keystore') || releaseAlias.equalsIgnoreCase('androiddebugkey')) {
+            throw new GradleException('Release harus memakai signing key privat toko, bukan debug key.')
+        }
+        if (!releaseKeyFile.isFile()) {
+            throw new GradleException('Release keystore tidak ditemukan. storeFile dihitung dari folder android/app; boleh juga memakai path absolut dengan slash /.')
+        }
+        try {
+            def keyStore = java.security.KeyStore.getInstance(releaseKeyFile, releaseKeystoreProperties.getProperty('storePassword').toCharArray())
+            if (!keyStore.isKeyEntry(releaseAlias) || !keyStore.getKey(releaseAlias, releaseKeystoreProperties.getProperty('keyPassword').toCharArray())) {
+                throw new IllegalArgumentException('Key entry missing')
+            }
+        } catch (Exception ignored) {
+            throw new GradleException('Signing key belum dapat dibuka. Periksa format keystore, alias, storePassword, dan keyPassword secara lokal.')
+        }
+        logger.lifecycle('Signing release valid. Password dan private key tidak ditampilkan.')
     }
 }
 

@@ -1,23 +1,24 @@
-> Panduan KasirPOS: [deployment](../PANDUAN_DEPLOYMENT.md) dan [penggunaan](../PANDUAN_PENGGUNA.md).
+> Iwearing Hijab: [panduan commit/push dan build release](../PANDUAN_COMMIT_DAN_RELEASE_IWEAR.md), [hasil penyesuaian Android](../PENYESUAIAN_ANDROID_2026-10-22.md).
 
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
 
-## Build APK release KasirPOS
+## Build APK release Iwearing Hijab
 
 APK yang dibagikan kepada pengguna harus ditandatangani dengan release keystore privat, bukan `debug.keystore`.
 
-1. Simpan release keystore di `android/app/kasirpos-release.keystore`.
+1. Gunakan signing key toko yang sama dengan APK sebelumnya; contoh lokasi `android/app/iwear-release.keystore`.
 2. Salin `android/keystore.properties.example` menjadi `android/keystore.properties`.
 3. Isi password dan alias yang benar. Kedua file tersebut diabaikan Git.
 4. Jalankan dari folder `pos-android/android`:
 
 ```sh
-gradlew.bat assembleRelease --no-daemon
+.\gradlew.bat :app:validateReleaseSigning --console=plain
+.\gradlew.bat :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --console=plain --max-workers=2
 ```
 
-Hasilnya berada di `android/app/build/outputs/apk/release/app-release.apk`.
+Hasilnya berada di `android/app/build/outputs/apk/release/app-release.apk`. Perintah ini untuk HP ARM64. Release menyertakan bundle JavaScript dan tidak memerlukan Metro. Lihat panduan lengkap di atas untuk setup key dan build universal.
 
 Simpan backup keystore dan password di tempat aman. Semua pembaruan aplikasi berikutnya harus menggunakan keystore yang sama. Jika kunci hilang atau berubah, pengguna harus menghapus aplikasi lama sebelum memasang versi baru.
 

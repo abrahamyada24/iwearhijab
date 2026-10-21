@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useStore } from '../store/useStore';
-import OrderNotificationWatcher from './OrderNotificationWatcher';
 
 type DialogButtonStyle = 'default' | 'cancel' | 'destructive';
 
@@ -51,7 +50,7 @@ const getTone = (dialog: DialogState | null) => {
 };
 
 const toneMap = {
-    info: { bg: '#EFF6FF', fg: '#2563EB', icon: 'information-outline' },
+    info: { bg: '#faf3f4', fg: '#a8747a', icon: 'information-outline' },
     success: { bg: '#ECFDF5', fg: '#16A34A', icon: 'check-circle-outline' },
     warning: { bg: '#FFFBEB', fg: '#D97706', icon: 'alert-outline' },
     danger: { bg: '#FEF2F2', fg: '#DC2626', icon: 'alert-circle-outline' },
@@ -203,7 +202,6 @@ export default function AppDialogProvider({ children }: { children: ReactNode })
 
     return (
         <>
-            <OrderNotificationWatcher />
             {children}
             <Modal
                 visible={!!dialog}
@@ -355,7 +353,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     buttonPrimary: {
-        backgroundColor: '#2563EB',
+        backgroundColor: '#a8747a',
     },
     buttonDanger: {
         backgroundColor: '#EF4444',
