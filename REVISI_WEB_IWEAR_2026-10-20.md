@@ -84,3 +84,16 @@ Tidak memerlukan migrasi database tambahan. Perubahan masih lokal; commit, push,
 Validasi: **67 tes backend**, **6 tes frontend**, **49 pemeriksaan browser static export**, dan **build static export 22 halaman** lulus. Pengujian browser memeriksa Admin/Owner/Staff, pencarian invoice/nama/ID member, hasil kosong, rentang tanggal, header tabel, detail transaksi, dan mobile tanpa overflow. Tidak ada page error. Screenshot tabel/detail tersedia di `artifacts/sidebar-role/*transactions*.png` dan `*transaction-detail*.png`.
 
 Tidak ada perubahan schema atau migrasi database tambahan. Frontend dan backend perlu dipasang ulang agar pencarian member tersedia. Pengujian menggunakan fixture lokal tanpa mengubah data toko. Commit, push, dan deployment belum dijalankan oleh asisten.
+
+## Tindak lanjut Laporan dan Pengeluaran — 21 Oktober 2026
+
+- Laporan Transaksi tidak lagi memiliki kolom Tipe. Detail memakai label Member dan QRIS, termasuk pembayaran historis `QRIS_MANUAL`. Tab serta ekspor laporan pelanggan memakai nama Member.
+- Detail laporan mengambil transaksi lengkap dari endpoint detail, sehingga item produk tidak bergantung pada data ringkas dari daftar transaksi. Proses pemuatan menampilkan indikator pada invoice dan kegagalan ditampilkan kepada pengguna.
+- Deskripsi Pengeluaran menjadi **Pencatatan pengeluaran perusahaan**. Ringkasan hanya memiliki kartu Total; kartu Pengeluaran dan label Filtered dihapus.
+- Dropdown kategori menggantikan filter tipe. Backend menerapkan kategori bersama rentang tanggal dan menghitung total berdasarkan hasil yang sama.
+- Kolom Tipe dihapus dari tabel Pengeluaran. Pilihan kategori form/filter berurutan **Umum, Operasional, Konveksi, Gaji**. Backend menolak kategori Lainnya, Bahan Baku, dan Utilitas pada catatan baru. Catatan historis tetap dapat dilihat pada Semua Kategori tanpa mengubah data lama.
+- Pembelian tetap tidak tersedia. Perubahan tidak memerlukan migrasi database tambahan; frontend dan backend perlu dipasang ulang bersama.
+
+Validasi: **73 tes backend**, **7 tes frontend**, **59 pemeriksaan browser static export**, dan **build static export 22 halaman** lulus. Browser memeriksa Admin/Owner, pemuatan item melalui endpoint detail, label Member/QRIS, kolom laporan, filter kategori dan hasil kosong, total, penyimpanan pengeluaran, serta tampilan mobile. Akses Staff ke Laporan/Pengeluaran tetap diblokir; tidak ada page error. Screenshot tersedia di `artifacts/reports-expenses/`.
+
+Pengujian memakai fixture lokal tanpa mengubah data toko. Commit, push, dan deployment belum dijalankan oleh asisten.

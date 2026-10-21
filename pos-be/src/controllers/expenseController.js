@@ -1,10 +1,15 @@
 const { prisma } = require('../config/prisma');
+const EXPENSE_CATEGORIES = ['Umum', 'Operasional', 'Konveksi', 'Gaji'];
 
 // 1. GET ALL EXPENSES (with date filtering)
 exports.getAllExpenses = async (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
+        const { startDate, endDate, category } = req.query;
         const whereClause = {};
+        if (category) {
+            if (!EXPENSE_CATEGORIES.includes(category)) return res.status(400).json({ success: false, message: 'Kategori pengeluaran tidak tersedia.' });
+            whereClause.category = category;
+        }
 
         if (startDate && endDate) {
             whereClause.createdAt = {
@@ -33,7 +38,7 @@ exports.createExpense = async (req, res) => {
     try {
         const { description, amount, category, type } = req.body;
         if (type && type !== 'EXPENSE') return res.status(400).json({ success: false, message: 'Jenis pembelian sudah dihapus.' });
-        if (!['Umum', 'Operasional', 'Gaji', 'Konveksi', 'Lainnya'].includes(category || 'Umum')) return res.status(400).json({ success: false, message: 'Kategori pengeluaran tidak tersedia.' });
+        if (!EXPENSE_CATEGORIES.includes(category || 'Umum')) return res.status(400).json({ success: false, message: 'Kategori pengeluaran tidak tersedia.' });
         if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) return res.status(400).json({ success: false, message: 'Jumlah pengeluaran harus lebih dari nol.' });
 
         if (!description || !amount) {

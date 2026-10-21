@@ -44,7 +44,7 @@ const TransactionDetailModal = ({ isOpen, onClose, transaction }) => {
                             <p className="font-bold text-gray-800">{transaction.user?.name || '-'}</p>
                         </div>
                         <div>
-                            <p className="text-gray-500">Pelanggan</p>
+                            <p className="text-gray-500">Member</p>
                             <p className="font-bold text-gray-800">{transaction.customer?.name || transaction.customerName || 'Umum'}</p>
                         </div>
                         <div>
@@ -98,7 +98,7 @@ const TransactionDetailModal = ({ isOpen, onClose, transaction }) => {
                         <p className="text-sm font-bold text-gray-800 mb-2">Pembayaran</p>
                         {transaction.payments?.map((p, idx) => (
                             <div key={idx} className="flex justify-between text-sm">
-                                <span className="text-gray-500">{p.paymentType}</span>
+                                <span className="text-gray-500">{p.paymentType === 'QRIS_MANUAL' ? 'QRIS' : p.paymentType}</span>
                                 <span className="font-bold">{formatRp(p.amount)}</span>
                             </div>
                         ))}
@@ -128,13 +128,14 @@ export default function ReportsPage() {
     const [expensesData, setExpensesData] = useState([]);
 
     const [selectedTrx, setSelectedTrx] = useState(null);
+    const [loadingTransactionId, setLoadingTransactionId] = useState(null);
     const [exportingFormat, setExportingFormat] = useState('');
 
     const TABS = [
         { id: 'TRANSAKSI', label: 'Transaksi', icon: Receipt },
         { id: 'KATEGORI', label: 'Kategori', icon: LayoutGrid },
         { id: 'TERLARIS', label: 'Terlaris', icon: TrendingUp },
-        { id: 'PELANGGAN', label: 'Pelanggan', icon: Users },
+        { id: 'PELANGGAN', label: 'Member', icon: Users },
         { id: 'SHIFT', label: 'Shift', icon: Clock },
         { id: 'LABARUGI', label: 'Laba Rugi', icon: DollarSign },
         { id: 'PENGELUARAN', label: 'Pengeluaran', icon: Wallet },
@@ -148,6 +149,21 @@ export default function ReportsPage() {
     };
 
     const requestOptions = () => ({ credentials: 'include', cache: 'no-store' });
+
+    const handleOpenTransaction = async (transactionId) => {
+        if (loadingTransactionId !== null) return;
+        setLoadingTransactionId(transactionId);
+        try {
+            const response = await fetch(`${API_URL}/api/transactions/${transactionId}`, requestOptions());
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.message || payload.error || 'Detail transaksi belum dapat dimuat.');
+            setSelectedTrx(payload.data);
+        } catch (error) {
+            showAlert.error('Gagal memuat transaksi', error.message || 'Silakan coba lagi.');
+        } finally {
+            setLoadingTransactionId(null);
+        }
+    };
 
     const loadData = async () => {
         setLoading(true);
@@ -292,18 +308,21 @@ export default function ReportsPage() {
                                             <th className="px-6 py-4 font-bold text-gray-500">Invoice</th>
                                             <th className="px-6 py-4 font-bold text-gray-500">Waktu</th>
                                             <th className="px-6 py-4 font-bold text-gray-500">Kasir</th>
-                                            <th className="px-6 py-4 font-bold text-gray-500">Tipe</th>
                                             <th className="px-6 py-4 font-bold text-gray-500 text-right">Total</th>
                                             <th className="px-6 py-4 font-bold text-gray-500">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {transactions.map(trx => (
-                                            <tr key={trx.id} onClick={() => setSelectedTrx(trx)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">
-                                                <td className="px-6 py-4 font-medium text-blue-600">{trx.invoiceNumber}</td>
+                                            <tr key={trx.id} onClick={() => handleOpenTransaction(trx.id)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">
+                                                <td className="px-6 py-4 font-medium text-blue-600">
+                                                    <button type="button" disabled={loadingTransactionId !== null} aria-label={`Detail transaksi ${trx.invoiceNumber}`} className="inline-flex items-center gap-2 text-left hover:underline disabled:opacity-50">
+                                                        {trx.invoiceNumber}
+                                                        {loadingTransactionId === trx.id && <Loader2 size={14} className="animate-spin" />}
+                                                    </button>
+                                                </td>
                                                 <td className="px-6 py-4 text-gray-600">{new Date(trx.createdAt).toLocaleString('id-ID')}</td>
                                                 <td className="px-6 py-4 text-gray-800">{trx.user?.name || '-'}</td>
-                                                <td className="px-6 py-4 text-gray-600">{trx.orderType}</td>
                                                 <td className="px-6 py-4 font-bold text-gray-900 text-right">{formatRp(trx.grandTotal)}</td>
                                                 <td className="px-6 py-4">
                                                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold ${trx.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -383,7 +402,7 @@ export default function ReportsPage() {
                         <table className="w-full text-left border-collapse text-sm">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className="px-6 py-4 font-bold text-gray-500">Pelanggan</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500">Member</th>
                                     <th className="px-6 py-4 font-bold text-gray-500 text-center">Kunjungan</th>
                                     <th className="px-6 py-4 font-bold text-gray-500 text-right">Total Belanja</th>
                                     <th className="px-6 py-4 font-bold text-gray-500 text-right">Rata-rata</th>

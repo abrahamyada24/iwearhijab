@@ -7,6 +7,7 @@ const { chromium } = require('playwright');
 
 const exported = path.resolve(__dirname, '../pos-fe/out');
 const output = path.resolve(__dirname, '../artifacts/sidebar-role');
+const reportOutput = path.resolve(__dirname, '../artifacts/reports-expenses');
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain', '.woff2': 'font/woff2', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -38,6 +39,7 @@ const menus = [
 
 (async () => {
   fs.mkdirSync(output, { recursive: true });
+  fs.mkdirSync(reportOutput, { recursive: true });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
@@ -49,6 +51,13 @@ const menus = [
       const page = await context.newPage();
       page.on('pageerror', error => errors.push(`${role}: ${error.message}`));
       const transactionQueries = [];
+      let detailRequests = 0;
+      const expenseRequests = [];
+      let expenseRecords = [
+        { id: 1, description: 'Gaji Oktober', category: 'Gaji', amount: 100000, createdAt: transaction.createdAt },
+        { id: 2, description: 'Jahit hijab', category: 'Konveksi', amount: 50000, createdAt: transaction.createdAt },
+        { id: 3, description: 'Catatan historis', category: 'Lainnya', amount: 2000, createdAt: transaction.createdAt },
+      ];
       await context.route('**/api/**', async route => {
         const requestUrl = new URL(route.request().url());
         const p = requestUrl.pathname;
@@ -64,11 +73,23 @@ const menus = [
         else if (p === '/api/transactions') {
           transactionQueries.push(requestUrl.searchParams);
           const search = requestUrl.searchParams.get('search') || '';
-          body.data = [transaction].filter(row => [row.invoiceNumber, row.customer.name, row.customer.memberId].some(value => value.includes(search)));
+          const { items, ...listTransaction } = transaction;
+          body.data = [listTransaction].filter(row => [row.invoiceNumber, row.customer.name, row.customer.memberId].some(value => value.includes(search)));
           body.meta = { page: 1, totalPages: 1, total: body.data.length };
         }
-        else if (p === '/api/transactions/1') body.data = transaction;
-        else if (p === '/api/expenses') body.total = 0;
+        else if (p === '/api/transactions/1') { detailRequests++; body.data = transaction; }
+        else if (p === '/api/expenses') {
+          if (route.request().method() === 'POST') {
+            const data = route.request().postDataJSON();
+            expenseRequests.push(data);
+            body.data = { ...data, id: expenseRecords.length + 1, amount: Number(data.amount), createdAt: transaction.createdAt };
+            expenseRecords.push(body.data);
+          } else {
+            const category = requestUrl.searchParams.get('category');
+            body.data = expenseRecords.filter(row => !category || row.category === category);
+            body.total = body.data.reduce((sum, row) => sum + row.amount, 0);
+          }
+        }
         else if (p === '/api/reports/dashboard') body.data = { summary: { todayRevenue: 125000, todayCount: 3, grossProfit: 10000 }, todayPaymentBreakdown: { cash: 50000, qris: 75000, cashCount: 1, qrisCount: 2 }, chart: [], topProducts: [] };
         await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
       });
@@ -99,6 +120,88 @@ const menus = [
           await page.getByRole('button', { name: 'Printer', exact: true }).click();
           await page.getByRole('button', { name: 'Test Print', exact: true }).waitFor();
           checks++;
+        }
+        if (url === '/reports/') {
+          const main = page.locator('main');
+          await main.getByRole('button', { name: `Detail transaksi ${transaction.invoiceNumber}`, exact: true }).waitFor();
+          assert.deepEqual(await main.getByRole('columnheader').allTextContents(), ['Invoice', 'Waktu', 'Kasir', 'Total', 'Status']);
+          assert.equal(await main.getByRole('button', { name: 'Retur', exact: true }).count(), 0);
+          assert.equal(await main.getByRole('button', { name: 'Pelanggan', exact: true }).count(), 0);
+          await main.getByRole('button', { name: 'Member', exact: true }).click();
+          await main.getByRole('columnheader', { name: 'Member', exact: true }).waitFor();
+          await main.getByRole('button', { name: 'Transaksi', exact: true }).click();
+          const open = main.getByRole('button', { name: `Detail transaksi ${transaction.invoiceNumber}`, exact: true });
+          await open.waitFor();
+          if (role === 'ADMIN') await page.screenshot({ path: path.join(reportOutput, 'admin-reports.png') });
+          const previousRequests = detailRequests;
+          await open.click();
+          await page.getByRole('heading', { name: 'Detail Transaksi', exact: true }).waitFor();
+          assert.equal(detailRequests, previousRequests + 1, 'reports fetch full items from detail endpoint');
+          const modal = page.locator('div.fixed').filter({ has: page.getByRole('heading', { name: 'Detail Transaksi', exact: true }) });
+          for (const label of ['Member', 'Aisyah', 'Pashmina', 'QRIS']) assert.equal(await modal.getByText(label, { exact: true }).count(), 1, label);
+          for (const removed of ['Pelanggan', 'QRIS_MANUAL']) assert.equal(await modal.getByText(removed, { exact: true }).count(), 0);
+          if (role === 'ADMIN') {
+            await page.screenshot({ path: path.join(reportOutput, 'admin-report-detail.png') });
+            await page.setViewportSize({ width: 390, height: 844 });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+            await page.screenshot({ path: path.join(reportOutput, 'admin-report-detail-mobile.png') });
+            await page.setViewportSize({ width: 1366, height: 900 });
+          }
+          await modal.getByRole('button', { name: 'Tutup', exact: true }).click();
+          checks += 2;
+        }
+        if (url === '/expenses/') {
+          const main = page.locator('main');
+          await main.getByText('Gaji Oktober', { exact: true }).waitFor();
+          await main.getByText('Pencatatan pengeluaran perusahaan', { exact: true }).waitFor();
+          assert.deepEqual(await main.getByRole('columnheader').allTextContents(), ['Tanggal', 'Deskripsi', 'Kategori', 'Jumlah', '']);
+          assert.equal(await main.getByText('Pengeluaran', { exact: true }).count(), 1, 'only heading, no expense summary card');
+          assert.equal(await main.getByText(/Filtered:/).count(), 0);
+          const filter = page.getByRole('combobox', { name: 'Filter kategori pengeluaran', exact: true });
+          assert.deepEqual(await filter.locator('option').allTextContents(), ['Semua Kategori', 'Umum', 'Operasional', 'Konveksi', 'Gaji']);
+          const total = page.getByRole('region', { name: 'Total pengeluaran', exact: true });
+          assert.match(await total.innerText(), /152\.000/);
+          await filter.selectOption('Konveksi');
+          await main.getByText('Jahit hijab', { exact: true }).waitFor();
+          await page.waitForFunction(() => document.querySelector('section[aria-label="Total pengeluaran"]').textContent.includes('50.000'));
+          assert.equal(await main.getByText('Gaji Oktober', { exact: true }).count(), 0);
+          await filter.selectOption('Operasional');
+          await main.getByText('Belum ada pengeluaran', { exact: true }).waitFor();
+          assert.match(await total.innerText(), /0 catatan/);
+          await filter.selectOption('');
+          await main.getByText('Catatan historis', { exact: true }).waitFor();
+          const dated = page.waitForResponse(res => {
+            const query = new URL(res.url());
+            return query.pathname === '/api/expenses' && query.searchParams.get('startDate') === '2026-10-19';
+          });
+          await page.getByLabel('Tanggal awal pengeluaran').fill('2026-10-19'); await dated;
+          if (role === 'ADMIN') await page.screenshot({ path: path.join(reportOutput, 'admin-expenses.png') });
+          await main.getByRole('button', { name: 'Tambah', exact: true }).click();
+          const form = page.locator('form');
+          const category = form.getByRole('combobox', { name: 'Kategori pengeluaran', exact: true });
+          assert.deepEqual(await category.locator('option').allTextContents(), ['Umum', 'Operasional', 'Konveksi', 'Gaji']);
+          assert.equal(await form.getByRole('button', { name: 'Pembelian', exact: true }).count(), 0);
+          await form.getByPlaceholder('Deskripsi', { exact: true }).fill('Jahit tambahan');
+          await form.getByPlaceholder('Jumlah (Rp)', { exact: true }).fill('25000');
+          await category.selectOption('Konveksi');
+          if (role === 'ADMIN') await page.screenshot({ path: path.join(reportOutput, 'admin-expense-form.png') });
+          await form.getByRole('button', { name: 'Simpan', exact: true }).click();
+          await main.getByText('Jahit tambahan', { exact: true }).waitFor();
+          assert.equal(expenseRequests.length, 1);
+          assert.deepEqual(expenseRequests[0], { description: 'Jahit tambahan', amount: '25000', category: 'Konveksi', type: 'EXPENSE' });
+          assert.match(await total.innerText(), /177\.000/);
+          if (role === 'ADMIN') {
+            await page.setViewportSize({ width: 390, height: 844 });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+            await page.screenshot({ path: path.join(reportOutput, 'admin-expenses-mobile.png') });
+            await main.getByRole('button', { name: 'Tambah', exact: true }).click();
+            await category.waitFor();
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+            await page.screenshot({ path: path.join(reportOutput, 'admin-expense-form-mobile.png') });
+            await form.getByRole('button', { name: 'Batal', exact: true }).click();
+            await page.setViewportSize({ width: 1366, height: 900 });
+          }
+          checks += 3;
         }
         if (url === '/transactions/') {
           const table = page.locator('main table');

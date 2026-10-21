@@ -50,3 +50,10 @@ test('ekspor laporan menampilkan nilai kategori pengeluaran dari respons API', (
   assert.equal(category.amount, -2500000);
   assert.equal(category.amount, total.amount);
 });
+
+test('ekspor laporan member memakai label yang sama dengan halaman laporan', () => {
+  const report = buildReportExport('PELANGGAN', { customerData: [{ name: 'Aisyah', totalSpent: 50000, visitCount: 1 }] });
+  assert.equal(report.title, 'Member');
+  assert.equal(report.columns[0].header, 'Member');
+  assert.equal(report.rows[0].name, 'Aisyah');
+});

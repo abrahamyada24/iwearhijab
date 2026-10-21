@@ -2,7 +2,7 @@ const REPORT_TITLES = {
   TRANSAKSI: "Transaksi",
   KATEGORI: "Kategori",
   TERLARIS: "Produk Terlaris",
-  PELANGGAN: "Pelanggan",
+  PELANGGAN: "Member",
   SHIFT: "Shift",
   LABARUGI: "Laba Rugi",
   PENGELUARAN: "Pengeluaran",
@@ -97,7 +97,7 @@ export function buildReportExport(activeTab, data) {
       return {
         title,
         columns: columns(
-          ["Pelanggan", "name"],
+          ["Member", "name"],
           ["Telepon", "phone"],
           ["Kunjungan", "visits", "number"],
           ["Total Belanja", "spent", "currency"],
