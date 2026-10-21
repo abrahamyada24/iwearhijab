@@ -72,3 +72,15 @@ Perubahan sidebar ini hanya frontend; **tidak memerlukan migrasi database tambah
 Validasi: **62 tes backend**, **6 tes frontend**, **40 pemeriksaan browser static export**, dan **build static export 22 halaman** lulus. Browser memeriksa Admin/Owner/Staff, tab yang dihapus, label baru, posisi/warna dan angka setiap metode pembayaran, serta mobile tanpa overflow. Screenshot dashboard berada di `artifacts/sidebar-role/admin-dashboard.png`, `cashier-dashboard.png`, dan `staff-dashboard-mobile.png`.
 
 Tidak memerlukan migrasi database tambahan. Perubahan masih lokal; commit, push, dan deployment belum dijalankan oleh asisten.
+
+## Tindak lanjut Transaksi — 21 Oktober 2026
+
+- Filter Status beserta ringkasannya dihapus dari halaman Transaksi. Kolom Status tetap tersedia dalam tabel.
+- Kolom pencarian menjadi **Cari Invoice / Member...**. Backend mencari nomor invoice, nama member, ID member, serta nama member yang tersimpan ketika transaksi dibuat. Filter tanggal dan pagination tetap berlaku pada hasil pencarian.
+- Kolom Tipe Pesanan dihapus; jumlah kolom untuk indikator loading dan hasil kosong ikut disesuaikan.
+- Label Pelanggan pada tabel dan detail transaksi diganti **Member**.
+- Tombol/kolom Pre-Order dan Jenis Transaksi tetap tidak ditampilkan. Label metode pembayaran tetap **QRIS**, termasuk untuk data lama bertipe `QRIS_MANUAL`.
+
+Validasi: **67 tes backend**, **6 tes frontend**, **49 pemeriksaan browser static export**, dan **build static export 22 halaman** lulus. Pengujian browser memeriksa Admin/Owner/Staff, pencarian invoice/nama/ID member, hasil kosong, rentang tanggal, header tabel, detail transaksi, dan mobile tanpa overflow. Tidak ada page error. Screenshot tabel/detail tersedia di `artifacts/sidebar-role/*transactions*.png` dan `*transaction-detail*.png`.
+
+Tidak ada perubahan schema atau migrasi database tambahan. Frontend dan backend perlu dipasang ulang agar pencarian member tersedia. Pengujian menggunakan fixture lokal tanpa mengubah data toko. Commit, push, dan deployment belum dijalankan oleh asisten.

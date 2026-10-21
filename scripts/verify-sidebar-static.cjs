@@ -24,6 +24,13 @@ const server = http.createServer((req, res) => {
 const product = { id: 1, name: 'Pashmina', sku: 'IWR-001', price: 50000, effectivePrice: 50000, stock: 20, isActive: true, categoryId: 1, category: { id: 1, name: 'Hijab' }, addons: [] };
 const settings = { storeName: 'Iwearing Hijab', enableShift: false, taxRate: 0, autoPrintReceipt: true };
 const member = { id: 1, name: 'Aisyah', memberId: 'MEM-001', points: 25, totalVisits: 1, totalSpent: 50000 };
+const transaction = {
+  id: 1, invoiceNumber: 'INV-20261021-001', createdAt: '2026-10-21T03:00:00Z', status: 'PAID',
+  customerId: 1, customerName: member.name, customer: member, user: { name: 'Staff Iwear' },
+  grandTotal: 50000, subTotal: 50000, taxAmount: 0, discountAmount: 0,
+  payments: [{ paymentType: 'QRIS_MANUAL', amount: 50000 }],
+  items: [{ productId: 1, product, qty: 1, price: 50000 }],
+};
 const menus = [
   ['/', 'Dashboard'], ['/products/', 'Daftar Produk'], ['/categories/', 'Kategori'], ['/stock/', 'Riwayat Stok'],
   ['/transactions/', 'Transaksi'], ['/reports/', 'Laporan'], ['/expenses/', 'Pengeluaran'], ['/users/', 'Pengguna'], ['/customers/', 'Member'], ['/settings/', 'Pengaturan'],
@@ -41,8 +48,10 @@ const menus = [
       const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
       const page = await context.newPage();
       page.on('pageerror', error => errors.push(`${role}: ${error.message}`));
+      const transactionQueries = [];
       await context.route('**/api/**', async route => {
-        const p = new URL(route.request().url()).pathname;
+        const requestUrl = new URL(route.request().url());
+        const p = requestUrl.pathname;
         let body = { success: true, data: [] };
         if (p === '/api/auth/me') body = { success: true, user: { id: 1, name: role === 'CASHIER' ? 'Staff Iwear' : 'Admin Iwear', role, mustChangePassword: false, activeStoreId: 1, stores: [{ id: 1, name: 'Iwearing Hijab', role, type: 'RETAIL' }] } };
         else if (p === '/api/license/status') body.data = { isActive: true, plan: 'PREMIUM' };
@@ -52,7 +61,13 @@ const menus = [
         else if (p === '/api/products/categories') body.data = [{ id: 1, name: 'Hijab', totalProducts: 1, totalStock: 20 }];
         else if (p === '/api/customers') body.data = [member];
         else if (p === '/api/shifts/current') body.data = null;
-        else if (p === '/api/transactions') body.meta = { page: 1, totalPages: 1, total: 0 };
+        else if (p === '/api/transactions') {
+          transactionQueries.push(requestUrl.searchParams);
+          const search = requestUrl.searchParams.get('search') || '';
+          body.data = [transaction].filter(row => [row.invoiceNumber, row.customer.name, row.customer.memberId].some(value => value.includes(search)));
+          body.meta = { page: 1, totalPages: 1, total: body.data.length };
+        }
+        else if (p === '/api/transactions/1') body.data = transaction;
         else if (p === '/api/expenses') body.total = 0;
         else if (p === '/api/reports/dashboard') body.data = { summary: { todayRevenue: 125000, todayCount: 3, grossProfit: 10000 }, todayPaymentBreakdown: { cash: 50000, qris: 75000, cashCount: 1, qrisCount: 2 }, chart: [], topProducts: [] };
         await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
@@ -83,6 +98,61 @@ const menus = [
           for (const hidden of ['Pembayaran', 'Tentang Aplikasi']) assert.equal(await page.getByRole('button', { name: hidden, exact: true }).count(), 0);
           await page.getByRole('button', { name: 'Printer', exact: true }).click();
           await page.getByRole('button', { name: 'Test Print', exact: true }).waitFor();
+          checks++;
+        }
+        if (url === '/transactions/') {
+          const table = page.locator('main table');
+          await table.getByText(transaction.invoiceNumber, { exact: true }).waitFor();
+          assert.deepEqual(await table.getByRole('columnheader').allTextContents(), ['No', 'Invoice', 'Waktu', 'Member', 'Total', 'Metode', 'Status', 'Aksi']);
+          assert.equal(await page.locator('main').getByRole('combobox').count(), 0);
+          assert.equal(await page.getByRole('button', { name: /Pre.?Order/i }).count(), 0);
+          assert.equal(await table.getByText('QRIS', { exact: true }).count(), 1);
+          assert.equal(await table.getByText('QRIS_MANUAL', { exact: true }).count(), 0);
+          checks++;
+          const search = page.getByRole('textbox', { name: 'Cari invoice atau member' });
+          for (const term of ['Aisyah', 'MEM-001', transaction.invoiceNumber, 'TidakAdaMember']) {
+            const response = page.waitForResponse(res => {
+              const query = new URL(res.url());
+              return query.pathname === '/api/transactions' && query.searchParams.get('search') === term;
+            });
+            await search.fill(term);
+            await response;
+            if (term === 'TidakAdaMember') {
+              await table.getByText('Tidak ada transaksi ditemukan.', { exact: true }).waitFor();
+              assert.equal(await table.locator('tbody td').getAttribute('colspan'), '8');
+            } else await table.getByText(transaction.invoiceNumber, { exact: true }).waitFor();
+          }
+          const cleared = page.waitForResponse(res => new URL(res.url()).pathname === '/api/transactions' && !new URL(res.url()).searchParams.has('search'));
+          await search.fill(''); await cleared;
+          await table.getByText(transaction.invoiceNumber, { exact: true }).waitFor();
+          const dated = page.waitForResponse(res => {
+            const query = new URL(res.url());
+            return query.pathname === '/api/transactions' && query.searchParams.get('startDate') === '2026-10-21' && query.searchParams.get('endDate') === '2026-10-21';
+          });
+          await page.getByLabel('Tanggal awal transaksi').fill('2026-10-21');
+          await page.getByLabel('Tanggal akhir transaksi').fill('2026-10-21');
+          await dated;
+          assert.ok(transactionQueries.every(query => !query.has('status')));
+          checks++;
+          await table.getByText(transaction.invoiceNumber, { exact: true }).waitFor();
+          if (role !== 'OWNER') await page.screenshot({ path: path.join(output, `${role.toLowerCase()}-transactions.png`) });
+          await page.getByRole('button', { name: `Detail transaksi ${transaction.invoiceNumber}`, exact: true }).click();
+          await page.getByRole('heading', { name: 'Detail Transaksi', exact: true }).waitFor();
+          const detail = page.locator('.no-print').filter({ has: page.getByText('Metode pembayaran', { exact: true }) });
+          assert.equal(await detail.getByText('Member', { exact: true }).count(), 1);
+          assert.equal(await detail.getByText('Aisyah', { exact: true }).count(), 1);
+          assert.equal(await detail.getByText('QRIS', { exact: true }).count(), 1);
+          for (const removed of ['Pelanggan', 'Jenis Transaksi', 'QRIS_MANUAL']) assert.equal(await detail.getByText(removed, { exact: true }).count(), 0);
+          if (role !== 'OWNER') await page.screenshot({ path: path.join(output, `${role.toLowerCase()}-transaction-detail.png`) });
+          if (role === 'CASHIER') {
+            await page.setViewportSize({ width: 390, height: 844 });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+            await page.screenshot({ path: path.join(output, 'staff-transaction-detail-mobile.png') });
+            await page.getByRole('button', { name: 'Tutup detail transaksi', exact: true }).click();
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+            await page.screenshot({ path: path.join(output, 'staff-transactions-mobile.png') });
+            await page.setViewportSize({ width: 1366, height: 900 });
+          } else await page.getByRole('button', { name: 'Tutup detail transaksi', exact: true }).click();
           checks++;
         }
         if (url === '/') {

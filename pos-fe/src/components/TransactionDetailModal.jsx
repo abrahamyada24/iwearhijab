@@ -221,7 +221,7 @@ export default function TransactionDetailModal({
               </div>
             </div>
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-              <p className="mb-1 text-[10px] font-bold uppercase text-gray-400">Pelanggan</p>
+              <p className="mb-1 text-[10px] font-bold uppercase text-gray-400">Member</p>
               <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
                 <User size={13} /> {transaction.customerName || customer?.name || "Umum"}
               </div>

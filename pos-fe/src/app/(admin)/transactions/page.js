@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, ChevronLeft, ChevronRight, Eye, RefreshCw, Calendar as CalendarIcon, Loader2, PackageCheck } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Eye, RefreshCw, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 // Import modal dari folder components
 import TransactionDetailModal from '../../../components/TransactionDetailModal';
 import { showAlert } from '../../../utils/swal';
@@ -17,7 +17,6 @@ export default function TransactionsPage() {
     const [isLoading, setIsLoading] = useState(true);
 
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
@@ -36,8 +35,7 @@ export default function TransactionsPage() {
                 limit: 10,
             });
 
-            if (search) params.append('search', search);
-            if (statusFilter) params.append('status', statusFilter);
+            if (search.trim()) params.append('search', search.trim());
             if (startDate && endDate) {
                 params.append('startDate', startDate);
                 params.append('endDate', endDate);
@@ -63,7 +61,7 @@ export default function TransactionsPage() {
             fetchTransactions(1);
         }, 500);
         return () => clearTimeout(timer);
-    }, [search, statusFilter, startDate, endDate]);
+    }, [search, startDate, endDate]);
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= meta.totalPages) {
@@ -157,13 +155,6 @@ export default function TransactionsPage() {
                         <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Total Data</p>
                         <p className="text-xl font-black text-gray-800">{meta.total} <span className="text-sm font-normal text-gray-400">Transaksi</span></p>
                     </div>
-                    <div className="h-8 w-[1px] bg-gray-200"></div>
-                    <div className="px-2">
-                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Status</p>
-                        <p className="text-sm font-medium text-gray-600 flex items-center gap-1">
-                            {statusFilter ? statusFilter : 'Semua'}
-                        </p>
-                    </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 items-center">
@@ -172,6 +163,7 @@ export default function TransactionsPage() {
                         <CalendarIcon size={14} className="text-gray-400" />
                         <input
                             type="date"
+                            aria-label="Tanggal awal transaksi"
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
                             className="bg-transparent text-xs outline-none w-24 text-gray-600"
@@ -179,36 +171,26 @@ export default function TransactionsPage() {
                         <span className="text-gray-300">-</span>
                         <input
                             type="date"
+                            aria-label="Tanggal akhir transaksi"
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
                             className="bg-transparent text-xs outline-none w-24 text-gray-600"
                         />
                     </div>
 
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500"
-                    >
-                        <option value="">Semua Status</option>
-                        <option value="PAID">Lunas (PAID)</option>
-                        <option value="PENDING">Pending</option>
-                        <option value="CANCELLED">Batal</option>
-                        <option value="RETURNED">Retur</option>
-                    </select>
-
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         <input
                             type="text"
-                            placeholder="Cari Invoice..."
+                            placeholder="Cari Invoice / Member..."
+                            aria-label="Cari invoice atau member"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 w-40 sm:w-auto"
+                            className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 w-60"
                         />
                     </div>
 
-                    <button onClick={() => fetchTransactions(1)} className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">
+                    <button aria-label="Muat ulang transaksi" onClick={() => fetchTransactions(1)} className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">
                         <RefreshCw size={18} />
                     </button>
 
@@ -224,8 +206,7 @@ export default function TransactionsPage() {
                                 <th className="px-6 py-4 font-semibold">No</th>
                                 <th className="px-6 py-4 font-semibold">Invoice</th>
                                 <th className="px-6 py-4 font-semibold">Waktu</th>
-                                <th className="px-6 py-4 font-semibold">Tipe Pesanan</th>
-                                <th className="px-6 py-4 font-semibold">Pelanggan</th>
+                                <th className="px-6 py-4 font-semibold">Member</th>
                                 <th className="px-6 py-4 font-semibold">Total</th>
                                 <th className="px-6 py-4 font-semibold">Metode</th>
                                 <th className="px-6 py-4 font-semibold">Status</th>
@@ -236,7 +217,7 @@ export default function TransactionsPage() {
                         <tbody className="divide-y divide-gray-100 bg-white">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 10 : 9} className="px-6 py-12 text-center text-gray-400">
+                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 9 : 8} className="px-6 py-12 text-center text-gray-400">
                                         <div className="flex justify-center items-center gap-2">
                                             <Loader2 className="animate-spin" size={20} /> Memuat data...
                                         </div>
@@ -244,7 +225,7 @@ export default function TransactionsPage() {
                                 </tr>
                             ) : transactions.length === 0 ? (
                                 <tr>
-                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 10 : 9} className="px-6 py-12 text-center text-gray-400">Tidak ada transaksi ditemukan.</td>
+                                    <td colSpan={activeStore?.type === 'LAUNDRY' ? 9 : 8} className="px-6 py-12 text-center text-gray-400">Tidak ada transaksi ditemukan.</td>
                                 </tr>
                             ) : (
                                 transactions.map((trx, index) => (
@@ -257,9 +238,6 @@ export default function TransactionsPage() {
                                         </td>
                                         <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">
                                             {formatDate(trx.createdAt)}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="text-xs text-gray-500">Penjualan</span>
                                         </td>
                                         <td className="px-6 py-4 text-gray-800 font-medium text-xs">
                                             {trx.customerName || trx.customer?.name || 'Umum'}
@@ -298,6 +276,7 @@ export default function TransactionsPage() {
                                         <td className="px-6 py-4 text-center">
                                             <button
                                                 onClick={() => handleOpenDetail(trx.id)}
+                                                aria-label={`Detail transaksi ${trx.invoiceNumber}`}
                                                 className="text-gray-400 hover:text-blue-500 font-medium p-2 hover:bg-blue-50 rounded-lg transition-colors"
                                             >
                                                 <Eye size={18} />

@@ -331,7 +331,16 @@ exports.getAllTransactions = async (req, res) => {
         const whereClause = {};
 
         if (status) whereClause.status = status;
-        if (search) whereClause.invoiceNumber = { contains: search };
+        const searchTerm = typeof search === 'string' ? search.trim() : '';
+        if (searchTerm) {
+            whereClause.OR = [
+                { invoiceNumber: { contains: searchTerm } },
+                { customer: { is: { name: { contains: searchTerm } } } },
+                { customer: { is: { memberId: { contains: searchTerm } } } },
+                // Keep the member name recorded at checkout searchable after a rename.
+                { customerId: { not: null }, customerName: { contains: searchTerm } },
+            ];
+        }
         if (startDate && endDate) {
             whereClause.createdAt = {
                 gte: new Date(startDate + 'T00:00:00'),
